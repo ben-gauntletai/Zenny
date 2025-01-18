@@ -1,0 +1,126 @@
+.article-feedback {
+  margin-top: 3rem;
+  padding-top: 2rem;
+  border-top: 1px solid #e2e8f0;
+  text-align: center;
+}
+
+.article-feedback h3 {
+  font-size: 1.25rem;
+  color: #2d3748;
+  margin-bottom: 1.5rem;
+}
+
+.feedback-buttons {
+  display: flex;
+  justify-content: center;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.feedback-button {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+  background-color: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  color: #4a5568;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.feedback-button:hover:not(:disabled) {
+  background-color: #f7fafc;
+  border-color: #cbd5e0;
+}
+
+.feedback-button.active {
+  background-color: #ebf8ff;
+  border-color: #4299e1;
+  color: #2b6cb0;
+}
+
+.feedback-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.feedback-form {
+  max-width: 500px;
+  margin: 0 auto;
+}
+
+.feedback-form textarea {
+  width: 100%;
+  padding: 0.75rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.375rem;
+  font-size: 1rem;
+  color: #2d3748;
+  resize: vertical;
+  min-height: 100px;
+  margin-bottom: 1rem;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.feedback-form textarea:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 3px rgba(66, 153, 225, 0.15);
+}
+
+.feedback-form .submit-button {
+  padding: 0.75rem 1.5rem;
+  background-color: #4299e1;
+  color: white;
+  border: none;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.feedback-form .submit-button:hover:not(:disabled) {
+  background-color: #3182ce;
+}
+
+.feedback-form .submit-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.feedback-thanks {
+  color: #48bb78;
+  font-weight: 500;
+  margin-top: 1rem;
+}
+
+.error {
+  color: #c53030;
+  background-color: #fff5f5;
+  padding: 0.75rem;
+  border-radius: 0.375rem;
+  margin-bottom: 1rem;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 640px) {
+  .article-feedback {
+    margin-top: 2rem;
+    padding-top: 1.5rem;
+  }
+
+  .feedback-buttons {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .feedback-button {
+    width: 100%;
+    justify-content: center;
+  }
+} 

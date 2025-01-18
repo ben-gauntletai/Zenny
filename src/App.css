@@ -1,0 +1,70 @@
+/* Base layout */
+.App {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  background-color: #f8fafc;
+}
+
+main {
+  flex: 1;
+  width: 100%;
+  padding-bottom: 2rem;
+}
+
+/* Dark mode support */
+@media (prefers-color-scheme: dark) {
+  .App {
+    background-color: #0f172a;
+  }
+}
+
+/* Utility classes */
+.container {
+  width: 100%;
+  max-width: 1400px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Responsive adjustments */
+@media (max-width: 640px) {
+  main {
+    padding-bottom: 1rem;
+  }
+}
+
+/* Global loading spinner */
+.loading-spinner {
+  width: 2rem;
+  height: 2rem;
+  border: 3px solid rgba(37, 99, 235, 0.1);
+  border-radius: 50%;
+  border-top-color: #2563eb;
+  animation: spin 1s linear infinite;
+  margin-bottom: 1rem;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+/* Global error message */
+.error-message {
+  background: linear-gradient(to right, #fef2f2, #fff1f2);
+  color: #dc2626;
+  padding: 1rem 1.25rem;
+  border-radius: 12px;
+  margin-bottom: 2rem;
+  border: 1px solid rgba(220, 38, 38, 0.2);
+}
+
+/* Dark mode error message */
+@media (prefers-color-scheme: dark) {
+  .error-message {
+    background: linear-gradient(to right, rgba(254, 242, 242, 0.1), rgba(255, 241, 242, 0.1));
+    border-color: rgba(220, 38, 38, 0.4);
+  }
+} 
