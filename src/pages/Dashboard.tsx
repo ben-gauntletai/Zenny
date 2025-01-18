@@ -135,7 +135,7 @@ const Dashboard: React.FC = () => {
   return (
     <div className="dashboard">
       <header className="dashboard-header">
-        <h1>Welcome back, {user?.user_metadata?.name || user?.email || 'User'}</h1>
+        <h1>Welcome back, {user?.user_metadata?.full_name || user?.user_metadata?.name || 'User'}</h1>
         <p className="dashboard-subtitle">Here's an overview of your support activity</p>
       </header>
 
