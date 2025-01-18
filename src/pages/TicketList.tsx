@@ -92,12 +92,16 @@ const TicketList: React.FC = () => {
       
       const formattedTickets: FormattedTicket[] = (ticketData || []).map((ticket: SupabaseTicket) => ({
         id: ticket.id,
-        title: ticket.title,
+        subject: ticket.subject,
         status: ticket.status,
         priority: ticket.priority,
         created_at: ticket.created_at,
         description: ticket.description,
         updated_at: ticket.updated_at,
+        ticket_type: ticket.ticket_type,
+        topic: ticket.topic,
+        customer_type: ticket.customer_type,
+        group_id: ticket.group_id,
         user: { email: userMap[ticket.user_id]?.email || 'Unknown' },
         agent: ticket.assigned_to ? { email: userMap[ticket.assigned_to]?.email || 'Unassigned' } : undefined
       }));
@@ -215,7 +219,7 @@ const TicketList: React.FC = () => {
                 <tr key={ticket.id}>
                   <td>
                     <Link to={`/tickets/${ticket.id}`} className="ticket-subject">
-                      {ticket.title}
+                      {ticket.subject}
                     </Link>
                   </td>
                   <td>

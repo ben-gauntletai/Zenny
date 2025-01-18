@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { supabase, Ticket as SupabaseTicket, Profile } from '../lib/supabaseClient';
+import { supabase } from '../lib/supabaseClient';
+import type { TicketStatus, TicketPriority, TicketType, TicketTopic, CustomerType } from '../types/supabase';
+import type { Ticket as SupabaseTicket } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { useNotifications } from '../contexts/NotificationContext';
 import '../styles/TicketDetail.css';
@@ -13,7 +15,18 @@ interface Comment {
   user_email: string;
 }
 
-interface Ticket extends Omit<SupabaseTicket, 'user_id' | 'assigned_to'> {
+interface Ticket {
+  id: number;
+  subject: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  ticket_type: TicketType;
+  topic: TicketTopic;
+  customer_type: CustomerType;
+  created_at: string;
+  updated_at: string;
+  group_id: string | null;
   user_email: string;
   agent_email?: string;
 }
@@ -32,13 +45,17 @@ interface DatabaseComment {
 }
 
 interface DatabaseTicket {
-  id: string;
-  title: string;
+  id: number;
+  subject: string;
   description: string;
   status: string;
   priority: string;
+  ticket_type: TicketType;
+  topic: TicketTopic;
+  customer_type: CustomerType;
   created_at: string;
   updated_at: string;
+  group_id: string | null;
   user_id: string;
   assigned_to: string | null;
 }
@@ -103,12 +120,16 @@ const TicketDetail: React.FC = () => {
       // Format ticket data
       const formattedTicket: Ticket = {
         id: typedTicketData.id,
-        title: typedTicketData.title,
+        subject: typedTicketData.subject,
         description: typedTicketData.description,
-        status: typedTicketData.status,
-        priority: typedTicketData.priority,
+        status: typedTicketData.status as TicketStatus,
+        priority: typedTicketData.priority as TicketPriority,
+        ticket_type: typedTicketData.ticket_type,
+        topic: typedTicketData.topic,
+        customer_type: typedTicketData.customer_type,
         created_at: typedTicketData.created_at,
         updated_at: typedTicketData.updated_at,
+        group_id: typedTicketData.group_id,
         user_email: userMap[typedTicketData.user_id]?.email || 'Unknown',
         agent_email: typedTicketData.assigned_to ? userMap[typedTicketData.assigned_to]?.email : undefined
       };
@@ -165,7 +186,7 @@ const TicketDetail: React.FC = () => {
 
       if (updateError) throw updateError;
 
-      setTicket(prev => prev ? { ...prev, status: newStatus } : null);
+      setTicket(prev => prev ? { ...prev, status: newStatus as TicketStatus } : null);
       addNotification({
         message: 'Ticket status updated successfully',
         type: 'success'
@@ -193,7 +214,7 @@ const TicketDetail: React.FC = () => {
 
       if (updateError) throw updateError;
 
-      setTicket(prev => prev ? { ...prev, priority: newPriority } : null);
+      setTicket(prev => prev ? { ...prev, priority: newPriority as TicketPriority } : null);
       addNotification({
         message: `Ticket priority updated to ${newPriority}`,
         type: 'success'
@@ -320,7 +341,7 @@ const TicketDetail: React.FC = () => {
     <div className="ticket-detail">
       <header className="ticket-header">
         <div className="header-content">
-          <h1>{ticket.title}</h1>
+          <h1>{ticket.subject}</h1>
           <div className="ticket-meta">
             <span className={`status-badge ${ticket.status.toLowerCase()}`}>
               {ticket.status}

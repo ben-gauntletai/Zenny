@@ -1,32 +1,57 @@
+export type TicketStatus = 'NEW' | 'IN_PROGRESS' | 'PENDING' | 'RESOLVED' | 'CLOSED';
+export type TicketPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
+export type TicketType = 'INCIDENT' | 'QUESTION' | 'PROBLEM' | 'TASK';
+export type TicketTopic = 'ISSUE' | 'INQUIRY' | 'OTHER' | 'PAYMENTS' | 'NONE';
+export type CustomerType = 'VIP_CUSTOMER' | 'STANDARD_CUSTOMER';
+
 export interface Database {
   public: {
     Tables: {
       tickets: {
         Row: {
-          id: string;
-          title: string;
-          description: string;
-          status: string;
-          priority: string;
-          user_id: string;
-          assigned_to: string | null;
+          id: number;
           created_at: string;
           updated_at: string;
+          subject: string;
+          description: string;
+          status: TicketStatus;
+          priority: TicketPriority;
+          ticket_type: TicketType;
+          topic: TicketTopic;
+          customer_type: CustomerType;
+          user_id: string;
+          assigned_to: string | null;
+          group_id: string | null;
         };
         Insert: {
-          title: string;
+          id?: number;
+          created_at?: string;
+          updated_at?: string;
+          subject: string;
           description: string;
-          status?: string;
-          priority: string;
+          status?: TicketStatus;
+          priority?: TicketPriority;
+          ticket_type?: TicketType;
+          topic?: TicketTopic;
+          customer_type?: CustomerType;
           user_id: string;
           assigned_to?: string | null;
+          group_id?: string | null;
         };
         Update: {
-          title?: string;
+          id?: number;
+          created_at?: string;
+          updated_at?: string;
+          subject?: string;
           description?: string;
-          status?: string;
-          priority?: string;
+          status?: TicketStatus;
+          priority?: TicketPriority;
+          ticket_type?: TicketType;
+          topic?: TicketTopic;
+          customer_type?: CustomerType;
+          user_id?: string;
           assigned_to?: string | null;
+          group_id?: string | null;
         };
       };
       profiles: {

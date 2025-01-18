@@ -25,6 +25,18 @@ interface UserMapProfile {
   email: string;
 }
 
+interface ActivityItem {
+  id: string;
+  type: 'assigned' | 'priority_changed';
+  ticketId: string;
+  ticketSubject: string;
+  actor: string;
+  timestamp: string;
+  details?: {
+    priority?: string;
+  };
+}
+
 const ALL_STATUSES = ['NEW', 'IN_PROGRESS', 'PENDING', 'RESOLVED', 'CLOSED'];
 
 const Dashboard: React.FC = () => {
@@ -32,14 +44,118 @@ const Dashboard: React.FC = () => {
   const isAgent = user?.user_metadata?.role === 'agent';
   const [ticketSummary, setTicketSummary] = useState<TicketSummary[]>([]);
   const [articleSummary, setArticleSummary] = useState<ArticleSummary>({ total: 0, recent: 0 });
+  const [tickets, setTickets] = useState<FormattedTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [activities, setActivities] = useState<ActivityItem[]>([]);
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return `Today ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return `Yesterday ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      return date.toLocaleDateString([], { 
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+  };
 
   useEffect(() => {
     if (user?.id) {
       fetchSummaryData();
+      fetchTickets();
+      // We'll simulate activities for now, but in a real app this would come from the database
+      const mockActivities: ActivityItem[] = [
+        {
+          id: '1',
+          type: 'priority_changed',
+          ticketId: 'SAMPLE-1',
+          ticketSubject: 'SAMPLE TICKET: Tax question',
+          actor: 'Zendesk',
+          timestamp: new Date().toISOString(),
+          details: {
+            priority: 'high'
+          }
+        },
+        {
+          id: '2',
+          type: 'assigned',
+          ticketId: 'SAMPLE-2',
+          ticketSubject: 'SAMPLE TICKET: Invoice questions',
+          actor: 'Zendesk',
+          timestamp: new Date(Date.now() - 5 * 60000).toISOString()
+        },
+        // Add more mock activities as needed
+      ];
+      setActivities(mockActivities);
     }
   }, [user?.id]);
+
+  const fetchTickets = async () => {
+    try {
+      const query = supabase
+        .from('tickets')
+        .select('*')
+        .order('updated_at', { ascending: false });
+
+      if (!isAgent) {
+        query.eq('user_id', user?.id);
+      }
+
+      const { data: ticketData, error: fetchError } = await query;
+
+      if (fetchError) throw fetchError;
+
+      const userIds = Array.from(new Set(ticketData?.map((t: SupabaseTicket) => t.user_id) || []));
+      const assignedToIds = Array.from(new Set(ticketData?.map((t: SupabaseTicket) => t.assigned_to).filter(Boolean) || []));
+      const allUserIds = Array.from(new Set([...userIds, ...assignedToIds]));
+
+      const { data: userData, error: userError } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('id', allUserIds);
+
+      if (userError) throw userError;
+
+      const userMap = (userData || []).reduce<Record<string, UserMapProfile>>((acc, user) => {
+        acc[user.id] = {
+          id: user.id,
+          email: user.email
+        };
+        return acc;
+      }, {});
+      
+      const formattedTickets: FormattedTicket[] = (ticketData || []).map((ticket: SupabaseTicket) => ({
+        id: ticket.id,
+        subject: ticket.subject,
+        status: ticket.status,
+        priority: ticket.priority,
+        created_at: ticket.created_at,
+        description: ticket.description,
+        updated_at: ticket.updated_at,
+        ticket_type: ticket.ticket_type,
+        topic: ticket.topic,
+        customer_type: ticket.customer_type,
+        group_id: ticket.group_id,
+        user: { email: userMap[ticket.user_id]?.email || 'Unknown' },
+        agent: ticket.assigned_to ? { email: userMap[ticket.assigned_to]?.email || 'Unassigned' } : undefined
+      }));
+
+      setTickets(formattedTickets);
+    } catch (err) {
+      console.error('Error fetching tickets:', err);
+      setError('Failed to load tickets');
+    }
+  };
 
   const fetchSummaryData = async () => {
     try {
@@ -134,54 +250,167 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="dashboard">
-      <header className="dashboard-header">
-        <h1>Welcome back, {user?.user_metadata?.full_name || user?.user_metadata?.name || 'User'}</h1>
-        <p className="dashboard-subtitle">Here's an overview of your support activity</p>
-      </header>
-
-      <section className="dashboard-grid">
-        <div className="dashboard-card">
-          <h2 className="stat-title">Your Tickets</h2>
-          <div className="stat-grid">
-            {ticketSummary.map(({ status, count }) => (
-              <div key={status} className="stat-item">
-                <span className="stat-label">{status.replace('_', ' ')}</span>
-                <span className="stat-value">{count}</span>
+      <div className="activity-feed">
+        <div className="activity-feed-header">
+          Updates to your tickets
+        </div>
+        <div className="activity-list">
+          {activities.map(activity => (
+            <div key={activity.id} className="activity-item">
+              <div className="activity-header">
+                <div className="activity-icon">
+                  {activity.type === 'assigned' ? (
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                    </svg>
+                  ) : (
+                    <svg viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
+                    </svg>
+                  )}
+                </div>
+                <div className="activity-title">
+                  <strong>{activity.actor}</strong>{' '}
+                  {activity.type === 'assigned' ? 'assigned' : 'increased the priority'} on{' '}
+                  <Link to={`/tickets/${activity.ticketId}`} className="activity-link">
+                    "{activity.ticketSubject}"
+                  </Link>
+                </div>
               </div>
-            ))}
-          </div>
-          <Link to="/tickets" className="dashboard-button primary-button">
-            View All Tickets
-          </Link>
+              <div className="activity-meta">
+                {formatDate(activity.timestamp)}
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+      <div className="dashboard-content">
+        <div className="dashboard-breadcrumb">
+          <Link to="/">Home</Link>
+          <span className="separator">/</span>
+          <span>Dashboard</span>
+        </div>
+        <nav className="dashboard-nav">
+          <Link to="/dashboard" className="nav-link active">Dashboard</Link>
+        </nav>
+        
+        <div className="stats-wrapper">
+          <section className="dashboard-stats">
+            <div className="stats-section">
+              <h2>Open Tickets (current)</h2>
+              <div className="stats-grid">
+                <div className="stat-box">
+                  <span className="stat-value">5</span>
+                  <span className="stat-label">YOU</span>
+                </div>
+                <div className="stat-box">
+                  <span className="stat-value">5</span>
+                  <span className="stat-label">GROUPS</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="stats-section">
+              <h2>Ticket Statistics (this week)</h2>
+              <div className="stats-grid">
+                <div className="stat-box">
+                  <span className="stat-value">0</span>
+                  <span className="stat-label">GOOD</span>
+                </div>
+                <div className="stat-box">
+                  <span className="stat-value">0</span>
+                  <span className="stat-label">BAD</span>
+                </div>
+                <div className="stat-box">
+                  <span className="stat-value">0</span>
+                  <span className="stat-label">SOLVED</span>
+                </div>
+              </div>
+            </div>
+          </section>
         </div>
 
-        <div className="dashboard-card">
-          <h2 className="stat-title">Knowledge Base</h2>
-          <div className="stat-grid">
-            <div className="stat-item">
-              <span className="stat-label">Total Articles</span>
-              <span className="stat-value">{articleSummary.total}</span>
+        <section className="tickets-section">
+          <div className="section-header">
+            <div className="header-left">
+              <h2>
+                Tickets requiring your attention ({tickets.length})
+                <Link to="/help" className="help-link">What is this?</Link>
+              </h2>
+              <div className="ticket-filters">
+                <div className="filter-item">
+                  <span>Priority:</span>
+                  <button className="filter-button">
+                    Normal
+                    <svg className="arrow-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                    </svg>
+                  </button>
+                </div>
+                <div className="filter-divider" />
+                <div className="bulk-actions" style={{ display: 'none' }}>
+                  <button className="bulk-action-button">Assign to...</button>
+                  <button className="bulk-action-button">Change priority...</button>
+                  <button className="bulk-action-button">Solve</button>
+                </div>
+              </div>
             </div>
-            <div className="stat-item">
-              <span className="stat-label">New This Week</span>
-              <span className="stat-value">{articleSummary.recent}</span>
+            <div className="header-right">
+              <button className="play-button">
+                Play
+                <svg className="play-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
+                </svg>
+              </button>
             </div>
           </div>
-          <Link to="/knowledge-base" className="dashboard-button secondary-button">
-            Browse Articles
-          </Link>
-        </div>
-      </section>
-
-      <section className="recent-tickets">
-        <div className="section-header">
-          <h2>Recent Tickets</h2>
-          <Link to="/tickets/new" className="dashboard-button primary-button">
-            Create Ticket
-          </Link>
-        </div>
-        <RecentTickets userId={user?.id} isAgent={isAgent} />
-      </section>
+          <div className="tickets-table-container">
+            <table className="tickets-table">
+              <thead>
+                <tr>
+                  <th className="checkbox-header">
+                    <div className="checkbox-wrapper">
+                      <input type="checkbox" />
+                    </div>
+                  </th>
+                  <th>Status</th>
+                  <th>ID</th>
+                  <th>Subject</th>
+                  <th>Requester</th>
+                  <th>Requester updated</th>
+                  <th>Group</th>
+                  <th>Assignee</th>
+                </tr>
+              </thead>
+              <tbody>
+                {tickets.map((ticket, index) => (
+                  <tr key={ticket.id}>
+                    <td className="checkbox-cell">
+                      <div className="checkbox-wrapper">
+                        <div className={`priority-bar priority-${ticket.priority.toLowerCase()}`} />
+                        <input type="checkbox" />
+                      </div>
+                    </td>
+                    <td>
+                      <span className="status-badge open">Open</span>
+                    </td>
+                    <td className="ticket-id">#{index + 1}</td>
+                    <td className="subject-cell">
+                      <Link to={`/tickets/${ticket.id}`} className="ticket-subject">
+                        {ticket.subject}
+                      </Link>
+                    </td>
+                    <td>{ticket.user.email}</td>
+                    <td>{formatDate(ticket.updated_at)}</td>
+                    <td>Support</td>
+                    <td>{ticket.agent?.email || 'Unassigned'}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </section>
+      </div>
     </div>
   );
 };
@@ -221,7 +450,6 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
 
       if (fetchError) throw fetchError;
 
-      // Fetch user information for each ticket
       const userIds = Array.from(new Set(ticketData?.map((t: SupabaseTicket) => t.user_id) || []));
       const assignedToIds = Array.from(new Set(ticketData?.map((t: SupabaseTicket) => t.assigned_to).filter(Boolean) || []));
       const allUserIds = Array.from(new Set([...userIds, ...assignedToIds]));
@@ -243,12 +471,16 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
       
       const formattedTickets: FormattedTicket[] = (ticketData || []).map((ticket: SupabaseTicket) => ({
         id: ticket.id,
-        title: ticket.title,
+        subject: ticket.subject,
         status: ticket.status,
         priority: ticket.priority,
         created_at: ticket.created_at,
         description: ticket.description,
         updated_at: ticket.updated_at,
+        ticket_type: ticket.ticket_type,
+        topic: ticket.topic,
+        customer_type: ticket.customer_type,
+        group_id: ticket.group_id,
         user: { email: userMap[ticket.user_id]?.email || 'Unknown' },
         agent: ticket.assigned_to ? { email: userMap[ticket.assigned_to]?.email || 'Unassigned' } : undefined
       }));
@@ -319,7 +551,7 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
       <table className="tickets-table">
         <thead>
           <tr>
-            <th>Title</th>
+            <th>Subject</th>
             <th>Status</th>
             <th>Priority</th>
             <th>Created</th>
@@ -332,7 +564,7 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
             <tr key={ticket.id}>
               <td>
                 <Link to={`/tickets/${ticket.id}`} className="ticket-subject">
-                  {ticket.title}
+                  {ticket.subject}
                 </Link>
               </td>
               <td>
