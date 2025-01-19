@@ -4,6 +4,7 @@ import { AuthProvider } from './contexts/AuthContext';
 import NotificationProvider from './contexts/NotificationContext';
 import NotificationToast from './components/NotificationToast';
 import Navigation from './components/Navigation';
+import CustomerLayout from './components/CustomerLayout';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -46,27 +47,19 @@ const router = createBrowserRouter(
       path: '/customers',
       element: (
         <ProtectedRoute>
-          <>
-            <Navigation />
-            <main>
-              <CustomerList />
-            </main>
-          </>
+          <CustomerLayout />
         </ProtectedRoute>
-      )
-    },
-    {
-      path: '/customers/suspended',
-      element: (
-        <ProtectedRoute>
-          <>
-            <Navigation />
-            <main>
-              <SuspendedUsers />
-            </main>
-          </>
-        </ProtectedRoute>
-      )
+      ),
+      children: [
+        {
+          path: '',
+          element: <CustomerList />
+        },
+        {
+          path: 'suspended',
+          element: <SuspendedUsers />
+        }
+      ]
     },
     {
       path: '/tickets',

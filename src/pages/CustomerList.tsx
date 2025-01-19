@@ -1,24 +1,6 @@
-import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
-import Navigation from '../components/Navigation';
+import React, { useState } from 'react';
+import { useCustomers } from '../contexts/CustomerContext';
 import '../styles/Customers.css';
-
-interface Customer {
-  id: string;
-  name: string;
-  email: string;
-  tags: string[];
-  timezone: string;
-  group_name?: string;
-  user_type: string;
-  access: string;
-  organization?: string;
-  language: string;
-  details?: any;
-  notes?: string;
-  updated_at: string;
-}
 
 const SearchIcon = () => (
   <svg viewBox="0 0 20 20" fill="currentColor" className="search">
@@ -27,47 +9,8 @@ const SearchIcon = () => (
 );
 
 const CustomerList: React.FC = () => {
-  const navigate = useNavigate();
-  const location = useLocation();
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const { customers, loading, searchCustomers } = useCustomers();
   const [searchQuery, setSearchQuery] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [activeList, setActiveList] = useState('all');
-
-  useEffect(() => {
-    fetchCustomers();
-  }, []);
-
-  const fetchCustomers = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
-      setCustomers(data || []);
-    } catch (error: any) {
-      console.error('Error fetching customers:', error.message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSearch = async () => {
-    try {
-      const { data, error } = await supabase
-        .from('customers')
-        .select('*')
-        .or(`name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
-        .order('updated_at', { ascending: false });
-
-      if (error) throw error;
-      setCustomers(data || []);
-    } catch (error: any) {
-      console.error('Error searching customers:', error.message);
-    }
-  };
 
   const formatDate = (date: string): string => {
     return new Date(date).toLocaleString();
@@ -75,100 +18,78 @@ const CustomerList: React.FC = () => {
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>): void => {
     if (e.key === 'Enter') {
-      handleSearch();
+      searchCustomers(searchQuery);
     }
   };
 
   if (loading) {
-    return <div className="container">Loading...</div>;
+    return null; // Don't show loading state since data is pre-fetched
   }
 
   return (
-    <div className="customers-page">
-      <Navigation />
-      
-      <div className="customer-sidebar">
-        <div className="customer-lists">
-          <div className="customer-lists-header">Customer lists</div>
-          <Link 
-            to="/customers" 
-            className={`customer-list-item ${location.pathname === '/customers' ? 'active' : ''}`}
-          >
-            All customers
-          </Link>
-          <Link 
-            to="/customers/suspended" 
-            className={`customer-list-item ${location.pathname === '/customers/suspended' ? 'active' : ''}`}
-          >
-            Suspended users
-          </Link>
+    <div className="customers-main">
+      <div className="customers-header">
+        <h1 className="customers-title">Customers</h1>
+        <div className="customers-header-actions">
+          <button className="secondary-button">Bulk import</button>
+          <button className="primary-button">Add customer</button>
         </div>
       </div>
 
-      <div className="customers-main">
-        <div className="customers-header">
-          <h1 className="customers-title">Customers</h1>
-          <div className="customers-header-actions">
-            <button className="secondary-button">Bulk import</button>
-            <button className="primary-button">Add customer</button>
-          </div>
+      <div className="customers-content">
+        <div className="customers-search">
+          <SearchIcon />
+          <input
+            type="text"
+            placeholder="Search customers"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            onKeyPress={handleKeyPress}
+          />
         </div>
 
-        <div className="customers-content">
-          <div className="customers-search">
-            <SearchIcon />
-            <input
-              type="text"
-              placeholder="Search customers"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              onKeyPress={handleKeyPress}
-            />
-          </div>
-
-          <div className="customers-table-container">
-            <table className="customers-table">
-              <thead>
-                <tr>
-                  <th>
+        <div className="customers-table-container">
+          <table className="customers-table">
+            <thead>
+              <tr>
+                <th>
+                  <input type="checkbox" />
+                </th>
+                <th>Name</th>
+                <th>Email</th>
+                <th>Tags</th>
+                <th>Timezone</th>
+                <th>Last updated</th>
+              </tr>
+            </thead>
+            <tbody>
+              {customers.map((customer) => (
+                <tr key={customer.id}>
+                  <td>
                     <input type="checkbox" />
-                  </th>
-                  <th>Name</th>
-                  <th>Email</th>
-                  <th>Tags</th>
-                  <th>Timezone</th>
-                  <th>Last updated</th>
+                  </td>
+                  <td>
+                    <div className="customer-name">
+                      <div className="customer-avatar">JD</div>
+                      <span>{customer.name}</span>
+                    </div>
+                  </td>
+                  <td>{customer.email}</td>
+                  <td>
+                    <div className="tags">
+                      {customer.tags?.map((tag: string, index: number) => (
+                        <span key={index} className="tag">
+                          {tag}
+                        </span>
+                      ))}
+                    </div>
+                  </td>
+                  <td className="timezone">{customer.timezone}</td>
+                  <td className="last-updated">{formatDate(customer.updated_at)}</td>
                 </tr>
-              </thead>
-              <tbody>
-                {customers.map((customer: Customer) => (
-                  <tr key={customer.id}>
-                    <td>
-                      <input type="checkbox" />
-                    </td>
-                    <td>
-                      <div className="customer-name">
-                        <div className="customer-avatar">JD</div>
-                        <span>{customer.name}</span>
-                      </div>
-                    </td>
-                    <td>{customer.email}</td>
-                    <td>
-                      <div className="tags">
-                        {customer.tags?.map((tag: string, index: number) => (
-                          <span key={index} className="tag">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
-                    </td>
-                    <td className="timezone">{customer.timezone}</td>
-                    <td className="last-updated">{formatDate(customer.updated_at)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
