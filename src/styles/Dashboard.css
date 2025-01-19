@@ -462,6 +462,27 @@
   background-color: #dc2626;
 }
 
+.dashboard .filter-select {
+  padding: 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 4px;
+  font-size: 11px;
+  color: #4a5568;
+  background-color: white;
+  cursor: pointer;
+  min-width: 100px;
+}
+
+.dashboard .filter-select:hover {
+  border-color: #cbd5e0;
+}
+
+.dashboard .filter-select:focus {
+  outline: none;
+  border-color: #4299e1;
+  box-shadow: 0 0 0 2px rgba(66, 153, 225, 0.1);
+}
+
 @media (max-width: 768px) {
   .dashboard-nav,
   .dashboard-stats,

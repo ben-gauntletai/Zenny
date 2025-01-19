@@ -4,6 +4,7 @@ DROP TABLE IF EXISTS knowledge_base_articles CASCADE;
 DROP TABLE IF EXISTS tickets CASCADE;
 DROP TABLE IF EXISTS groups CASCADE;
 DROP TABLE IF EXISTS profiles CASCADE;
+DROP TABLE IF EXISTS customers CASCADE;
 
 -- Drop existing types
 DROP TYPE IF EXISTS ticket_status CASCADE;
@@ -86,6 +87,30 @@ CREATE TABLE knowledge_base_articles (
     updated_at timestamptz DEFAULT now()
 );
 
+-- Create customers table
+CREATE TABLE IF NOT EXISTS customers (
+    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
+    name TEXT NOT NULL,
+    email TEXT UNIQUE NOT NULL,
+    tags TEXT[],
+    timezone TEXT,
+    group_name TEXT,
+    user_type TEXT DEFAULT 'end-user',
+    access TEXT DEFAULT 'full',
+    organization TEXT,
+    language TEXT DEFAULT 'en',
+    details JSONB,
+    notes TEXT,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+);
+
+-- Create an index on email for faster lookups
+CREATE INDEX IF NOT EXISTS customers_email_idx ON customers(email);
+
+-- Create a GIN index for the tags array for faster tag-based searches
+CREATE INDEX IF NOT EXISTS customers_tags_idx ON customers USING GIN(tags);
+
 -- Add indexes for better performance
 CREATE INDEX idx_tickets_status ON tickets(status);
 CREATE INDEX idx_tickets_priority ON tickets(priority);
@@ -130,12 +155,18 @@ CREATE TRIGGER update_knowledge_base_articles_updated_at
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
 
+CREATE TRIGGER update_customers_updated_at
+    BEFORE UPDATE ON customers
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Enable RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
 ALTER TABLE groups ENABLE ROW LEVEL SECURITY;
 ALTER TABLE tickets ENABLE ROW LEVEL SECURITY;
 ALTER TABLE ticket_comments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE knowledge_base_articles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE customers ENABLE ROW LEVEL SECURITY;
 
 -- Create policies
 CREATE POLICY "Users can view their own tickets"
@@ -200,4 +231,13 @@ CREATE POLICY "Only agents and admins can create knowledge base articles"
             WHERE profiles.id = auth.uid()
             AND profiles.role IN ('agent', 'admin')
         )
-    ); 
+    );
+
+-- Add some sample data
+INSERT INTO customers (name, email, timezone, tags, user_type, organization)
+VALUES 
+    ('Berlin Torres', 'berlin.torres@example.com', '(GMT-07:00) Arizona', ARRAY[]::TEXT[], 'end-user', 'Example Corp'),
+    ('Jiwon Bora', 'jiwon.bora@example.com', '(GMT-07:00) Arizona', ARRAY[]::TEXT[], 'end-user', 'Example Corp'),
+    ('Hikari Ito', 'hikari.ito@example.com', '(GMT-07:00) Arizona', ARRAY[]::TEXT[], 'end-user', 'Example Corp'),
+    ('August Lee', 'august.lee@example.com', '(GMT-07:00) Arizona', ARRAY[]::TEXT[], 'end-user', 'Example Corp'),
+    ('The Customer', 'customer@example.com', '(GMT-07:00) Arizona', ARRAY[]::TEXT[], 'end-user', 'Example Corp'); 

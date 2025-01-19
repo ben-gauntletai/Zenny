@@ -1,5 +1,5 @@
 import React from 'react';
-import { RouterProvider, createBrowserRouter, type RouterProviderProps } from 'react-router-dom';
+import { RouterProvider, createBrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import NotificationProvider from './contexts/NotificationContext';
 import NotificationToast from './components/NotificationToast';
@@ -14,7 +14,9 @@ import KnowledgeBase from './pages/KnowledgeBase';
 import CreateArticle from './pages/CreateArticle';
 import ArticleDetail from './pages/ArticleDetail';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
+import CustomerList from './pages/CustomerList';
 import ProtectedRoute from './components/ProtectedRoute';
+import './styles/App.css';
 
 const router = createBrowserRouter(
   [
@@ -34,6 +36,19 @@ const router = createBrowserRouter(
             <Navigation />
             <main>
               <Dashboard />
+            </main>
+          </>
+        </ProtectedRoute>
+      )
+    },
+    {
+      path: '/customers',
+      element: (
+        <ProtectedRoute>
+          <>
+            <Navigation />
+            <main>
+              <CustomerList />
             </main>
           </>
         </ProtectedRoute>
@@ -140,14 +155,16 @@ const router = createBrowserRouter(
 
 const App: React.FC = () => {
   return (
-    <AuthProvider>
-      <NotificationProvider>
-        <NotificationToast />
-        <div className="app-container">
-          <RouterProvider router={router} />
-        </div>
-      </NotificationProvider>
-    </AuthProvider>
+    <div className="app">
+      <AuthProvider>
+        <NotificationProvider>
+          <NotificationToast />
+          <div className="app-container">
+            <RouterProvider router={router} />
+          </div>
+        </NotificationProvider>
+      </AuthProvider>
+    </div>
   );
 };
 

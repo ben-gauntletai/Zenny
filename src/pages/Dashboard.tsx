@@ -430,12 +430,12 @@ const Dashboard: React.FC = () => {
               <div className="ticket-filters">
                 <div className="filter-item">
                   <span>Priority: </span>
-                  <button className="filter-button">
-                    Normal
-                    <svg className="arrow-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-                      <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                  </button>
+                  <select className="filter-select">
+                    <option value="all">All</option>
+                    <option value="low">Low</option>
+                    <option value="medium">Medium</option>
+                    <option value="high">High</option>
+                  </select>
                 </div>
                 <div className="filter-divider" />
                 <div className="bulk-actions" style={{ display: 'none' }}>
