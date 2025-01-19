@@ -183,10 +183,27 @@
 
 .dashboard-nav {
   display: flex;
-  gap: 2rem;
-  padding: 0.5rem 2rem;
+  justify-content: center;
   background: white;
   border-bottom: 1px solid #e2e8f0;
+  padding: 0;
+}
+
+.nav-container {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  max-width: 1400px;
+  padding: 0;
+}
+
+.nav-left {
+  padding-left: 2rem;
+}
+
+.nav-right {
+  padding-right: 2rem;
 }
 
 .nav-link {
@@ -205,6 +222,19 @@
   color: #2d3748;
   border-bottom-color: #3182ce;
   font-weight: 500;
+}
+
+.sign-out-button {
+  padding: 0.5rem 1rem;
+  color: #4a5568;
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.sign-out-button:hover {
+  color: #2d3748;
 }
 
 .stats-wrapper {
@@ -501,5 +531,13 @@
   .dashboard .tickets-table th:nth-child(7),
   .dashboard .tickets-table td:nth-child(7) {
     display: none;
+  }
+
+  .nav-left {
+    padding-left: 1rem;
+  }
+  
+  .nav-right {
+    padding-right: 1rem;
   }
 } 

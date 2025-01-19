@@ -59,7 +59,7 @@ interface ActivityItem {
 const ALL_STATUSES = ['open', 'pending', 'solved', 'closed'];
 
 const Dashboard: React.FC = () => {
-  const { user } = useAuth();
+  const { user, signOut } = useAuth();
   const isAgent = user?.user_metadata?.role === 'agent';
   const [ticketSummary, setTicketSummary] = useState<TicketSummary[]>([]);
   const [articleSummary, setArticleSummary] = useState<ArticleSummary>({ total: 0, recent: 0 });
@@ -68,6 +68,14 @@ const Dashboard: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activities, setActivities] = useState<ActivityItem[]>([]);
+
+  const handleSignOut = async () => {
+    try {
+      await signOut();
+    } catch (error) {
+      console.error('Error signing out:', error);
+    }
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -381,9 +389,6 @@ const Dashboard: React.FC = () => {
           <span className="separator">/</span>
           <span>Dashboard</span>
         </div>
-        <nav className="dashboard-nav">
-          <span className="nav-link active">Dashboard</span>
-        </nav>
         
         <div className="stats-wrapper">
           <section className="dashboard-stats">
