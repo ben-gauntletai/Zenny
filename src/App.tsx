@@ -3,8 +3,10 @@ import { RouterProvider, createBrowserRouter } from 'react-router-dom';
 import { AuthProvider } from './contexts/AuthContext';
 import NotificationProvider from './contexts/NotificationContext';
 import NotificationToast from './components/NotificationToast';
-import Navigation from './components/Navigation';
+import DashboardLayout from './components/DashboardLayout';
 import CustomerLayout from './components/CustomerLayout';
+import TicketLayout from './components/TicketLayout';
+import KnowledgeBaseLayout from './components/KnowledgeBaseLayout';
 import Login from './pages/Login';
 import Register from './pages/Register';
 import Dashboard from './pages/Dashboard';
@@ -34,14 +36,15 @@ const router = createBrowserRouter(
       path: '/',
       element: (
         <ProtectedRoute>
-          <>
-            <Navigation />
-            <main>
-              <Dashboard />
-            </main>
-          </>
+          <DashboardLayout />
         </ProtectedRoute>
-      )
+      ),
+      children: [
+        {
+          path: '',
+          element: <Dashboard />
+        }
+      ]
     },
     {
       path: '/customers',
@@ -65,92 +68,57 @@ const router = createBrowserRouter(
       path: '/tickets',
       element: (
         <ProtectedRoute>
-          <>
-            <Navigation />
-            <main>
-              <TicketList />
-            </main>
-          </>
+          <TicketLayout />
         </ProtectedRoute>
-      )
-    },
-    {
-      path: '/tickets/new',
-      element: (
-        <ProtectedRoute>
-          <>
-            <Navigation />
-            <main>
-              <CreateTicket />
-            </main>
-          </>
-        </ProtectedRoute>
-      )
-    },
-    {
-      path: '/tickets/:ticketId',
-      element: (
-        <ProtectedRoute>
-          <>
-            <Navigation />
-            <main>
-              <TicketDetail />
-            </main>
-          </>
-        </ProtectedRoute>
-      )
+      ),
+      children: [
+        {
+          path: '',
+          element: <TicketList />
+        },
+        {
+          path: 'new',
+          element: <CreateTicket />
+        },
+        {
+          path: ':ticketId',
+          element: <TicketDetail />
+        }
+      ]
     },
     {
       path: '/knowledge-base',
       element: (
         <ProtectedRoute>
-          <>
-            <Navigation />
-            <main>
-              <KnowledgeBase />
-            </main>
-          </>
+          <KnowledgeBaseLayout />
         </ProtectedRoute>
-      )
-    },
-    {
-      path: '/knowledge-base/new',
-      element: (
-        <ProtectedRoute requireAgent>
-          <>
-            <Navigation />
-            <main>
+      ),
+      children: [
+        {
+          path: '',
+          element: <KnowledgeBase />
+        },
+        {
+          path: 'new',
+          element: (
+            <ProtectedRoute requireAgent>
               <CreateArticle />
-            </main>
-          </>
-        </ProtectedRoute>
-      )
-    },
-    {
-      path: '/knowledge-base/:articleId',
-      element: (
-        <ProtectedRoute>
-          <>
-            <Navigation />
-            <main>
-              <ArticleDetail />
-            </main>
-          </>
-        </ProtectedRoute>
-      )
-    },
-    {
-      path: '/knowledge-base/analytics',
-      element: (
-        <ProtectedRoute requireAgent>
-          <>
-            <Navigation />
-            <main>
+            </ProtectedRoute>
+          )
+        },
+        {
+          path: ':articleId',
+          element: <ArticleDetail />
+        },
+        {
+          path: 'analytics',
+          element: (
+            <ProtectedRoute requireAgent>
               <AnalyticsDashboard />
-            </main>
-          </>
-        </ProtectedRoute>
-      )
+            </ProtectedRoute>
+          )
+        }
+      ]
     }
   ],
   {

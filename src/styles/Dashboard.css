@@ -1,65 +1,96 @@
 .dashboard {
   display: flex;
-  height: 100vh;
-  overflow: hidden;
-  background-color: #f8f9fa;
+  height: calc(100vh - 64px);
+  margin-top: 64px;
+  background: #f8fafc;
+  transition: all 0.3s ease-in-out;
 }
 
 .activity-feed {
-  width: 300px;
-  height: 100%;
-  border-right: 1px solid #e2e8f0;
+  width: 280px;
+  min-width: 280px;
   background: white;
+  border-right: 1px solid #e2e8f0;
   display: flex;
   flex-direction: column;
-  flex-shrink: 0;
+  transition: all 0.3s ease;
 }
 
 .activity-feed-header {
-  padding: 1.5rem;
+  padding: 1rem;
+  font-size: 11px;
   font-weight: 600;
+  color: #64748b;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
   border-bottom: 1px solid #e2e8f0;
-  flex-shrink: 0;
 }
 
 .activity-list {
-  padding: 1rem;
+  flex: 1;
   overflow-y: auto;
-  flex-grow: 1;
+  padding: 1rem;
+}
+
+.activity-empty {
+  color: #94a3b8;
+  text-align: center;
+  padding: 2rem 1rem;
+  font-size: 0.875rem;
 }
 
 .activity-item {
-  padding: 1rem;
+  padding: 0.75rem 0;
   border-bottom: 1px solid #e2e8f0;
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+  transition: background-color 0.2s ease, transform 0.2s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.activity-item:nth-child(1) { animation-delay: 0.1s; }
+.activity-item:nth-child(2) { animation-delay: 0.2s; }
+.activity-item:nth-child(3) { animation-delay: 0.3s; }
+
+.activity-item:last-child {
+  border-bottom: none;
+}
+
+.activity-item:hover {
+  background-color: #f7fafc;
+  transform: translateX(4px);
 }
 
 .activity-header {
   display: flex;
+  gap: 0.75rem;
   align-items: flex-start;
-  gap: 1rem;
   margin-bottom: 0.5rem;
 }
 
 .activity-icon {
-  width: 24px;
-  height: 24px;
-  color: #4a5568;
+  width: 20px;
+  height: 20px;
+  color: #64748b;
   flex-shrink: 0;
 }
 
 .activity-title {
   font-size: 0.875rem;
-  color: #4a5568;
-  line-height: 1.5;
+  color: #475569;
+  line-height: 1.4;
 }
 
-.activity-meta {
-  font-size: 0.75rem;
-  color: #718096;
+.activity-title strong {
+  color: #1e293b;
 }
 
 .activity-link {
-  color: #4299e1;
+  color: #2563eb;
   text-decoration: none;
 }
 
@@ -67,14 +98,18 @@
   text-decoration: underline;
 }
 
+.activity-meta {
+  font-size: 0.75rem;
+  color: #94a3b8;
+  margin-left: calc(20px + 0.75rem);
+}
+
 .dashboard-content {
-  flex-grow: 1;
-  padding: 2rem;
+  flex: 1;
+  padding: 1.5rem;
   overflow-y: auto;
-  height: 100%;
-  display: flex;
-  flex-direction: column;
-  gap: 2rem;
+  min-width: 0;
+  min-height: calc(100vh - 64px);
 }
 
 .side-nav {
@@ -234,6 +269,13 @@
   box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
   flex: 1;
   min-width: 0;
+  min-height: 90px;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.stats-section:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
 }
 
 .stats-section h2 {
@@ -255,6 +297,12 @@
   background: #f8fafc;
   border-radius: 3px;
   border: 1px solid #edf2f7;
+  transition: all 0.2s ease;
+}
+
+.stat-box:hover {
+  transform: scale(1.02);
+  border-color: #cbd5e0;
 }
 
 .stat-value {
@@ -264,6 +312,7 @@
   color: #2c3e50;
   margin-bottom: 0.25rem;
   line-height: 1;
+  min-height: 19px;
 }
 
 .stat-label {
@@ -278,12 +327,15 @@
   flex-grow: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0; /* Important for nested scrolling */
+  min-height: 0;
+  max-width: 100%;
+  overflow-x: hidden;
 }
 
 .tickets-table-container {
   flex-grow: 1;
   overflow-y: auto;
+  overflow-x: hidden;
   border: 1px solid #e2e8f0;
   border-radius: 0.5rem;
   background: white;
@@ -291,23 +343,75 @@
 
 .tickets-table {
   width: 100%;
+  table-layout: fixed;
   border-collapse: collapse;
 }
 
+/* Base styles for all cells */
 .tickets-table th,
 .tickets-table td {
-  padding: 1rem;
-  text-align: left;
+  padding: 0.75rem 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   border-bottom: 1px solid #e2e8f0;
 }
 
+/* Header specific styles */
 .tickets-table th {
-  background: #f8f9fa;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 500;
   color: #4a5568;
+  background: #f8fafc;
   position: sticky;
   top: 0;
   z-index: 1;
+}
+
+/* Column widths */
+.tickets-table .checkbox-column {
+  width: 32px;
+  padding: 0 8px;
+}
+
+.tickets-table .status-column {
+  width: 80px;
+}
+
+.tickets-table .id-column {
+  width: 50px;
+}
+
+.tickets-table .subject-column {
+  width: auto;
+  min-width: 200px;
+}
+
+.tickets-table .requester-column {
+  width: 120px;
+}
+
+.tickets-table .updated-column {
+  width: 140px;
+}
+
+.tickets-table .group-column {
+  width: 100px;
+}
+
+.tickets-table .assignee-column {
+  width: 120px;
+}
+
+/* Status and priority badges should not be cut off */
+.status-badge,
+.priority-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 /* Loading state */
@@ -335,14 +439,6 @@
 }
 
 /* Status and priority badges */
-.status-badge,
-.priority-badge {
-  padding: 0.25rem 0.5rem;
-  border-radius: 9999px;
-  font-size: 0.875rem;
-  font-weight: 500;
-}
-
 .status-badge.open { background-color: #E3F2FD; color: #1976D2; }
 .status-badge.pending { background-color: #FFF3E0; color: #F57C00; }
 .status-badge.solved { background-color: #E8F5E9; color: #388E3C; }
@@ -534,4 +630,139 @@
   .nav-right {
     padding-right: 1rem;
   }
+}
+
+/* Smooth transitions */
+.dashboard * {
+  transition: background-color 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+/* Loading state refinements */
+.stat-value {
+  min-height: 19px; /* Height of the text to prevent layout shift */
+}
+
+.stat-box.loading {
+  animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.7; }
+  100% { opacity: 1; }
+}
+
+/* Prevent layout shifts */
+.tickets-table th {
+  height: 48px; /* Fixed header height */
+}
+
+.tickets-table td {
+  height: 56px; /* Fixed row height */
+}
+
+/* Smoother hover effects */
+.tickets-table tr {
+  animation: fadeInSlide 0.3s ease forwards;
+  opacity: 0;
+  transform: translateX(-10px);
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Add staggered animations for each row */
+.tickets-table tr:nth-child(1) { animation-delay: 0.1s; }
+.tickets-table tr:nth-child(2) { animation-delay: 0.15s; }
+.tickets-table tr:nth-child(3) { animation-delay: 0.2s; }
+.tickets-table tr:nth-child(4) { animation-delay: 0.25s; }
+.tickets-table tr:nth-child(5) { animation-delay: 0.3s; }
+.tickets-table tr:nth-child(6) { animation-delay: 0.35s; }
+.tickets-table tr:nth-child(7) { animation-delay: 0.4s; }
+.tickets-table tr:nth-child(8) { animation-delay: 0.45s; }
+.tickets-table tr:nth-child(9) { animation-delay: 0.5s; }
+.tickets-table tr:nth-child(10) { animation-delay: 0.55s; }
+
+/* Smooth transitions for data updates */
+.tickets-table td {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Status and priority badge transitions */
+.status-badge,
+.priority-badge {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Enhance hover effect */
+.tickets-table tr:hover {
+  transform: translateX(4px);
+  background-color: #f7fafc;
+  transition: all 0.2s ease-in-out;
+}
+
+/* Add transition for checkbox interactions */
+.checkbox-wrapper input[type="checkbox"] {
+  transition: all 0.2s ease-in-out;
+}
+
+/* Smooth sorting transitions */
+.tickets-table.sorting tbody {
+  opacity: 0.7;
+  transition: opacity 0.2s ease-in-out;
+}
+
+.tickets-table.sorting.sorted tbody {
+  opacity: 1;
+}
+
+/* Activity feed improvements */
+.activity-item {
+  opacity: 0;
+  animation: fadeIn 0.3s ease forwards;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.activity-item:nth-child(1) { animation-delay: 0.1s; }
+.activity-item:nth-child(2) { animation-delay: 0.2s; }
+.activity-item:nth-child(3) { animation-delay: 0.3s; }
+
+/* Ensure content doesn't shift during loading */
+.dashboard-content {
+  min-height: calc(100vh - 64px);
+}
+
+.stats-section {
+  min-height: 90px;
+}
+
+/* Ensure cells handle overflow properly */
+.tickets-table td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 0.75rem 1rem;
+}
+
+.tickets-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #4a5568;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 48px;
+  padding: 0 1rem;
 } 

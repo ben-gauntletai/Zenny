@@ -14,6 +14,7 @@ import { useAuth } from '../contexts/AuthContext';
 import Navigation from '../components/Navigation';
 import '../styles/Dashboard.css';
 import { getInitials, getProfileColor, formatFullName } from '../utils/profileUtils';
+import { useDashboard } from '../contexts/DashboardContext';
 
 interface TicketSummary {
   status: string;
@@ -46,7 +47,7 @@ interface UserMapProfile {
   email: string;
 }
 
-interface ActivityItem {
+interface ActivityFeedItem {
   id: string;
   type: 'assigned' | 'priority_changed';
   ticketId: string;
@@ -248,23 +249,15 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
 };
 
 const Dashboard: React.FC = () => {
-  const { user, signOut } = useAuth();
+  const { user } = useAuth();
   const isAgent = user?.user_metadata?.role === 'agent';
-  const [ticketSummary, setTicketSummary] = useState<TicketSummary[]>([]);
-  const [articleSummary, setArticleSummary] = useState<ArticleSummary>({ total: 0, recent: 0 });
-  const [tickets, setTickets] = useState<FormattedTicket[]>([]);
   const [selectedTickets, setSelectedTickets] = useState<Set<number>>(new Set());
-  const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [activities, setActivities] = useState<ActivityItem[]>([]);
+  const { stats, tickets, loading: dashboardLoading } = useDashboard();
 
-  const handleSignOut = async () => {
-    try {
-      await signOut();
-    } catch (error) {
-      console.error('Error signing out:', error);
-    }
-  };
+  useEffect(() => {
+    console.log('Dashboard mounted with:', { stats, tickets, dashboardLoading });
+  }, [stats, tickets, dashboardLoading]);
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
@@ -286,216 +279,6 @@ const Dashboard: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    if (user?.id) {
-      console.log('User object:', {
-        id: user.id,
-        email: user.email,
-        metadata: user.user_metadata,
-        role: user.user_metadata?.role
-      });
-      console.log('Auth state:', {
-        isAgent,
-        userId: user.id
-      });
-      fetchSummaryData();
-      fetchTickets();
-      // We'll simulate activities for now, but in a real app this would come from the database
-      const mockActivities: ActivityItem[] = [
-        {
-          id: '1',
-          type: 'priority_changed',
-          ticketId: 'SAMPLE-1',
-          ticketSubject: 'SAMPLE TICKET: Tax question',
-          actor: 'Zendesk',
-          timestamp: new Date().toISOString(),
-          details: {
-            priority: 'high'
-          }
-        },
-        {
-          id: '2',
-          type: 'assigned',
-          ticketId: 'SAMPLE-2',
-          ticketSubject: 'SAMPLE TICKET: Invoice questions',
-          actor: 'Zendesk',
-          timestamp: new Date(Date.now() - 5 * 60000).toISOString()
-        },
-        // Add more mock activities as needed
-      ];
-      setActivities(mockActivities);
-    }
-  }, [user?.id]);
-
-  const fetchTickets = async () => {
-    try {
-      console.log('Fetching tickets...');
-      console.log('User:', user);
-      console.log('Is agent:', isAgent);
-
-      let query = supabase
-        .from('tickets')
-        .select(`
-          id,
-          subject,
-          description,
-          status,
-          priority,
-          ticket_type,
-          topic,
-          customer_type,
-          created_at,
-          updated_at,
-          user_id,
-          assigned_to,
-          group_id
-        `);
-
-      // Chain the where clause properly
-      if (!isAgent && user?.id) {
-        console.log('Filtering for user:', user.id);
-        query = query.eq('user_id', user.id);
-      }
-
-      // Chain the order clause
-      query = query.order('updated_at', { ascending: false });
-
-      console.log('Executing query...');
-      console.log('Query details:', query); // Log the query object
-      const { data: ticketData, error: fetchError } = await query;
-      console.log('Ticket data:', ticketData);
-      console.log('Fetch error:', fetchError);
-
-      if (fetchError) {
-        console.error('Error fetching tickets:', fetchError);
-        throw fetchError;
-      }
-
-      if (!ticketData || ticketData.length === 0) {
-        console.log('No tickets found for user');
-        setTickets([]);
-        return;
-      }
-
-      const userIds = Array.from(new Set(ticketData.map(t => t.user_id)));
-      const assignedToIds = Array.from(new Set(ticketData.map(t => t.assigned_to).filter(Boolean)));
-      const allUserIds = Array.from(new Set([...userIds, ...assignedToIds]));
-
-      console.log('Fetching user data for IDs:', allUserIds);
-      const { data: userData, error: userError } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .in('id', allUserIds);
-
-      console.log('User data:', userData);
-      console.log('User error:', userError);
-
-      if (userError) {
-        console.error('Error fetching user data:', userError);
-        throw userError;
-      }
-
-      const userMap = (userData || []).reduce<Record<string, UserMapProfile>>((acc, user) => {
-        acc[user.id] = {
-          id: user.id,
-          email: user.email
-        };
-        return acc;
-      }, {});
-
-      const formattedTickets: FormattedTicket[] = ticketData.map(ticket => ({
-        id: ticket.id,
-        subject: ticket.subject,
-        description: ticket.description,
-        status: ticket.status,
-        priority: ticket.priority,
-        ticket_type: ticket.ticket_type,
-        topic: ticket.topic,
-        customer_type: ticket.customer_type,
-        created_at: ticket.created_at,
-        updated_at: ticket.updated_at,
-        group_id: ticket.group_id,
-        user: { email: userMap[ticket.user_id]?.email || 'Unknown' },
-        agent: ticket.assigned_to ? { email: userMap[ticket.assigned_to]?.email || 'Unassigned' } : undefined
-      }));
-
-      console.log('Formatted tickets:', formattedTickets);
-      setTickets(formattedTickets);
-    } catch (err) {
-      console.error('Error in fetchTickets:', err);
-      setError('Failed to load tickets');
-    }
-  };
-
-  const fetchSummaryData = async () => {
-    try {
-      setLoading(true);
-      setError('');
-      
-      // Fetch ticket summary
-      let query = supabase
-        .from('tickets')
-        .select('status');
-
-      if (!isAgent) {
-        query = query.eq('user_id', user?.id);
-      }
-
-      const { data: ticketData, error: ticketError } = await query;
-
-      if (ticketError) {
-        console.error('Ticket summary query error:', ticketError);
-        throw ticketError;
-      }
-
-      // Initialize counts for all statuses
-      const summary = ALL_STATUSES.reduce((acc, status) => {
-        acc[status] = 0;
-        return acc;
-      }, {} as Record<string, number>);
-
-      // Update counts from actual data
-      ticketData?.forEach((ticket: { status: string }) => {
-        if (ticket.status in summary) {
-          summary[ticket.status] = (summary[ticket.status] || 0) + 1;
-        }
-      });
-
-      const ticketSummaryData = Object.entries(summary).map(([status, count]) => ({
-        status,
-        count
-      }));
-
-      // Fetch article summary
-      const { data: articleData, error: articleError } = await supabase
-        .from('knowledge_base_articles')
-        .select('created_at');
-
-      if (articleError) {
-        console.error('Article summary query error:', articleError);
-        throw articleError;
-      }
-
-      const oneWeekAgo = new Date();
-      oneWeekAgo.setDate(oneWeekAgo.getDate() - 7);
-
-      const articleSummaryData = {
-        total: articleData?.length || 0,
-        recent: articleData?.filter((article: { created_at: string }) => 
-          new Date(article.created_at) > oneWeekAgo
-        ).length || 0
-      };
-
-      setTicketSummary(ticketSummaryData);
-      setArticleSummary(articleSummaryData);
-    } catch (err) {
-      console.error('Error fetching summary data:', err);
-      setError('Failed to load dashboard data. Please try again later.');
-    } finally {
-      setLoading(false);
-    }
-  };
-
   const handleSelectAll = (checked: boolean) => {
     if (checked) {
       setSelectedTickets(new Set(tickets.map(ticket => ticket.id)));
@@ -514,23 +297,11 @@ const Dashboard: React.FC = () => {
     setSelectedTickets(newSelected);
   };
 
-  if (loading) {
-    return (
-      <div className="dashboard loading">
-        <div className="loading-spinner"></div>
-        <p>Loading your dashboard...</p>
-      </div>
-    );
-  }
-
   if (error) {
     return (
       <div className="dashboard error">
         <div className="error-message">
           <p>{error}</p>
-          <button onClick={fetchSummaryData} className="dashboard-button primary-button">
-            Retry
-          </button>
         </div>
       </div>
     );
@@ -544,33 +315,39 @@ const Dashboard: React.FC = () => {
           Updates to your tickets
         </div>
         <div className="activity-list">
-          {activities.map(activity => (
-            <div key={activity.id} className="activity-item">
-              <div className="activity-header">
-                <div className="activity-icon">
-                  {activity.type === 'assigned' ? (
-                    <svg viewBox="0 0 20 20" fill="currentColor">
-                      <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                    </svg>
-                  ) : (
-                    <svg viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
-                    </svg>
-                  )}
-                </div>
-                <div className="activity-title">
-                  <strong>{activity.actor}</strong>{' '}
-                  {activity.type === 'assigned' ? 'assigned' : 'increased the priority'} on{' '}
-                  <Link to={`/tickets/${activity.ticketId}`} className="activity-link">
-                    "{activity.ticketSubject}"
-                  </Link>
-                </div>
-              </div>
-              <div className="activity-meta">
-                {formatDate(activity.timestamp)}
-              </div>
+          {stats.activityFeed.length === 0 ? (
+            <div className="activity-empty">
+              No recent activity
             </div>
-          ))}
+          ) : (
+            stats.activityFeed.map((activity: ActivityFeedItem, index: number) => (
+              <div key={index} className="activity-item">
+                <div className="activity-header">
+                  <div className="activity-icon">
+                    {activity.type === 'assigned' ? (
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
+                      </svg>
+                    ) : (
+                      <svg viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
+                      </svg>
+                    )}
+                  </div>
+                  <div className="activity-title">
+                    <strong>{activity.actor}</strong>{' '}
+                    {activity.type === 'assigned' ? 'assigned' : 'increased the priority'} on{' '}
+                    <Link to={`/tickets/${activity.ticketId}`} className="activity-link">
+                      "{activity.ticketSubject}"
+                    </Link>
+                  </div>
+                </div>
+                <div className="activity-meta">
+                  {formatDate(activity.timestamp)}
+                </div>
+              </div>
+            ))
+          )}
         </div>
       </div>
       <div className="dashboard-content">
@@ -584,11 +361,11 @@ const Dashboard: React.FC = () => {
               <h2>Open Tickets (current)</h2>
               <div className="stats-grid">
                 <div className="stat-box">
-                  <span className="stat-value">5</span>
+                  <span className="stat-value">{stats.ticketStats.open}</span>
                   <span className="stat-label">YOU</span>
                 </div>
                 <div className="stat-box">
-                  <span className="stat-value">5</span>
+                  <span className="stat-value">{stats.ticketStats.total}</span>
                   <span className="stat-label">GROUPS</span>
                 </div>
               </div>
@@ -598,16 +375,20 @@ const Dashboard: React.FC = () => {
               <h2>Ticket Statistics (this week)</h2>
               <div className="stats-grid">
                 <div className="stat-box">
-                  <span className="stat-value">0</span>
-                  <span className="stat-label">GOOD</span>
+                  <span className="stat-value">{stats.ticketStats.total}</span>
+                  <span className="stat-label">Total</span>
                 </div>
                 <div className="stat-box">
-                  <span className="stat-value">0</span>
-                  <span className="stat-label">BAD</span>
+                  <span className="stat-value">{stats.ticketStats.open}</span>
+                  <span className="stat-label">Open</span>
                 </div>
                 <div className="stat-box">
-                  <span className="stat-value">0</span>
-                  <span className="stat-label">SOLVED</span>
+                  <span className="stat-value">{stats.ticketStats.inProgress}</span>
+                  <span className="stat-label">In Progress</span>
+                </div>
+                <div className="stat-box">
+                  <span className="stat-value">{stats.ticketStats.resolved}</span>
+                  <span className="stat-label">Resolved</span>
                 </div>
               </div>
             </div>
@@ -682,7 +463,9 @@ const Dashboard: React.FC = () => {
                       </div>
                     </td>
                     <td>
-                      <span className="status-badge open">Open</span>
+                      <span className={`status-badge ${ticket.status.toLowerCase()}`}>
+                        {ticket.status.replace('_', ' ')}
+                      </span>
                     </td>
                     <td className="ticket-id">#{index + 1}</td>
                     <td className="subject-cell">
