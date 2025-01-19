@@ -7,7 +7,6 @@ const Navigation: React.FC = () => {
   const { user, signOut } = useAuth();
   const location = useLocation();
   const isAgent = user?.user_metadata?.role === 'agent';
-  const displayName = user?.user_metadata?.full_name || user?.email;
 
   const isActive = (path: string) => {
     return location.pathname.startsWith(path) ? 'active' : '';
@@ -37,12 +36,9 @@ const Navigation: React.FC = () => {
       </div>
 
       <div className="nav-user">
-        <div className="user-info">
-          <span>{displayName}</span>
-          {isAgent && <span className="agent-badge">Agent</span>}
-        </div>
+        {isAgent && <span className="agent-badge">Agent</span>}
         <button onClick={signOut} className="sign-out-button">
-          Sign Out
+          Sign out
         </button>
       </div>
     </nav>

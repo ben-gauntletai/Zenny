@@ -64,7 +64,7 @@
 
 .agent-badge {
   background-color: #2563eb;
-  color: white !important;
+  color: white;
   padding: 0.25rem 0.5rem;
   border-radius: 0.25rem;
   font-size: 0.75rem;
@@ -73,16 +73,24 @@
 
 .sign-out-button {
   padding: 0.5rem 1rem;
-  border: none;
+  border: 1px solid #e2e8f0;
   border-radius: 0.375rem;
-  background-color: #ef4444;
-  color: white;
+  background-color: white;
+  color: #4b5563;
+  font-size: 0.875rem;
+  font-weight: 500;
   cursor: pointer;
-  transition: background-color 0.2s ease;
+  transition: all 0.2s ease;
 }
 
 .sign-out-button:hover {
-  background-color: #dc2626;
+  background-color: #f3f4f6;
+  border-color: #cbd5e0;
+  color: #1f2937;
+}
+
+.sign-out-button:active {
+  background-color: #e5e7eb;
 }
 
 /* Add margin to the main content to account for fixed navigation */

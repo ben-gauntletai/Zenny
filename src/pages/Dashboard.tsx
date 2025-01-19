@@ -1,6 +1,14 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import type { Ticket as SupabaseTicket, Profile } from '../lib/supabaseClient';
+import type { 
+  TicketStatus, 
+  TicketPriority, 
+  TicketType, 
+  TicketTopic, 
+  CustomerType,
+  Ticket,
+  Profile 
+} from '../types/supabase';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import '../styles/Dashboard.css';
@@ -15,7 +23,18 @@ interface ArticleSummary {
   recent: number;
 }
 
-interface FormattedTicket extends Omit<SupabaseTicket, 'user_id' | 'assigned_to'> {
+interface FormattedTicket {
+  id: number;
+  subject: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  ticket_type: TicketType;
+  topic: TicketTopic;
+  customer_type: CustomerType;
+  created_at: string;
+  updated_at: string;
+  group_id: string | null;
   user: { email: string };
   agent?: { email: string };
 }
@@ -37,7 +56,7 @@ interface ActivityItem {
   };
 }
 
-const ALL_STATUSES = ['NEW', 'IN_PROGRESS', 'PENDING', 'RESOLVED', 'CLOSED'];
+const ALL_STATUSES = ['open', 'pending', 'solved', 'closed'];
 
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
@@ -45,6 +64,7 @@ const Dashboard: React.FC = () => {
   const [ticketSummary, setTicketSummary] = useState<TicketSummary[]>([]);
   const [articleSummary, setArticleSummary] = useState<ArticleSummary>({ total: 0, recent: 0 });
   const [tickets, setTickets] = useState<FormattedTicket[]>([]);
+  const [selectedTickets, setSelectedTickets] = useState<Set<number>>(new Set());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [activities, setActivities] = useState<ActivityItem[]>([]);
@@ -71,6 +91,16 @@ const Dashboard: React.FC = () => {
 
   useEffect(() => {
     if (user?.id) {
+      console.log('User object:', {
+        id: user.id,
+        email: user.email,
+        metadata: user.user_metadata,
+        role: user.user_metadata?.role
+      });
+      console.log('Auth state:', {
+        isAgent,
+        userId: user.id
+      });
       fetchSummaryData();
       fetchTickets();
       // We'll simulate activities for now, but in a real app this would come from the database
@@ -102,29 +132,71 @@ const Dashboard: React.FC = () => {
 
   const fetchTickets = async () => {
     try {
-      const query = supabase
-        .from('tickets')
-        .select('*')
-        .order('updated_at', { ascending: false });
+      console.log('Fetching tickets...');
+      console.log('User:', user);
+      console.log('Is agent:', isAgent);
 
-      if (!isAgent) {
-        query.eq('user_id', user?.id);
+      let query = supabase
+        .from('tickets')
+        .select(`
+          id,
+          subject,
+          description,
+          status,
+          priority,
+          ticket_type,
+          topic,
+          customer_type,
+          created_at,
+          updated_at,
+          user_id,
+          assigned_to,
+          group_id
+        `);
+
+      // Chain the where clause properly
+      if (!isAgent && user?.id) {
+        console.log('Filtering for user:', user.id);
+        query = query.eq('user_id', user.id);
       }
 
+      // Chain the order clause
+      query = query.order('updated_at', { ascending: false });
+
+      console.log('Executing query...');
+      console.log('Query details:', query); // Log the query object
       const { data: ticketData, error: fetchError } = await query;
+      console.log('Ticket data:', ticketData);
+      console.log('Fetch error:', fetchError);
 
-      if (fetchError) throw fetchError;
+      if (fetchError) {
+        console.error('Error fetching tickets:', fetchError);
+        throw fetchError;
+      }
 
-      const userIds = Array.from(new Set(ticketData?.map((t: SupabaseTicket) => t.user_id) || []));
-      const assignedToIds = Array.from(new Set(ticketData?.map((t: SupabaseTicket) => t.assigned_to).filter(Boolean) || []));
+      if (!ticketData || ticketData.length === 0) {
+        console.log('No tickets found for user');
+        setTickets([]);
+        return;
+      }
+
+      const userIds = Array.from(new Set(ticketData.map(t => t.user_id)));
+      const assignedToIds = Array.from(new Set(ticketData.map(t => t.assigned_to).filter(Boolean)));
       const allUserIds = Array.from(new Set([...userIds, ...assignedToIds]));
 
+      console.log('Fetching user data for IDs:', allUserIds);
       const { data: userData, error: userError } = await supabase
         .from('profiles')
         .select('id, email')
         .in('id', allUserIds);
 
-      if (userError) throw userError;
+      console.log('User data:', userData);
+      console.log('User error:', userError);
+
+      if (userError) {
+        console.error('Error fetching user data:', userError);
+        throw userError;
+      }
 
       const userMap = (userData || []).reduce<Record<string, UserMapProfile>>((acc, user) => {
         acc[user.id] = {
@@ -133,26 +205,27 @@ const Dashboard: React.FC = () => {
         };
         return acc;
       }, {});
-      
-      const formattedTickets: FormattedTicket[] = (ticketData || []).map((ticket: SupabaseTicket) => ({
+
+      const formattedTickets: FormattedTicket[] = ticketData.map(ticket => ({
         id: ticket.id,
         subject: ticket.subject,
+        description: ticket.description,
         status: ticket.status,
         priority: ticket.priority,
-        created_at: ticket.created_at,
-        description: ticket.description,
-        updated_at: ticket.updated_at,
         ticket_type: ticket.ticket_type,
         topic: ticket.topic,
         customer_type: ticket.customer_type,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
         group_id: ticket.group_id,
         user: { email: userMap[ticket.user_id]?.email || 'Unknown' },
         agent: ticket.assigned_to ? { email: userMap[ticket.assigned_to]?.email || 'Unassigned' } : undefined
       }));
 
+      console.log('Formatted tickets:', formattedTickets);
       setTickets(formattedTickets);
     } catch (err) {
-      console.error('Error fetching tickets:', err);
+      console.error('Error in fetchTickets:', err);
       setError('Failed to load tickets');
     }
   };
@@ -226,6 +299,24 @@ const Dashboard: React.FC = () => {
     }
   };
 
+  const handleSelectAll = (checked: boolean) => {
+    if (checked) {
+      setSelectedTickets(new Set(tickets.map(ticket => ticket.id)));
+    } else {
+      setSelectedTickets(new Set());
+    }
+  };
+
+  const handleSelectTicket = (ticketId: number, checked: boolean) => {
+    const newSelected = new Set(selectedTickets);
+    if (checked) {
+      newSelected.add(ticketId);
+    } else {
+      newSelected.delete(ticketId);
+    }
+    setSelectedTickets(newSelected);
+  };
+
   if (loading) {
     return (
       <div className="dashboard loading">
@@ -291,7 +382,7 @@ const Dashboard: React.FC = () => {
           <span>Dashboard</span>
         </div>
         <nav className="dashboard-nav">
-          <Link to="/dashboard" className="nav-link active">Dashboard</Link>
+          <span className="nav-link active">Dashboard</span>
         </nav>
         
         <div className="stats-wrapper">
@@ -335,11 +426,10 @@ const Dashboard: React.FC = () => {
             <div className="header-left">
               <h2>
                 Tickets requiring your attention ({tickets.length})
-                <Link to="/help" className="help-link">What is this?</Link>
               </h2>
               <div className="ticket-filters">
                 <div className="filter-item">
-                  <span>Priority:</span>
+                  <span>Priority: </span>
                   <button className="filter-button">
                     Normal
                     <svg className="arrow-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
@@ -370,7 +460,11 @@ const Dashboard: React.FC = () => {
                 <tr>
                   <th className="checkbox-header">
                     <div className="checkbox-wrapper">
-                      <input type="checkbox" />
+                      <input 
+                        type="checkbox" 
+                        checked={tickets.length > 0 && selectedTickets.size === tickets.length}
+                        onChange={(e) => handleSelectAll(e.target.checked)}
+                      />
                     </div>
                   </th>
                   <th>Status</th>
@@ -387,8 +481,11 @@ const Dashboard: React.FC = () => {
                   <tr key={ticket.id}>
                     <td className="checkbox-cell">
                       <div className="checkbox-wrapper">
-                        <div className={`priority-bar priority-${ticket.priority.toLowerCase()}`} />
-                        <input type="checkbox" />
+                        <input 
+                          type="checkbox"
+                          checked={selectedTickets.has(ticket.id)}
+                          onChange={(e) => handleSelectTicket(ticket.id, e.target.checked)}
+                        />
                       </div>
                     </td>
                     <td>
@@ -438,7 +535,21 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
 
       const query = supabase
         .from('tickets')
-        .select('*')
+        .select(`
+          id,
+          subject,
+          description,
+          status,
+          priority,
+          ticket_type,
+          topic,
+          customer_type,
+          created_at,
+          updated_at,
+          user_id,
+          assigned_to,
+          group_id
+        `)
         .order('created_at', { ascending: false })
         .limit(5);
 
@@ -450,8 +561,8 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
 
       if (fetchError) throw fetchError;
 
-      const userIds = Array.from(new Set(ticketData?.map((t: SupabaseTicket) => t.user_id) || []));
-      const assignedToIds = Array.from(new Set(ticketData?.map((t: SupabaseTicket) => t.assigned_to).filter(Boolean) || []));
+      const userIds = Array.from(new Set(ticketData?.map(t => t.user_id) || []));
+      const assignedToIds = Array.from(new Set(ticketData?.map(t => t.assigned_to).filter(Boolean) || []));
       const allUserIds = Array.from(new Set([...userIds, ...assignedToIds]));
 
       const { data: userData, error: userError } = await supabase
@@ -469,17 +580,17 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
         return acc;
       }, {});
       
-      const formattedTickets: FormattedTicket[] = (ticketData || []).map((ticket: SupabaseTicket) => ({
+      const formattedTickets: FormattedTicket[] = (ticketData || []).map(ticket => ({
         id: ticket.id,
         subject: ticket.subject,
+        description: ticket.description,
         status: ticket.status,
         priority: ticket.priority,
-        created_at: ticket.created_at,
-        description: ticket.description,
-        updated_at: ticket.updated_at,
         ticket_type: ticket.ticket_type,
         topic: ticket.topic,
         customer_type: ticket.customer_type,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
         group_id: ticket.group_id,
         user: { email: userMap[ticket.user_id]?.email || 'Unknown' },
         agent: ticket.assigned_to ? { email: userMap[ticket.assigned_to]?.email || 'Unassigned' } : undefined

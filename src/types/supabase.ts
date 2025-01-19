@@ -1,8 +1,43 @@
-export type TicketStatus = 'NEW' | 'IN_PROGRESS' | 'PENDING' | 'RESOLVED' | 'CLOSED';
-export type TicketPriority = 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT';
-export type TicketType = 'INCIDENT' | 'QUESTION' | 'PROBLEM' | 'TASK';
+export type TicketStatus = 'open' | 'pending' | 'solved' | 'closed';
+export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
+export type TicketType = 'question' | 'incident' | 'problem' | 'task';
 export type TicketTopic = 'ISSUE' | 'INQUIRY' | 'OTHER' | 'PAYMENTS' | 'NONE';
 export type CustomerType = 'VIP_CUSTOMER' | 'STANDARD_CUSTOMER';
+
+export interface Group {
+  id: string;
+  name: string;
+  description: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface Ticket {
+  id: number;
+  subject: string;
+  description: string;
+  status: TicketStatus;
+  priority: TicketPriority;
+  ticket_type: TicketType;
+  topic: TicketTopic;
+  customer_type: CustomerType;
+  user_id: string;
+  assigned_to: string | null;
+  group_id: string | null;
+  created_at: string;
+  updated_at: string;
+  last_requester_update: string;
+  last_agent_update: string;
+}
+
+export interface Profile {
+  id: string;
+  email: string;
+  full_name: string | null;
+  role: 'user' | 'agent' | 'admin';
+  created_at: string;
+  updated_at: string;
+}
 
 export interface Database {
   public: {

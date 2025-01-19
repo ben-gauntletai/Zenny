@@ -2,7 +2,9 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+import { useNotifications } from '../contexts/NotificationContext';
 import type { TicketPriority, TicketType, TicketTopic, CustomerType } from '../types/supabase';
+import '../styles/CreateTicket.css';
 
 interface TicketFormData {
   subject: string;
@@ -11,6 +13,7 @@ interface TicketFormData {
   ticket_type: TicketType;
   topic: TicketTopic;
   customer_type: CustomerType;
+  status: string;
 }
 
 const CreateTicket: React.FC = () => {
@@ -19,10 +22,11 @@ const CreateTicket: React.FC = () => {
   const [formData, setFormData] = useState<TicketFormData>({
     subject: '',
     description: '',
-    priority: 'NORMAL',
-    ticket_type: 'INCIDENT',
+    priority: 'normal',
+    ticket_type: 'question',
     topic: 'NONE',
-    customer_type: 'STANDARD_CUSTOMER'
+    customer_type: 'STANDARD_CUSTOMER',
+    status: 'open'
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -57,9 +61,11 @@ const CreateTicket: React.FC = () => {
     }
   };
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+  const handleInputChange = (name: keyof TicketFormData, value: string) => {
+    setFormData(prev => ({
+      ...prev,
+      [name]: value
+    }));
   };
 
   return (
@@ -73,7 +79,7 @@ const CreateTicket: React.FC = () => {
             id="subject"
             name="subject"
             value={formData.subject}
-            onChange={handleChange}
+            onChange={(e) => handleInputChange('subject', e.target.value)}
             required
           />
         </div>
@@ -84,7 +90,7 @@ const CreateTicket: React.FC = () => {
             id="description"
             name="description"
             value={formData.description}
-            onChange={handleChange}
+            onChange={(e) => handleInputChange('description', e.target.value)}
             required
             rows={5}
           />
@@ -96,13 +102,13 @@ const CreateTicket: React.FC = () => {
             id="ticket_type"
             name="ticket_type"
             value={formData.ticket_type}
-            onChange={handleChange}
+            onChange={(e) => handleInputChange('ticket_type', e.target.value)}
             required
           >
-            <option value="INCIDENT">Incident</option>
-            <option value="QUESTION">Question</option>
-            <option value="PROBLEM">Problem</option>
-            <option value="TASK">Task</option>
+            <option value="question">Question</option>
+            <option value="incident">Incident</option>
+            <option value="problem">Problem</option>
+            <option value="task">Task</option>
           </select>
         </div>
 
@@ -112,13 +118,13 @@ const CreateTicket: React.FC = () => {
             id="priority"
             name="priority"
             value={formData.priority}
-            onChange={handleChange}
+            onChange={(e) => handleInputChange('priority', e.target.value)}
             required
           >
-            <option value="LOW">Low</option>
-            <option value="NORMAL">Normal</option>
-            <option value="HIGH">High</option>
-            <option value="URGENT">Urgent</option>
+            <option value="low">Low</option>
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
           </select>
         </div>
 
@@ -128,7 +134,7 @@ const CreateTicket: React.FC = () => {
             id="topic"
             name="topic"
             value={formData.topic}
-            onChange={handleChange}
+            onChange={(e) => handleInputChange('topic', e.target.value)}
             required
           >
             <option value="NONE">-</option>
@@ -145,7 +151,7 @@ const CreateTicket: React.FC = () => {
             id="customer_type"
             name="customer_type"
             value={formData.customer_type}
-            onChange={handleChange}
+            onChange={(e) => handleInputChange('customer_type', e.target.value)}
             required
           >
             <option value="STANDARD_CUSTOMER">Standard Customer</option>

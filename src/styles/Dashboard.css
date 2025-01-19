@@ -430,53 +430,15 @@
 }
 
 .dashboard .checkbox-wrapper {
-  position: relative;
   display: flex;
   align-items: center;
-  gap: 4px;
+  justify-content: center;
+  padding: 0 8px;
 }
 
-.dashboard .priority-bar {
-  position: relative;
-  width: 12px;
-  height: 32px;
-  background-color: #e2e8f0;
-  border-radius: 2px;
-  margin: -4px 0;
-}
-
-.dashboard .priority-bar.priority-high {
-  background-color: #e53e3e;
-}
-
-.dashboard .priority-bar.priority-medium {
-  background-color: #dd6b20;
-}
-
-.dashboard .priority-bar.priority-low {
-  background-color: #38a169;
-}
-
-.dashboard .ticket-id {
-  font-weight: 500;
-  color: #2d3748;
-}
-
-.dashboard .subject-cell {
-  white-space: normal !important;
-  min-width: 200px;
-  max-width: 400px;
-  padding-right: 24px;
-}
-
-.dashboard .ticket-subject {
-  color: #2d3748;
-  text-decoration: none;
-  font-weight: 400;
-}
-
-.dashboard .ticket-subject:hover {
-  color: #3182ce;
+.dashboard .checkbox-wrapper input[type="checkbox"] {
+  margin: 0;
+  cursor: pointer;
 }
 
 .dashboard .status-badge {
