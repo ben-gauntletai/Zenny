@@ -1,0 +1,256 @@
+.customers-page {
+  display: flex;
+  height: 100vh;
+  overflow: hidden;
+  background-color: var(--background-color);
+}
+
+.customer-sidebar {
+  width: 280px;
+  height: 100%;
+  border-right: 1px solid var(--border-color);
+  background: white;
+  display: flex;
+  flex-direction: column;
+  flex-shrink: 0;
+}
+
+.customer-lists {
+  padding: 1rem;
+}
+
+.customer-lists-header {
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--secondary-color);
+  margin-bottom: 1rem;
+}
+
+.customer-list-item {
+  display: block;
+  padding: 0.5rem 1rem;
+  color: var(--text-color);
+  text-decoration: none;
+  border-radius: 0.375rem;
+  margin-bottom: 0.25rem;
+  font-size: 0.875rem;
+}
+
+.customer-list-item:hover {
+  background-color: var(--background-color);
+}
+
+.customer-list-item.active {
+  background-color: #EBF8FF;
+  color: #2B6CB0;
+  font-weight: 500;
+}
+
+.customers-main {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  height: 100%;
+  overflow: hidden;
+}
+
+.customers-header {
+  padding: 1.5rem 2rem;
+  background: white;
+  border-bottom: 1px solid var(--border-color);
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.customers-title {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-color);
+}
+
+.customers-header-actions {
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.customers-content {
+  flex: 1;
+  padding: 2rem;
+  overflow-y: auto;
+}
+
+.customers-search {
+  margin-bottom: 1.5rem;
+  position: relative;
+}
+
+.customers-search input {
+  width: 100%;
+  padding: 0.5rem 1rem;
+  padding-left: 2.5rem;
+  border: 1px solid var(--border-color);
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+}
+
+.customers-search svg {
+  position: absolute;
+  left: 0.75rem;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 1rem;
+  height: 1rem;
+  color: var(--secondary-color);
+}
+
+.customers-table {
+  width: 100%;
+  background: white;
+  border: 1px solid var(--border-color);
+  border-radius: 0.5rem;
+  overflow: hidden;
+}
+
+.customers-table th {
+  background: #F7FAFC;
+  font-size: 0.75rem;
+  font-weight: 500;
+  color: var(--secondary-color);
+  text-transform: uppercase;
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid var(--border-color);
+  text-align: left;
+}
+
+.customers-table td {
+  padding: 1rem;
+  font-size: 0.875rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.customer-name {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.customer-avatar {
+  width: 2rem;
+  height: 2rem;
+  border-radius: 50%;
+  background: var(--background-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 0.875rem;
+  color: var(--secondary-color);
+}
+
+.timezone {
+  color: var(--secondary-color);
+  font-size: 0.875rem;
+}
+
+.last-updated {
+  color: var(--secondary-color);
+  font-size: 0.875rem;
+}
+
+.primary-button {
+  background-color: #2563EB;
+  color: white;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: none;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.primary-button:hover {
+  background-color: #1D4ED8;
+}
+
+.secondary-button {
+  background-color: white;
+  color: #4B5563;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  font-size: 0.875rem;
+  font-weight: 500;
+  border: 1px solid #E5E7EB;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.secondary-button:hover {
+  background-color: #F9FAFB;
+  border-color: #D1D5DB;
+}
+
+.suspended-by-link {
+  color: #2563EB;
+  text-decoration: none;
+  font-size: 0.875rem;
+}
+
+.suspended-by-link:hover {
+  text-decoration: underline;
+}
+
+.more-button {
+  background: none;
+  border: none;
+  padding: 0.25rem;
+  cursor: pointer;
+  color: #6B7280;
+  border-radius: 0.25rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.more-button:hover {
+  background-color: #F3F4F6;
+  color: #374151;
+}
+
+.more-icon {
+  width: 1rem;
+  height: 1rem;
+}
+
+/* Update table header styles */
+.customers-table th:last-child {
+  width: 48px;
+  padding: 0.75rem 0.5rem;
+}
+
+/* Add hover effect to table rows */
+.customers-table tbody tr:hover {
+  background-color: #F9FAFB;
+}
+
+/* Style for the suspended date column */
+.customers-table td:nth-last-child(2) {
+  color: #6B7280;
+  font-size: 0.875rem;
+}
+
+@media (max-width: 768px) {
+  .customer-sidebar {
+    display: none;
+  }
+  
+  .customers-header {
+    padding: 1rem;
+  }
+  
+  .customers-content {
+    padding: 1rem;
+  }
+} 

@@ -15,6 +15,7 @@ import CreateArticle from './pages/CreateArticle';
 import ArticleDetail from './pages/ArticleDetail';
 import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import CustomerList from './pages/CustomerList';
+import SuspendedUsers from './pages/SuspendedUsers';
 import ProtectedRoute from './components/ProtectedRoute';
 import './styles/App.css';
 
@@ -49,6 +50,19 @@ const router = createBrowserRouter(
             <Navigation />
             <main>
               <CustomerList />
+            </main>
+          </>
+        </ProtectedRoute>
+      )
+    },
+    {
+      path: '/customers/suspended',
+      element: (
+        <ProtectedRoute>
+          <>
+            <Navigation />
+            <main>
+              <SuspendedUsers />
             </main>
           </>
         </ProtectedRoute>

@@ -1,23 +1,16 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
+import { Link, useLocation } from 'react-router-dom';
 import Navigation from '../components/Navigation';
+import { supabase } from '../lib/supabaseClient';
 import '../styles/Customers.css';
 
-interface Customer {
+interface SuspendedUser {
   id: string;
   name: string;
   email: string;
-  tags: string[];
-  timezone: string;
-  group_name?: string;
-  user_type: string;
-  access: string;
-  organization?: string;
-  language: string;
-  details?: any;
-  notes?: string;
-  updated_at: string;
+  reason: string;
+  suspended_by: string;
+  suspended_date: string;
 }
 
 const SearchIcon = () => (
@@ -26,29 +19,34 @@ const SearchIcon = () => (
   </svg>
 );
 
-const CustomerList: React.FC = () => {
-  const navigate = useNavigate();
+const MoreIcon = () => (
+  <svg viewBox="0 0 20 20" fill="currentColor" className="more-icon" style={{ width: '16px', height: '16px' }}>
+    <path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z" />
+  </svg>
+);
+
+const SuspendedUsers: React.FC = () => {
   const location = useLocation();
-  const [customers, setCustomers] = useState<Customer[]>([]);
+  const [users, setUsers] = useState<SuspendedUser[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [loading, setLoading] = useState(true);
-  const [activeList, setActiveList] = useState('all');
+  const [activeList, setActiveList] = useState('suspended');
 
   useEffect(() => {
-    fetchCustomers();
+    fetchSuspendedUsers();
   }, []);
 
-  const fetchCustomers = async () => {
+  const fetchSuspendedUsers = async () => {
     try {
       const { data, error } = await supabase
-        .from('customers')
+        .from('suspended_users')
         .select('*')
-        .order('updated_at', { ascending: false });
+        .order('suspended_date', { ascending: false });
 
       if (error) throw error;
-      setCustomers(data || []);
+      setUsers(data || []);
     } catch (error: any) {
-      console.error('Error fetching customers:', error.message);
+      console.error('Error fetching suspended users:', error.message);
     } finally {
       setLoading(false);
     }
@@ -57,20 +55,33 @@ const CustomerList: React.FC = () => {
   const handleSearch = async () => {
     try {
       const { data, error } = await supabase
-        .from('customers')
+        .from('suspended_users')
         .select('*')
         .or(`name.ilike.%${searchQuery}%,email.ilike.%${searchQuery}%`)
-        .order('updated_at', { ascending: false });
+        .order('suspended_date', { ascending: false });
 
       if (error) throw error;
-      setCustomers(data || []);
+      setUsers(data || []);
     } catch (error: any) {
-      console.error('Error searching customers:', error.message);
+      console.error('Error searching suspended users:', error.message);
     }
   };
 
   const formatDate = (date: string): string => {
-    return new Date(date).toLocaleString();
+    const now = new Date();
+    const suspendedDate = new Date(date);
+    const diffInMinutes = Math.floor((now.getTime() - suspendedDate.getTime()) / (1000 * 60));
+
+    if (diffInMinutes < 1) {
+      return 'less than a minute ago';
+    } else if (diffInMinutes < 60) {
+      return `${diffInMinutes} minute${diffInMinutes === 1 ? '' : 's'} ago`;
+    } else if (diffInMinutes < 1440) {
+      const hours = Math.floor(diffInMinutes / 60);
+      return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+    } else {
+      return suspendedDate.toLocaleDateString();
+    }
   };
 
   const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>): void => {
@@ -107,11 +118,7 @@ const CustomerList: React.FC = () => {
 
       <div className="customers-main">
         <div className="customers-header">
-          <h1 className="customers-title">Customers</h1>
-          <div className="customers-header-actions">
-            <button className="secondary-button">Bulk import</button>
-            <button className="primary-button">Add customer</button>
-          </div>
+          <h1 className="customers-title">Suspended users</h1>
         </div>
 
         <div className="customers-content">
@@ -119,7 +126,7 @@ const CustomerList: React.FC = () => {
             <SearchIcon />
             <input
               type="text"
-              placeholder="Search customers"
+              placeholder="Search suspended users"
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               onKeyPress={handleKeyPress}
@@ -135,35 +142,39 @@ const CustomerList: React.FC = () => {
                   </th>
                   <th>Name</th>
                   <th>Email</th>
-                  <th>Tags</th>
-                  <th>Timezone</th>
-                  <th>Last updated</th>
+                  <th>Reason</th>
+                  <th>Suspended by</th>
+                  <th>Suspended date</th>
+                  <th></th>
                 </tr>
               </thead>
               <tbody>
-                {customers.map((customer: Customer) => (
-                  <tr key={customer.id}>
+                {users.map((user) => (
+                  <tr key={user.id}>
                     <td>
                       <input type="checkbox" />
                     </td>
                     <td>
                       <div className="customer-name">
-                        <div className="customer-avatar">JD</div>
-                        <span>{customer.name}</span>
+                        <div className="customer-avatar">
+                          {user.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                        </div>
+                        <span>{user.name}</span>
                       </div>
                     </td>
-                    <td>{customer.email}</td>
+                    <td>{user.email}</td>
+                    <td>{user.reason}</td>
                     <td>
-                      <div className="tags">
-                        {customer.tags?.map((tag: string, index: number) => (
-                          <span key={index} className="tag">
-                            {tag}
-                          </span>
-                        ))}
-                      </div>
+                      <Link to={`/users/${user.suspended_by}`} className="suspended-by-link">
+                        {user.suspended_by}
+                      </Link>
                     </td>
-                    <td className="timezone">{customer.timezone}</td>
-                    <td className="last-updated">{formatDate(customer.updated_at)}</td>
+                    <td>{formatDate(user.suspended_date)}</td>
+                    <td>
+                      <button className="more-button">
+                        <MoreIcon />
+                      </button>
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -175,4 +186,4 @@ const CustomerList: React.FC = () => {
   );
 };
 
-export default CustomerList; 
+export default SuspendedUsers; 
