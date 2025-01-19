@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import React, { useState, useEffect, useRef } from 'react';
+import { Link, useLocation } from 'react-router-dom';
 import type { 
   TicketStatus, 
   TicketPriority, 
@@ -7,11 +7,13 @@ import type {
   TicketTopic, 
   CustomerType,
   Ticket,
-  Profile 
+  Profile
 } from '../types/supabase';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+import Navigation from '../components/Navigation';
 import '../styles/Dashboard.css';
+import { getInitials, getProfileColor, formatFullName } from '../utils/profileUtils';
 
 interface TicketSummary {
   status: string;
@@ -56,7 +58,194 @@ interface ActivityItem {
   };
 }
 
+interface RecentTicketsProps {
+  userId: string | undefined;
+  isAgent: boolean;
+}
+
 const ALL_STATUSES = ['open', 'pending', 'solved', 'closed'];
+
+const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
+  const [tickets, setTickets] = useState<FormattedTicket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (userId) {
+      fetchRecentTickets();
+    }
+  }, [userId, isAgent]);
+
+  const fetchRecentTickets = async () => {
+    try {
+      setLoading(true);
+      setError('');
+
+      const query = supabase
+        .from('tickets')
+        .select(`
+          id,
+          subject,
+          description,
+          status,
+          priority,
+          ticket_type,
+          topic,
+          customer_type,
+          created_at,
+          updated_at,
+          user_id,
+          assigned_to,
+          group_id
+        `)
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (!isAgent) {
+        query.eq('user_id', userId);
+      }
+
+      const { data: ticketData, error: fetchError } = await query;
+
+      if (fetchError) throw fetchError;
+
+      const userIds = Array.from(new Set(ticketData?.map(t => t.user_id) || []));
+      const assignedToIds = Array.from(new Set(ticketData?.map(t => t.assigned_to).filter(Boolean) || []));
+      const allUserIds = Array.from(new Set([...userIds, ...assignedToIds]));
+
+      const { data: userData, error: userError } = await supabase
+        .from('profiles')
+        .select('id, email')
+        .in('id', allUserIds);
+
+      if (userError) throw userError;
+
+      const userMap = (userData || []).reduce<Record<string, UserMapProfile>>((acc, user) => {
+        acc[user.id] = {
+          id: user.id,
+          email: user.email
+        };
+        return acc;
+      }, {});
+      
+      const formattedTickets: FormattedTicket[] = (ticketData || []).map(ticket => ({
+        id: ticket.id,
+        subject: ticket.subject,
+        description: ticket.description,
+        status: ticket.status,
+        priority: ticket.priority,
+        ticket_type: ticket.ticket_type,
+        topic: ticket.topic,
+        customer_type: ticket.customer_type,
+        created_at: ticket.created_at,
+        updated_at: ticket.updated_at,
+        group_id: ticket.group_id,
+        user: { email: userMap[ticket.user_id]?.email || 'Unknown' },
+        agent: ticket.assigned_to ? { email: userMap[ticket.assigned_to]?.email || 'Unassigned' } : undefined
+      }));
+
+      setTickets(formattedTickets);
+    } catch (err) {
+      console.error('Error fetching recent tickets:', err);
+      setError('Failed to load recent tickets');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const formatDate = (dateString: string) => {
+    const date = new Date(dateString);
+    const today = new Date();
+    const yesterday = new Date(today);
+    yesterday.setDate(yesterday.getDate() - 1);
+
+    if (date.toDateString() === today.toDateString()) {
+      return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else if (date.toDateString() === yesterday.toDateString()) {
+      return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+    } else {
+      return date.toLocaleDateString([], { 
+        year: 'numeric',
+        month: 'short',
+        day: 'numeric',
+        hour: '2-digit',
+        minute: '2-digit'
+      });
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="tickets-loading">
+        <div className="loading-spinner"></div>
+        <p>Loading recent tickets...</p>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="tickets-error">
+        <p>{error}</p>
+        <button onClick={fetchRecentTickets} className="dashboard-button primary-button">
+          Retry
+        </button>
+      </div>
+    );
+  }
+
+  if (tickets.length === 0) {
+    return (
+      <div className="no-tickets">
+        <p>No recent tickets found</p>
+        <Link to="/tickets/new" className="dashboard-button primary-button">
+          Create Your First Ticket
+        </Link>
+      </div>
+    );
+  }
+
+  return (
+    <div className="tickets-table-container">
+      <table className="tickets-table">
+        <thead>
+          <tr>
+            <th>Subject</th>
+            <th>Status</th>
+            <th>Priority</th>
+            <th>Created</th>
+            {isAgent && <th>Requester</th>}
+            <th>Assigned To</th>
+          </tr>
+        </thead>
+        <tbody>
+          {tickets.map(ticket => (
+            <tr key={ticket.id}>
+              <td>
+                <Link to={`/tickets/${ticket.id}`} className="ticket-subject">
+                  {ticket.subject}
+                </Link>
+              </td>
+              <td>
+                <span className={`status-badge ${ticket.status.toLowerCase()}`}>
+                  {ticket.status.replace('_', ' ')}
+                </span>
+              </td>
+              <td>
+                <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
+                  {ticket.priority}
+                </span>
+              </td>
+              <td>{formatDate(ticket.created_at)}</td>
+              {isAgent && <td>{ticket.user.email}</td>}
+              <td>{ticket.agent?.email || 'Unassigned'}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+};
 
 const Dashboard: React.FC = () => {
   const { user, signOut } = useAuth();
@@ -349,6 +538,7 @@ const Dashboard: React.FC = () => {
 
   return (
     <div className="dashboard">
+      <Navigation />
       <div className="activity-feed">
         <div className="activity-feed-header">
           Updates to your tickets
@@ -385,8 +575,6 @@ const Dashboard: React.FC = () => {
       </div>
       <div className="dashboard-content">
         <div className="dashboard-breadcrumb">
-          <Link to="/">Home</Link>
-          <span className="separator">/</span>
           <span>Dashboard</span>
         </div>
         
@@ -513,193 +701,6 @@ const Dashboard: React.FC = () => {
           </div>
         </section>
       </div>
-    </div>
-  );
-};
-
-interface RecentTicketsProps {
-  userId: string | undefined;
-  isAgent: boolean;
-}
-
-const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
-  const [tickets, setTickets] = useState<FormattedTicket[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-
-  useEffect(() => {
-    if (userId) {
-      fetchRecentTickets();
-    }
-  }, [userId, isAgent]);
-
-  const fetchRecentTickets = async () => {
-    try {
-      setLoading(true);
-      setError('');
-
-      const query = supabase
-        .from('tickets')
-        .select(`
-          id,
-          subject,
-          description,
-          status,
-          priority,
-          ticket_type,
-          topic,
-          customer_type,
-          created_at,
-          updated_at,
-          user_id,
-          assigned_to,
-          group_id
-        `)
-        .order('created_at', { ascending: false })
-        .limit(5);
-
-      if (!isAgent) {
-        query.eq('user_id', userId);
-      }
-
-      const { data: ticketData, error: fetchError } = await query;
-
-      if (fetchError) throw fetchError;
-
-      const userIds = Array.from(new Set(ticketData?.map(t => t.user_id) || []));
-      const assignedToIds = Array.from(new Set(ticketData?.map(t => t.assigned_to).filter(Boolean) || []));
-      const allUserIds = Array.from(new Set([...userIds, ...assignedToIds]));
-
-      const { data: userData, error: userError } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .in('id', allUserIds);
-
-      if (userError) throw userError;
-
-      const userMap = (userData || []).reduce<Record<string, UserMapProfile>>((acc, user) => {
-        acc[user.id] = {
-          id: user.id,
-          email: user.email
-        };
-        return acc;
-      }, {});
-      
-      const formattedTickets: FormattedTicket[] = (ticketData || []).map(ticket => ({
-        id: ticket.id,
-        subject: ticket.subject,
-        description: ticket.description,
-        status: ticket.status,
-        priority: ticket.priority,
-        ticket_type: ticket.ticket_type,
-        topic: ticket.topic,
-        customer_type: ticket.customer_type,
-        created_at: ticket.created_at,
-        updated_at: ticket.updated_at,
-        group_id: ticket.group_id,
-        user: { email: userMap[ticket.user_id]?.email || 'Unknown' },
-        agent: ticket.assigned_to ? { email: userMap[ticket.assigned_to]?.email || 'Unassigned' } : undefined
-      }));
-
-      setTickets(formattedTickets);
-    } catch (err) {
-      console.error('Error fetching recent tickets:', err);
-      setError('Failed to load recent tickets');
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    const today = new Date();
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    if (date.toDateString() === today.toDateString()) {
-      return `Today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    } else if (date.toDateString() === yesterday.toDateString()) {
-      return `Yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
-    } else {
-      return date.toLocaleDateString([], { 
-        year: 'numeric',
-        month: 'short',
-        day: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
-    }
-  };
-
-  if (loading) {
-    return (
-      <div className="tickets-loading">
-        <div className="loading-spinner"></div>
-        <p>Loading recent tickets...</p>
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="tickets-error">
-        <p>{error}</p>
-        <button onClick={fetchRecentTickets} className="dashboard-button primary-button">
-          Retry
-        </button>
-      </div>
-    );
-  }
-
-  if (tickets.length === 0) {
-    return (
-      <div className="no-tickets">
-        <p>No recent tickets found</p>
-        <Link to="/tickets/new" className="dashboard-button primary-button">
-          Create Your First Ticket
-        </Link>
-      </div>
-    );
-  }
-
-  return (
-    <div className="tickets-table-container">
-      <table className="tickets-table">
-        <thead>
-          <tr>
-            <th>Subject</th>
-            <th>Status</th>
-            <th>Priority</th>
-            <th>Created</th>
-            {isAgent && <th>Requester</th>}
-            <th>Assigned To</th>
-          </tr>
-        </thead>
-        <tbody>
-          {tickets.map(ticket => (
-            <tr key={ticket.id}>
-              <td>
-                <Link to={`/tickets/${ticket.id}`} className="ticket-subject">
-                  {ticket.subject}
-                </Link>
-              </td>
-              <td>
-                <span className={`status-badge ${ticket.status.toLowerCase()}`}>
-                  {ticket.status.replace('_', ' ')}
-                </span>
-              </td>
-              <td>
-                <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
-                  {ticket.priority}
-                </span>
-              </td>
-              <td>{formatDate(ticket.created_at)}</td>
-              {isAgent && <td>{ticket.user.email}</td>}
-              <td>{ticket.agent?.email || 'Unassigned'}</td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
     </div>
   );
 };

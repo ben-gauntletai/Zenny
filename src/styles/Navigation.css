@@ -55,6 +55,146 @@
   display: flex;
   align-items: center;
   gap: 1rem;
+  position: relative;
+}
+
+.profile-menu {
+  position: relative;
+}
+
+.profile-button {
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  position: relative;
+}
+
+.profile-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: #e2e8f0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.status-indicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background-color: #cbd5e0;
+  border: 2px solid white;
+  position: absolute;
+  bottom: 0;
+  right: 0;
+}
+
+.profile-dropdown {
+  position: absolute;
+  top: 100%;
+  right: 0;
+  margin-top: 0.5rem;
+  background: white;
+  border-radius: 0.5rem;
+  box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  width: 240px;
+  z-index: 50;
+}
+
+.profile-header {
+  padding: 1rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.profile-info {
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
+}
+
+.profile-name {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: #2d3748;
+}
+
+.profile-status {
+  font-size: 0.75rem;
+  color: #718096;
+}
+
+.profile-menu-items {
+  padding: 0.5rem;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.status-option {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.5rem;
+  border: none;
+  background: none;
+  font-size: 0.875rem;
+  color: #4a5568;
+  cursor: pointer;
+  border-radius: 0.375rem;
+  text-align: left;
+}
+
+.status-option:hover {
+  background-color: #f7fafc;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-option.online .status-dot {
+  background-color: #48bb78;
+}
+
+.status-option.away .status-dot {
+  background-color: #ed8936;
+}
+
+.status-option.transfers .status-dot {
+  background-color: #4299e1;
+}
+
+.status-option.offline .status-dot {
+  background-color: #cbd5e0;
+}
+
+.profile-menu-footer {
+  padding: 0.5rem;
+}
+
+.menu-item {
+  display: block;
+  width: 100%;
+  padding: 0.5rem;
+  border: none;
+  background: none;
+  font-size: 0.875rem;
+  color: #4a5568;
+  cursor: pointer;
+  border-radius: 0.375rem;
+  text-align: left;
+}
+
+.menu-item:hover {
+  background-color: #f7fafc;
+}
+
+.menu-item.sign-out {
+  color: #e53e3e;
 }
 
 .agent-badge {

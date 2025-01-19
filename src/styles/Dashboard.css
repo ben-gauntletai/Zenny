@@ -1,101 +1,80 @@
 .dashboard {
   display: flex;
-  padding: 0;
+  height: 100vh;
+  overflow: hidden;
   background-color: #f8f9fa;
-  min-height: 100vh;
 }
 
 .activity-feed {
-  width: 280px;
+  width: 300px;
+  height: 100%;
+  border-right: 1px solid #e2e8f0;
   background: white;
-  border-right: 2px solid #cbd5e0;
-  box-shadow: 4px 0 8px rgba(0, 0, 0, 0.1);
-  flex-shrink: 0;
   display: flex;
   flex-direction: column;
-  height: 100vh;
-  position: sticky;
-  top: 0;
+  flex-shrink: 0;
 }
 
 .activity-feed-header {
-  padding: 1rem;
-  font-size: 14px;
-  font-weight: 500;
-  color: #2d3748;
+  padding: 1.5rem;
+  font-weight: 600;
   border-bottom: 1px solid #e2e8f0;
-  background: #f8fafc;
+  flex-shrink: 0;
 }
 
 .activity-list {
-  padding: 0;
+  padding: 1rem;
+  overflow-y: auto;
+  flex-grow: 1;
 }
 
 .activity-item {
-  padding: 0.75rem 1rem;
+  padding: 1rem;
   border-bottom: 1px solid #e2e8f0;
-  cursor: pointer;
-  transition: background-color 0.15s ease;
 }
 
-.activity-item:hover {
-  background-color: #f8fafc;
-}
-
-.activity-item .activity-header {
+.activity-header {
   display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  margin-bottom: 0.25rem;
+  align-items: flex-start;
+  gap: 1rem;
+  margin-bottom: 0.5rem;
 }
 
-.activity-item .activity-icon {
-  width: 20px;
-  height: 20px;
-  border-radius: 50%;
-  background-color: #e2e8f0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+.activity-icon {
+  width: 24px;
+  height: 24px;
+  color: #4a5568;
+  flex-shrink: 0;
 }
 
-.activity-item .activity-icon svg {
-  width: 12px;
-  height: 12px;
+.activity-title {
+  font-size: 0.875rem;
+  color: #4a5568;
+  line-height: 1.5;
+}
+
+.activity-meta {
+  font-size: 0.75rem;
   color: #718096;
 }
 
-.activity-item .activity-title {
-  font-size: 12px;
-  color: #4a5568;
-  line-height: 1.4;
-}
-
-.activity-item .activity-title strong {
-  color: #2d3748;
-  font-weight: 500;
-}
-
-.activity-item .activity-meta {
-  font-size: 11px;
-  color: #a0aec0;
-  margin-left: 28px;
-}
-
-.activity-item .activity-link {
-  color: inherit;
+.activity-link {
+  color: #4299e1;
   text-decoration: none;
 }
 
-.activity-item .activity-link:hover {
+.activity-link:hover {
   text-decoration: underline;
 }
 
 .dashboard-content {
-  flex: 1;
-  min-width: 0;
+  flex-grow: 1;
+  padding: 2rem;
+  overflow-y: auto;
+  height: 100%;
   display: flex;
   flex-direction: column;
+  gap: 2rem;
 }
 
 .side-nav {
@@ -160,11 +139,11 @@
 }
 
 .dashboard-breadcrumb {
-  padding: 0.5rem 2rem;
-  font-size: 12px;
-  color: #718096;
-  background: white;
-  border-bottom: 1px solid #e2e8f0;
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 1rem;
+  flex-shrink: 0;
 }
 
 .dashboard-breadcrumb a {
@@ -238,17 +217,14 @@
 }
 
 .stats-wrapper {
-  background: #f8f9fa;
-  padding: 0.5rem 0;
-  margin: 0;
-  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
 }
 
 .dashboard-stats {
-  display: flex;
-  gap: 0.75rem;
-  margin: 0 2rem;
-  max-width: 1200px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
 }
 
 .stats-section {
@@ -298,12 +274,84 @@
   line-height: 1;
 }
 
-.dashboard .tickets-section {
-  background: white;
-  margin: 1rem 2rem;
-  border-radius: 4px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+.tickets-section {
+  flex-grow: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0; /* Important for nested scrolling */
 }
+
+.tickets-table-container {
+  flex-grow: 1;
+  overflow-y: auto;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.5rem;
+  background: white;
+}
+
+.tickets-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.tickets-table th,
+.tickets-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.tickets-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #4a5568;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Loading state */
+.dashboard.loading,
+.dashboard.error {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100vh;
+}
+
+.loading-spinner {
+  border: 3px solid #f3f3f3;
+  border-top: 3px solid #3498db;
+  border-radius: 50%;
+  width: 24px;
+  height: 24px;
+  animation: spin 1s linear infinite;
+  margin-right: 1rem;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+/* Status and priority badges */
+.status-badge,
+.priority-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 9999px;
+  font-size: 0.875rem;
+  font-weight: 500;
+}
+
+.status-badge.open { background-color: #E3F2FD; color: #1976D2; }
+.status-badge.pending { background-color: #FFF3E0; color: #F57C00; }
+.status-badge.solved { background-color: #E8F5E9; color: #388E3C; }
+.status-badge.closed { background-color: #ECEFF1; color: #546E7A; }
+
+.priority-badge.low { background-color: #E8F5E9; color: #388E3C; }
+.priority-badge.normal { background-color: #E3F2FD; color: #1976D2; }
+.priority-badge.high { background-color: #FFF3E0; color: #F57C00; }
+.priority-badge.urgent { background-color: #FFEBEE; color: #D32F2F; }
 
 .dashboard .section-header {
   display: flex;
@@ -357,30 +405,6 @@
   background: #e2e8f0;
 }
 
-.dashboard .tickets-table-container {
-  overflow-x: auto;
-}
-
-.dashboard .tickets-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  font-size: 12px;
-}
-
-.dashboard .tickets-table th {
-  text-align: left;
-  padding: 6px 8px;
-  color: #a0aec0;
-  font-weight: 500;
-  border-bottom: 1px solid #e2e8f0;
-  white-space: nowrap;
-  background: #f8f9fa;
-  font-size: 11px;
-  position: relative;
-  cursor: pointer;
-}
-
 .dashboard .tickets-table th:hover {
   color: #2d3748;
 }
@@ -419,15 +443,6 @@
 
 .dashboard .tickets-table th:last-child::after {
   display: none;
-}
-
-.dashboard .tickets-table td {
-  padding: 8px;
-  border-bottom: 1px solid #e2e8f0;
-  color: #2d3748;
-  white-space: nowrap;
-  background: white;
-  position: relative;
 }
 
 .dashboard .tickets-table td::after {
@@ -469,27 +484,6 @@
 .dashboard .checkbox-wrapper input[type="checkbox"] {
   margin: 0;
   cursor: pointer;
-}
-
-.dashboard .status-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 1px 10px;
-  border-radius: 24px;
-  font-size: 11px;
-  font-weight: 500;
-  background-color: #dc2626;
-  color: white;
-  height: 20px;
-  text-transform: uppercase;
-  letter-spacing: 0.5px;
-  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
-  min-width: 44px;
-}
-
-.dashboard .status-badge.open {
-  background-color: #dc2626;
 }
 
 .dashboard .filter-select {

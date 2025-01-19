@@ -1,3 +1,5 @@
+import { User as SupabaseUser } from '@supabase/supabase-js';
+
 export type TicketStatus = 'open' | 'pending' | 'solved' | 'closed';
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type TicketType = 'question' | 'incident' | 'problem' | 'task';
@@ -37,6 +39,16 @@ export interface Profile {
   role: 'user' | 'agent' | 'admin';
   created_at: string;
   updated_at: string;
+}
+
+export interface UserMetadata {
+  firstName?: string;
+  lastName?: string;
+  role?: string;
+}
+
+export interface User extends SupabaseUser {
+  user_metadata: UserMetadata;
 }
 
 export interface Database {
