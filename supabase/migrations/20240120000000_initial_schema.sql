@@ -5,6 +5,7 @@ DROP TABLE IF EXISTS tickets CASCADE;
 DROP TABLE IF EXISTS groups CASCADE;
 DROP TABLE IF EXISTS profiles CASCADE;
 DROP TABLE IF EXISTS customers CASCADE;
+DROP TABLE IF EXISTS notifications CASCADE;
 
 -- Drop existing types
 DROP TYPE IF EXISTS ticket_status CASCADE;
@@ -13,6 +14,7 @@ DROP TYPE IF EXISTS ticket_type CASCADE;
 DROP TYPE IF EXISTS ticket_topic CASCADE;
 DROP TYPE IF EXISTS customer_type CASCADE;
 DROP TYPE IF EXISTS user_role CASCADE;
+DROP TYPE IF EXISTS notification_type CASCADE;
 
 -- Enable UUID generation
 CREATE EXTENSION IF NOT EXISTS "uuid-ossp";
@@ -24,6 +26,12 @@ CREATE TYPE ticket_type AS ENUM ('question', 'incident', 'problem', 'task');
 CREATE TYPE ticket_topic AS ENUM ('ISSUE', 'INQUIRY', 'OTHER', 'PAYMENTS', 'NONE');
 CREATE TYPE customer_type AS ENUM ('VIP_CUSTOMER', 'STANDARD_CUSTOMER');
 CREATE TYPE user_role AS ENUM ('user', 'agent', 'admin');
+CREATE TYPE notification_type AS ENUM (
+    'TICKET_CREATED',
+    'TICKET_UPDATED',
+    'TICKET_ASSIGNED',
+    'COMMENT_ADDED'
+);
 
 -- Create profiles table first (since tickets will reference it)
 CREATE TABLE profiles (
@@ -32,7 +40,8 @@ CREATE TABLE profiles (
     full_name text,
     role user_role DEFAULT 'user',
     created_at timestamptz DEFAULT now(),
-    updated_at timestamptz DEFAULT now()
+    updated_at timestamptz DEFAULT now(),
+    last_assigned_at timestamptz
 );
 
 -- Create groups table (since tickets will reference it)
@@ -300,4 +309,86 @@ $$ language plpgsql security definer;
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
     AFTER INSERT ON auth.users
-    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user(); 
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user();
+
+-- Create notifications table
+CREATE TABLE notifications (
+    id bigint PRIMARY KEY GENERATED ALWAYS AS IDENTITY,
+    user_id uuid REFERENCES profiles(id) ON DELETE CASCADE,
+    title text NOT NULL,
+    message text NOT NULL,
+    type notification_type NOT NULL,
+    ticket_id bigint REFERENCES tickets(id) ON DELETE CASCADE,
+    read boolean DEFAULT false,
+    created_at timestamptz DEFAULT now(),
+    updated_at timestamptz DEFAULT now()
+);
+
+-- Add index for faster notification queries
+CREATE INDEX idx_notifications_user_id ON notifications(user_id);
+CREATE INDEX idx_notifications_read ON notifications(read);
+
+-- Create notification trigger
+CREATE TRIGGER update_notifications_updated_at
+    BEFORE UPDATE ON notifications
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
+-- Create notification policies
+CREATE POLICY "Users can view their own notifications"
+    ON notifications FOR SELECT
+    TO authenticated
+    USING (auth.uid() = user_id);
+
+CREATE POLICY "Users can update their own notifications"
+    ON notifications FOR UPDATE
+    TO authenticated
+    USING (auth.uid() = user_id)
+    WITH CHECK (auth.uid() = user_id);
+
+-- Enable RLS on notifications
+ALTER TABLE notifications ENABLE ROW LEVEL SECURITY;
+
+-- Create policies for customers table
+CREATE POLICY "Agents and admins can view all customers"
+    ON customers FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('agent', 'admin')
+        )
+    );
+
+CREATE POLICY "Users can view their own customer data"
+    ON customers FOR SELECT
+    TO authenticated
+    USING (
+        email = (
+            SELECT email FROM profiles
+            WHERE profiles.id = auth.uid()
+        )
+    );
+
+CREATE POLICY "Only admins can insert customers"
+    ON customers FOR INSERT
+    TO authenticated
+    WITH CHECK (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role = 'admin'
+        )
+    );
+
+CREATE POLICY "Only admins can update customers"
+    ON customers FOR UPDATE
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role = 'admin'
+        )
+    ); 

@@ -1,0 +1,2 @@
+Use this when you need to: npx supabase start -x vector -x logflare
+

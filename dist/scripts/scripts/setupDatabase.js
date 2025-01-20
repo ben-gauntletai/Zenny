@@ -21,7 +21,7 @@ async function setupDatabase() {
     try {
         console.log('Starting database setup...');
         // Run initial setup
-        await runSQLFile('supabase/migrations/20240320000000_initial_setup.sql');
+        await runSQLFile('supabase/migrations/initial_setup.sql');
         console.log('Initial setup complete');
         // Run seed file
         await runSQLFile('supabase/seed.sql');

@@ -18,6 +18,159 @@ VALUES
     ('b1d6dddd-b69b-49e2-a3eb-8fca0afb4119', 'ttttsmurf1@gmail.com', 'Test User', 'user')
 ON CONFLICT (id) DO NOTHING;
 
+-- Insert sample customers with more detailed information
+INSERT INTO customers (
+    name,
+    email,
+    tags,
+    timezone,
+    group_name,
+    user_type,
+    access,
+    organization,
+    language,
+    details,
+    notes
+) VALUES 
+    (
+        'John Smith',
+        'john.smith@example.com',
+        ARRAY['VIP', 'Enterprise'],
+        'America/New_York',
+        'Enterprise',
+        'end-user',
+        'full',
+        'Acme Corp',
+        'en',
+        '{"subscription": "enterprise", "employees": 500}'::jsonb,
+        'Key account, requires priority support'
+    ),
+    (
+        'Sarah Johnson',
+        'sarah.j@techstart.io',
+        ARRAY['Startup', 'Beta'],
+        'Europe/London',
+        'Startup',
+        'end-user',
+        'full',
+        'TechStart',
+        'en',
+        '{"subscription": "startup", "employees": 20}'::jsonb,
+        'Beta testing new features'
+    ),
+    (
+        'Maria Garcia',
+        'mgarcia@bigcorp.com',
+        ARRAY['Enterprise', 'Support Priority'],
+        'America/Chicago',
+        'Enterprise',
+        'end-user',
+        'full',
+        'BigCorp Inc',
+        'es',
+        '{"subscription": "enterprise", "employees": 1000}'::jsonb,
+        'Spanish language support preferred'
+    ),
+    (
+        'David Lee',
+        'david.lee@smallbiz.net',
+        ARRAY['SMB', 'New'],
+        'Asia/Tokyo',
+        'Small Business',
+        'end-user',
+        'full',
+        'SmallBiz Solutions',
+        'en',
+        '{"subscription": "basic", "employees": 10}'::jsonb,
+        'New customer onboarding in progress'
+    ),
+    (
+        'Emma Wilson',
+        'emma@growthco.io',
+        ARRAY['Startup', 'Growth'],
+        'Europe/Berlin',
+        'Startup',
+        'end-user',
+        'full',
+        'GrowthCo',
+        'en',
+        '{"subscription": "growth", "employees": 50}'::jsonb,
+        'Rapidly expanding team'
+    ),
+    (
+        'Carlos Rodriguez',
+        'carlos@megacorp.com',
+        ARRAY['Enterprise', 'Technical'],
+        'America/Los_Angeles',
+        'Enterprise',
+        'end-user',
+        'full',
+        'MegaCorp',
+        'es',
+        '{"subscription": "enterprise", "employees": 2000}'::jsonb,
+        'Technical account requiring API support'
+    ),
+    (
+        'Lisa Chen',
+        'lisa.chen@innovate.co',
+        ARRAY['Startup', 'Developer'],
+        'Asia/Singapore',
+        'Startup',
+        'end-user',
+        'full',
+        'Innovate Co',
+        'en',
+        '{"subscription": "startup", "employees": 15}'::jsonb,
+        'Developer-focused account'
+    ),
+    (
+        'Alex Kumar',
+        'alex@quickstart.dev',
+        ARRAY['SMB', 'Developer'],
+        'Asia/Kolkata',
+        'Small Business',
+        'end-user',
+        'full',
+        'QuickStart Dev',
+        'en',
+        '{"subscription": "pro", "employees": 25}'::jsonb,
+        'Developer tools integration customer'
+    ),
+    (
+        'Sophie Martin',
+        'sophie@artdesign.co',
+        ARRAY['SMB', 'Creative'],
+        'Europe/Paris',
+        'Small Business',
+        'end-user',
+        'full',
+        'Art & Design Co',
+        'fr',
+        '{"subscription": "basic", "employees": 5}'::jsonb,
+        'Design agency account'
+    ),
+    (
+        'James Wilson',
+        'james@techhub.io',
+        ARRAY['Startup', 'Technical'],
+        'Europe/London',
+        'Startup',
+        'end-user',
+        'full',
+        'TechHub',
+        'en',
+        '{"subscription": "startup", "employees": 30}'::jsonb,
+        'Technical integration ongoing'
+    )
+ON CONFLICT (email) DO UPDATE SET
+    name = EXCLUDED.name,
+    tags = EXCLUDED.tags,
+    timezone = EXCLUDED.timezone,
+    group_name = EXCLUDED.group_name,
+    details = EXCLUDED.details,
+    notes = EXCLUDED.notes,
+    updated_at = now();
+
 -- Get the Support group ID
 DO $$
 DECLARE

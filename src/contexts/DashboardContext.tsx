@@ -1,6 +1,6 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { supabase } from '../lib/supabaseClient';
-import { useAuth } from '../contexts/AuthContext';
+import { useAuth } from './AuthContext';
+import { ticketService } from '../services/ticketService';
 import type { TicketWithUsers } from '../types/supabase';
 
 interface DashboardStats {
@@ -67,7 +67,6 @@ const DashboardContext = createContext<DashboardContextType | undefined>(undefin
 
 export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const { user } = useAuth();
-  const isAgent = user?.user_metadata?.role === 'agent';
   const [stats, setStats] = useState<DashboardStats>(initialStats);
   const [tickets, setTickets] = useState<TicketWithUsers[]>([]);
   const [loading, setLoading] = useState(false);
@@ -82,7 +81,6 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     try {
       console.log('Fetching dashboard data for user:', {
         userId: user.id,
-        isAgent,
         role: user.user_metadata?.role
       });
 
@@ -92,30 +90,9 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
       setIsUpdating(true);
 
-      // Optimize query to fetch only needed fields
-      let query = supabase
-        .from('tickets_with_users')
-        .select('*')
-        .order('updated_at', { ascending: false })
-        .limit(50);
-
-      if (!isAgent && user.id) {
-        query = query.eq('user_id', user.id);
-        console.log('Filtering tickets for regular user');
-      } else {
-        console.log('Fetching all tickets for agent');
-      }
-
-      const { data: ticketData, error: ticketError } = await query;
-
-      if (ticketError) {
-        console.error('Error fetching tickets:', ticketError);
-        throw ticketError;
-      }
-
-      console.log('Received ticket data:', {
-        count: ticketData?.length || 0,
-        firstTicket: ticketData?.[0]
+      // Fetch tickets using the Edge Function
+      const { tickets: ticketData } = await ticketService.listTickets({
+        limit: 50
       });
 
       if (!ticketData?.length) {
@@ -128,9 +105,9 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       // Calculate ticket stats
       const ticketStats = {
         total: ticketData.length,
-        open: ticketData.filter(t => t.status === 'open').length,
-        inProgress: ticketData.filter(t => t.status === 'pending').length,
-        resolved: ticketData.filter(t => t.status === 'solved').length
+        open: ticketData.filter((t: TicketWithUsers) => t.status === 'open').length,
+        inProgress: ticketData.filter((t: TicketWithUsers) => t.status === 'pending').length,
+        resolved: ticketData.filter((t: TicketWithUsers) => t.status === 'solved').length
       };
 
       console.log('Calculated ticket stats:', ticketStats);
@@ -150,20 +127,19 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       });
       
     } catch (error: any) {
-      console.error('Error fetching dashboard data:', error.message, error.stack);
+      console.error('Error fetching dashboard data:', error.message);
       setStats(initialStats);
       setTickets([]);
     } finally {
       setLoading(false);
       setIsUpdating(false);
     }
-  }, [user?.id, isAgent, tickets.length]);
+  }, [user?.id, tickets.length]);
 
   // Fetch data immediately when user is available
   useEffect(() => {
     console.log('DashboardProvider effect triggered:', {
       hasUserId: !!user?.id,
-      isAgent,
       currentTicketCount: tickets.length
     });
     
