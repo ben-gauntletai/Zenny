@@ -4,16 +4,21 @@
   margin-top: 64px;
   background: #f8fafc;
   transition: all 0.3s ease-in-out;
+  overflow: hidden;
 }
 
 .activity-feed {
   width: 280px;
   min-width: 280px;
   background: white;
-  border-right: 1px solid #e2e8f0;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  margin: 0 2rem 0 1rem;
   display: flex;
   flex-direction: column;
   transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  height: calc(100vh - 96px);
 }
 
 .activity-feed-header {
@@ -23,7 +28,8 @@
   color: #64748b;
   text-transform: uppercase;
   letter-spacing: 0.5px;
-  border-bottom: 1px solid #e2e8f0;
+  border-bottom: 2px solid #e2e8f0;
+  background: #f8f9fa;
 }
 
 .activity-list {
@@ -40,8 +46,8 @@
 }
 
 .activity-item {
-  padding: 0.75rem 0;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 1rem;
+  border-bottom: 2px solid #e2e8f0;
   opacity: 0;
   animation: fadeIn 0.3s ease forwards;
   transition: background-color 0.2s ease, transform 0.2s ease;
@@ -106,10 +112,11 @@
 
 .dashboard-content {
   flex: 1;
-  padding: 1.5rem;
-  overflow-y: auto;
+  padding: 2rem;
   min-width: 0;
-  min-height: calc(100vh - 64px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
 }
 
 .side-nav {
@@ -260,6 +267,7 @@
   grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
   gap: 2rem;
   margin-bottom: 2rem;
+  flex-shrink: 0;
 }
 
 .stats-section {
@@ -324,27 +332,57 @@
 }
 
 .tickets-section {
-  flex-grow: 1;
+  flex: 1;
   display: flex;
   flex-direction: column;
-  min-height: 0;
-  max-width: 100%;
-  overflow-x: hidden;
+  overflow: hidden;
 }
 
 .tickets-table-container {
-  flex-grow: 1;
+  flex: 1;
   overflow-y: auto;
-  overflow-x: hidden;
-  border: 1px solid #e2e8f0;
-  border-radius: 0.5rem;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
   background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  margin-bottom: 2rem;
+  height: calc(100vh - 300px);
 }
 
 .tickets-table {
   width: 100%;
-  table-layout: fixed;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
+}
+
+.tickets-table th,
+.tickets-table td {
+  padding: 1rem;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  border-bottom: 2px solid #e2e8f0;
+  border-right: 2px solid #e2e8f0;
+}
+
+.tickets-table thead {
+  position: sticky;
+  top: 0;
+  background: white;
+  z-index: 1;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tickets-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #4a5568;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 48px;
+  padding: 0 1rem;
+  border-bottom: 2px solid #e2e8f0;
 }
 
 /* Base styles for all cells */
@@ -355,6 +393,7 @@
   overflow: hidden;
   text-overflow: ellipsis;
   border-bottom: 1px solid #e2e8f0;
+  border-right: 1px solid #e2e8f0;
 }
 
 /* Header specific styles */
@@ -765,4 +804,13 @@
   z-index: 1;
   height: 48px;
   padding: 0 1rem;
+}
+
+.tickets-table th:last-child,
+.tickets-table td:last-child {
+  border-right: none;
+}
+
+.tickets-table tr:last-child td {
+  border-bottom: none;
 } 

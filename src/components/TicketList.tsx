@@ -3,6 +3,9 @@ import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 import { TicketWithUsers } from '../types/supabase';
+import TicketCard from '../components/TicketCard';
+import '../styles/TicketList.css';
+import '../styles/TicketCard.css';
 
 interface FilterState {
   status: string;
@@ -66,16 +69,8 @@ const TicketList: React.FC = () => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  if (loading) {
-    return <div className="loading">Loading tickets...</div>;
-  }
-
-  if (error) {
-    return <div className="error">{error}</div>;
-  }
-
   return (
-    <div className="ticket-list">
+    <div className="ticket-list-container">
       <div className="ticket-list-header">
         <h2>Support Tickets</h2>
         <Link to="/tickets/new" className="create-ticket-button">
@@ -83,80 +78,25 @@ const TicketList: React.FC = () => {
         </Link>
       </div>
 
-      <div className="filters">
-        <select
-          value={filters.status}
-          onChange={(e) => handleFilterChange('status', e.target.value)}
-        >
-          <option value="">All Status</option>
-          <option value="open">Open</option>
-          <option value="pending">Pending</option>
-          <option value="solved">Solved</option>
-          <option value="closed">Closed</option>
-        </select>
-
-        <select
-          value={filters.priority}
-          onChange={(e) => handleFilterChange('priority', e.target.value)}
-        >
-          <option value="">All Priority</option>
-          <option value="low">Low</option>
-          <option value="normal">Normal</option>
-          <option value="high">High</option>
-          <option value="urgent">Urgent</option>
-        </select>
-
-        {isAgent && (
-          <select
-            value={filters.assignee}
-            onChange={(e) => handleFilterChange('assignee', e.target.value)}
-          >
-            <option value="">All Tickets</option>
-            <option value="me">Assigned to Me</option>
-            <option value="unassigned">Unassigned</option>
-          </select>
-        )}
-      </div>
-
-      <div className="tickets-table">
-        <table>
-          <thead>
-            <tr>
-              <th>ID</th>
-              <th>Subject</th>
-              <th>Status</th>
-              <th>Priority</th>
-              <th>Requester</th>
-              <th>Assignee</th>
-              <th>Created</th>
-            </tr>
-          </thead>
-          <tbody>
-            {tickets.map(ticket => (
-              <tr key={ticket.id}>
-                <td>#{ticket.id}</td>
-                <td>
-                  <Link to={`/tickets/${ticket.id}`} className="ticket-link">
-                    {ticket.subject}
-                  </Link>
-                </td>
-                <td>
-                  <span className={`status-badge status-${ticket.status}`}>
-                    {ticket.status}
-                  </span>
-                </td>
-                <td>
-                  <span className={`priority-badge priority-${ticket.priority}`}>
-                    {ticket.priority}
-                  </span>
-                </td>
-                <td>{ticket.creator_email}</td>
-                <td>{ticket.agent_email || 'Unassigned'}</td>
-                <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
-              </tr>
+      <div className="tickets-scroll-container">
+        {loading ? (
+          <div className="loading">Loading tickets...</div>
+        ) : error ? (
+          <div className="error">{error}</div>
+        ) : tickets.length === 0 ? (
+          <div className="no-tickets">
+            <p>No tickets found</p>
+            <Link to="/tickets/new" className="create-ticket-button">
+              Create your first ticket
+            </Link>
+          </div>
+        ) : (
+          <div className="ticket-list">
+            {tickets.map((ticket) => (
+              <TicketCard key={ticket.id} ticket={ticket} />
             ))}
-          </tbody>
-        </table>
+          </div>
+        )}
       </div>
     </div>
   );

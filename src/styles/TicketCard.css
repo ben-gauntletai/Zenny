@@ -1,0 +1,158 @@
+.ticket-card {
+  background: white;
+  border-radius: 8px;
+  padding: 1rem;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.ticket-card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+}
+
+.ticket-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 0.75rem;
+}
+
+.ticket-title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-color, #2d3748);
+  text-decoration: none;
+  flex: 1;
+  margin-right: 1rem;
+}
+
+.ticket-title:hover {
+  color: var(--primary-color, #4a90e2);
+}
+
+.ticket-badges {
+  display: flex;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.status-badge,
+.priority-badge {
+  padding: 0.25rem 0.5rem;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  text-transform: capitalize;
+}
+
+.status-badge {
+  background-color: #e2e8f0;
+  color: #4a5568;
+}
+
+.status-open {
+  background-color: #ebf8ff;
+  color: #2b6cb0;
+}
+
+.status-pending {
+  background-color: #fefcbf;
+  color: #975a16;
+}
+
+.status-solved {
+  background-color: #c6f6d5;
+  color: #2f855a;
+}
+
+.status-closed {
+  background-color: #e2e8f0;
+  color: #4a5568;
+}
+
+.priority-badge {
+  background-color: #e2e8f0;
+  color: #4a5568;
+}
+
+.priority-low {
+  background-color: #e2e8f0;
+  color: #4a5568;
+}
+
+.priority-normal {
+  background-color: #bee3f8;
+  color: #2c5282;
+}
+
+.priority-high {
+  background-color: #fed7d7;
+  color: #c53030;
+}
+
+.priority-urgent {
+  background-color: #fbd38d;
+  color: #c05621;
+}
+
+.ticket-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.875rem;
+  color: var(--text-muted, #718096);
+}
+
+.ticket-info {
+  display: flex;
+  gap: 0.75rem;
+}
+
+.ticket-id {
+  color: var(--text-muted, #718096);
+}
+
+.ticket-type {
+  text-transform: capitalize;
+}
+
+.ticket-users {
+  display: flex;
+  gap: 1rem;
+}
+
+.ticket-requester,
+.ticket-assignee {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.ticket-date {
+  color: var(--text-muted, #718096);
+  font-size: 0.75rem;
+}
+
+@media (max-width: 768px) {
+  .ticket-header {
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+
+  .ticket-badges {
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .ticket-meta {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 0.5rem;
+  }
+
+  .ticket-users {
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+} 
