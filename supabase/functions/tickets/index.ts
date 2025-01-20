@@ -208,24 +208,17 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
     const limit = parseInt(url.searchParams.get('limit') ?? '10')
     const offset = parseInt(url.searchParams.get('offset') ?? '0')
 
-    console.log('Handling ticket list request:', { 
-      user_id: user.id, 
-      user_email: user.email,
-      user_metadata: user.user_metadata,
-      status,
-      limit,
-      offset
-    })
-
     // Get or create user profile
     const userProfile = await getUserProfile(supabaseClient, user)
-    const effectiveRole = userProfile?.role || 'user'
+    const effectiveRole = userProfile?.role || user.user_metadata?.role || 'user'
+    const isAgentOrAdmin = effectiveRole === 'admin' || effectiveRole === 'agent'
     
-    console.log('User profile and role:', {
-      profile: userProfile,
-      effectiveRole,
-      isAdmin: effectiveRole === 'admin',
-      isAgent: effectiveRole === 'agent'
+    console.log('DEBUG - Auth state:', {
+      user_id: user.id,
+      metadata_role: user.user_metadata?.role,
+      profile_role: userProfile?.role,
+      effective_role: effectiveRole,
+      is_agent_or_admin: isAgentOrAdmin
     })
 
     // Use service role client to bypass RLS
@@ -243,22 +236,21 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
         assignee:profiles!tickets_assigned_to_fkey (email, full_name)
       `)
 
-    // Add filters
+    // Log query parameters before applying filters
+    console.log('DEBUG - Query parameters:', {
+      base_query: 'tickets with creator and assignee profiles',
+      status_filter: status || 'none',
+      user_filter: !isAgentOrAdmin ? user.id : 'none',
+      pagination: { offset, limit },
+      ordering: 'created_at DESC'
+    })
+
     if (status) {
-      console.log('Applying status filter:', status)
       query.eq('status', status)
     }
 
-    if (effectiveRole !== 'admin' && effectiveRole !== 'agent') {
-      console.log('Restricting to user tickets:', {
-        user_id: user.id,
-        reason: 'User is not admin/agent'
-      })
+    if (!isAgentOrAdmin) {
       query.eq('user_id', user.id)
-    } else {
-      console.log('Showing all tickets:', {
-        reason: `User is ${effectiveRole}`
-      })
     }
 
     // Add ordering and pagination
@@ -269,28 +261,23 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
     // Execute query
     const { data: tickets, error: queryError } = await query
     
-    console.log('Query result:', {
+    // Log query results
+    console.log('DEBUG - Query results:', {
       success: !queryError,
-      ticketCount: tickets?.length,
-      error: queryError,
-      firstTicket: tickets?.[0],
-      query: {
-        filters: {
-          user_id: effectiveRole !== 'admin' && effectiveRole !== 'agent' ? user.id : null,
-          status: status || null
-        },
-        range: [offset, offset + limit - 1]
-      }
+      error: queryError ? {
+        message: queryError.message,
+        code: queryError.code
+      } : null,
+      ticket_count: tickets?.length || 0,
+      sample_ticket: tickets?.[0] ? {
+        id: tickets[0].id,
+        subject: tickets[0].subject,
+        user_id: tickets[0].user_id,
+        status: tickets[0].status
+      } : null
     })
 
     if (queryError) {
-      console.error('Error fetching tickets:', {
-        error: queryError,
-        message: queryError.message,
-        details: queryError.details,
-        code: queryError.code,
-        hint: queryError.hint
-      })
       throw queryError
     }
 
@@ -303,13 +290,6 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       agent_name: ticket.assignee?.full_name
     }))
 
-    console.log('Response data:', {
-      ticketCount: transformedTickets.length,
-      firstTicket: transformedTickets[0],
-      userProfile,
-      effectiveRole
-    })
-
     return new Response(
       JSON.stringify({ tickets: transformedTickets }),
       { 
@@ -318,12 +298,10 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       }
     )
   } catch (error) {
-    console.error('Error in handleTicketList:', {
-      error,
+    console.error('DEBUG - Error in handleTicketList:', {
       message: error.message,
-      details: error.details || null,
       code: error.code || null,
-      hint: error.hint || null
+      stack: error.stack
     })
     return new Response(
       JSON.stringify({ 
@@ -339,47 +317,64 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
 }
 
 async function getUserProfile(supabaseClient: any, user: any) {
-  // First try to get existing profile
-  const { data: profile, error: profileError } = await supabaseClient
-    .from('profiles')
-    .select('role, full_name, email')
-    .eq('id', user.id)
-    .maybeSingle()
+  try {
+    // Create service role client for profile operations
+    const serviceRoleClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    );
 
-  if (profile || profileError) {
-    return profile
+    console.log('Fetching user profile with service role client');
+    const { data: profile, error: profileError } = await serviceRoleClient
+      .from('profiles')
+      .select('*')
+      .eq('id', user.id)
+      .single();
+
+    if (profileError) {
+      console.error('Error fetching profile:', {
+        message: profileError.message,
+        code: profileError.code,
+        details: profileError.details,
+        hint: profileError.hint
+      });
+      throw profileError;
+    }
+
+    if (!profile) {
+      console.log('Profile not found, creating new profile');
+      const { data: newProfile, error: insertError } = await serviceRoleClient
+        .from('profiles')
+        .upsert({
+          id: user.id,
+          email: user.email,
+          role: user.user_metadata?.role || 'user',
+          full_name: user.user_metadata?.full_name || user.email
+        })
+        .select()
+        .single();
+
+      if (insertError) {
+        console.error('Error creating profile:', {
+          error: insertError.message,
+          userId: user.id
+        });
+        throw insertError;
+      }
+
+      console.log('New profile created:', newProfile);
+      return newProfile;
+    }
+
+    console.log('Existing profile found:', profile);
+    return profile;
+  } catch (error) {
+    console.error('Error in getUserProfile:', {
+      name: error.name,
+      message: error.message,
+      stack: error.stack,
+      cause: error.cause
+    });
+    throw error;
   }
-
-  // If no profile exists, create one
-  const userRole = user.user_metadata?.role || 'user'
-  console.log('Creating new profile:', {
-    id: user.id,
-    email: user.email,
-    role: userRole,
-    full_name: user.user_metadata?.full_name
-  })
-  
-  const serviceRoleClient = createClient(
-    Deno.env.get('SUPABASE_URL') ?? '',
-    Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-  )
-  
-  const { data: newProfile, error: insertError } = await serviceRoleClient
-    .from('profiles')
-    .upsert({
-      id: user.id,
-      email: user.email,
-      role: userRole,
-      full_name: user.user_metadata?.full_name || user.email
-    })
-    .select()
-    .single()
-
-  if (insertError) {
-    console.error('Error creating profile:', insertError)
-    throw insertError
-  }
-
-  console.log('Profile creation successful:', newProfile)
-  return newProfile
 } 

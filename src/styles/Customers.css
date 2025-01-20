@@ -52,9 +52,12 @@
 
 .customers-main {
   flex: 1;
-  overflow: auto;
+  overflow: hidden;
   background-color: #f8fafc;
-  padding: 2rem;
+  padding: 2rem 2rem 6rem 2rem; /* Increased bottom padding to 6rem */
+  margin-right: 2.5rem;
+  display: flex;
+  flex-direction: column;
 }
 
 .customers-header {
@@ -112,11 +115,71 @@
   border-radius: 0.5rem;
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
   overflow: auto;
+  height: 500px; /* Increased from 400px to show more rows */
+}
+
+/* Ensure the table header stays fixed while scrolling */
+.customers-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  background: white;
 }
 
 .customers-table {
   width: 100%;
   border-collapse: collapse;
+  table-layout: fixed;
+}
+
+/* Checkbox column */
+.customers-table th:first-child,
+.customers-table td:first-child {
+  width: 20px; /* Just enough for the checkbox */
+  padding: 0;
+  text-align: center;
+}
+
+/* Add styles for the checkbox itself to ensure it fits */
+.customers-table input[type="checkbox"] {
+  margin: 0;
+  width: 16px;
+  height: 16px;
+}
+
+/* Name column with avatar */
+.customers-table th:nth-child(2),
+.customers-table td:nth-child(2) {
+  padding-left: 0.5rem; /* Reduced left padding */
+  width: 18%; /* Slightly wider for name */
+}
+
+/* Other content columns */
+.customers-table th:nth-child(3),
+.customers-table td:nth-child(3),
+.customers-table th:nth-child(4),
+.customers-table td:nth-child(4),
+.customers-table th:nth-child(5),
+.customers-table td:nth-child(5),
+.customers-table th:nth-child(6),
+.customers-table td:nth-child(6),
+.customers-table th:nth-child(7),
+.customers-table td:nth-child(7) {
+  width: 15%; /* Slightly adjusted for better distribution */
+}
+
+/* Actions column */
+.customers-table th:last-child,
+.customers-table td:last-child {
+  width: 40px; /* Reduced from 48px */
+  padding: 0.75rem 0.25rem; /* Reduced side padding */
+}
+
+.customers-table th,
+.customers-table td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .customers-table th {
@@ -145,7 +208,7 @@
 .customer-name {
   display: flex;
   align-items: center;
-  gap: 0.75rem;
+  gap: 0.5rem; /* Reduced from 0.75rem */
 }
 
 .customer-avatar {
@@ -247,17 +310,6 @@
 .secondary-button:hover {
   background-color: #F9FAFB;
   border-color: #D1D5DB;
-}
-
-/* Update table header styles */
-.customers-table th:last-child {
-  width: 48px;
-  padding: 0.75rem 0.5rem;
-}
-
-/* Add hover effect to table rows */
-.customers-table tbody tr:hover {
-  background-color: #F9FAFB;
 }
 
 /* Style for the suspended date column */

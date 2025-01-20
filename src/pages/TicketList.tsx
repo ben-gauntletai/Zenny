@@ -28,7 +28,7 @@ interface FilterState {
 
 const TicketList: React.FC = () => {
   const { user } = useAuth();
-  const isAgent = user?.user_metadata?.role === 'agent';
+  const isAgentOrAdmin = user?.user_metadata?.role === 'agent' || user?.user_metadata?.role === 'admin';
   const [tickets, setTickets] = useState<FormattedTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -64,9 +64,9 @@ const TicketList: React.FC = () => {
         filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => ticket.priority === filters.priority);
       }
 
-      if (isAgent && filters.assignee === 'me') {
+      if (isAgentOrAdmin && filters.assignee === 'me') {
         filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => ticket.agent_email === user?.email);
-      } else if (isAgent && filters.assignee === 'unassigned') {
+      } else if (isAgentOrAdmin && filters.assignee === 'unassigned') {
         filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => !ticket.agent_email);
       }
 
@@ -139,7 +139,7 @@ const TicketList: React.FC = () => {
           <option value="urgent">Urgent</option>
         </select>
 
-        {isAgent && (
+        {isAgentOrAdmin && (
           <select
             value={filters.assignee}
             onChange={(e) => handleFilterChange('assignee', e.target.value)}
@@ -187,7 +187,7 @@ const TicketList: React.FC = () => {
                 <th>Status</th>
                 <th>Priority</th>
                 <th>Created</th>
-                {isAgent && <th>Requester</th>}
+                {isAgentOrAdmin && <th>Requester</th>}
                 <th>Assigned To</th>
               </tr>
             </thead>
@@ -210,7 +210,7 @@ const TicketList: React.FC = () => {
                     </span>
                   </td>
                   <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
-                  {isAgent && <td>{ticket.creator_email}</td>}
+                  {isAgentOrAdmin && <td>{ticket.creator_email}</td>}
                   <td>{ticket.agent_email || 'Unassigned'}</td>
                 </tr>
               ))}
