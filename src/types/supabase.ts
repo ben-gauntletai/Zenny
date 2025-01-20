@@ -5,6 +5,7 @@ export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type TicketType = 'question' | 'incident' | 'problem' | 'task';
 export type TicketTopic = 'ISSUE' | 'INQUIRY' | 'OTHER' | 'PAYMENTS' | 'NONE';
 export type CustomerType = 'VIP_CUSTOMER' | 'STANDARD_CUSTOMER';
+export type UserRole = 'user' | 'agent' | 'admin';
 
 export interface Group {
   id: string;
@@ -36,7 +37,7 @@ export interface Profile {
   id: string;
   email: string;
   full_name: string | null;
-  role: 'user' | 'agent' | 'admin';
+  role: UserRole;
   created_at: string;
   updated_at: string;
 }
@@ -49,6 +50,13 @@ export interface UserMetadata {
 
 export interface User extends SupabaseUser {
   user_metadata: UserMetadata;
+}
+
+export interface TicketWithUsers extends Ticket {
+  creator_email: string;
+  creator_name: string | null;
+  agent_email: string | null;
+  agent_name: string | null;
 }
 
 export interface Database {

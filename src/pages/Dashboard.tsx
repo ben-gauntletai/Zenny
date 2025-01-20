@@ -83,7 +83,7 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
       setError('');
 
       const query = supabase
-        .from('tickets')
+        .from('tickets_with_users')
         .select(`
           id,
           subject,
@@ -97,7 +97,11 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
           updated_at,
           user_id,
           assigned_to,
-          group_id
+          group_id,
+          creator_email,
+          creator_name,
+          agent_email,
+          agent_name
         `)
         .order('created_at', { ascending: false })
         .limit(5);
@@ -110,26 +114,7 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
 
       if (fetchError) throw fetchError;
 
-      const userIds = Array.from(new Set(ticketData?.map(t => t.user_id) || []));
-      const assignedToIds = Array.from(new Set(ticketData?.map(t => t.assigned_to).filter(Boolean) || []));
-      const allUserIds = Array.from(new Set([...userIds, ...assignedToIds]));
-
-      const { data: userData, error: userError } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .in('id', allUserIds);
-
-      if (userError) throw userError;
-
-      const userMap = (userData || []).reduce<Record<string, UserMapProfile>>((acc, user) => {
-        acc[user.id] = {
-          id: user.id,
-          email: user.email
-        };
-        return acc;
-      }, {});
-      
-      const formattedTickets: FormattedTicket[] = (ticketData || []).map(ticket => ({
+      const formattedTickets: FormattedTicket[] = (ticketData || []).map((ticket) => ({
         id: ticket.id,
         subject: ticket.subject,
         description: ticket.description,
@@ -141,14 +126,14 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
         created_at: ticket.created_at,
         updated_at: ticket.updated_at,
         group_id: ticket.group_id,
-        user: { email: userMap[ticket.user_id]?.email || 'Unknown' },
-        agent: ticket.assigned_to ? { email: userMap[ticket.assigned_to]?.email || 'Unassigned' } : undefined
+        user: { email: ticket.creator_email || 'Unknown' },
+        agent: ticket.agent_email ? { email: ticket.agent_email } : undefined
       }));
 
       setTickets(formattedTickets);
     } catch (err) {
-      console.error('Error fetching recent tickets:', err);
-      setError('Failed to load recent tickets');
+      console.error('Error fetching tickets:', err);
+      setError('Failed to load tickets');
     } finally {
       setLoading(false);
     }
@@ -473,10 +458,10 @@ const Dashboard: React.FC = () => {
                         {ticket.subject}
                       </Link>
                     </td>
-                    <td>{ticket.user.email}</td>
+                    <td>{ticket.creator_email}</td>
                     <td>{formatDate(ticket.updated_at)}</td>
                     <td>Support</td>
-                    <td>{ticket.agent?.email || 'Unassigned'}</td>
+                    <td>{ticket.agent_email || 'Unassigned'}</td>
                   </tr>
                 ))}
               </tbody>

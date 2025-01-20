@@ -20,6 +20,7 @@ import AnalyticsDashboard from './pages/AnalyticsDashboard';
 import CustomerList from './pages/CustomerList';
 import SuspendedUsers from './pages/SuspendedUsers';
 import ProtectedRoute from './components/ProtectedRoute';
+import Navigation from './components/Navigation';
 import './styles/App.css';
 
 const router = createBrowserRouter(

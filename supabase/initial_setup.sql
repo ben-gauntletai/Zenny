@@ -58,13 +58,15 @@ CREATE TABLE tickets (
     ticket_type ticket_type DEFAULT 'question',
     topic ticket_topic DEFAULT 'NONE',
     customer_type customer_type DEFAULT 'STANDARD_CUSTOMER',
-    user_id uuid REFERENCES profiles(id) NOT NULL,
-    assigned_to uuid REFERENCES profiles(id),
+    user_id uuid NOT NULL,
+    assigned_to uuid,
     group_id uuid REFERENCES groups(id),
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now(),
     last_requester_update timestamptz DEFAULT now(),
-    last_agent_update timestamptz DEFAULT now()
+    last_agent_update timestamptz DEFAULT now(),
+    CONSTRAINT tickets_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id),
+    CONSTRAINT tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES profiles(id)
 );
 
 -- Create replies table (replacing ticket_comments)
@@ -77,18 +79,6 @@ CREATE TABLE replies (
     created_at timestamptz DEFAULT now(),
     updated_at timestamptz DEFAULT now()
 );
-
--- Create view for tickets with user info
-CREATE OR REPLACE VIEW tickets_with_users AS
-SELECT 
-    t.*,
-    creator.email as creator_email,
-    creator.full_name as creator_name,
-    agent.email as agent_email,
-    agent.full_name as agent_name
-FROM tickets t
-LEFT JOIN profiles creator ON t.user_id = creator.id
-LEFT JOIN profiles agent ON t.assigned_to = agent.id;
 
 -- Create view for replies with user info
 CREATE OR REPLACE VIEW replies_with_users AS
@@ -180,6 +170,16 @@ CREATE TRIGGER update_customers_updated_at
     BEFORE UPDATE ON customers
     FOR EACH ROW
     EXECUTE FUNCTION update_updated_at_column();
+
+-- Create view for tickets with user info
+CREATE OR REPLACE VIEW tickets_with_users AS
+SELECT 
+    t.*,
+    u.email as user_email,
+    a.email as agent_email
+FROM tickets t
+LEFT JOIN profiles u ON t.user_id = u.id
+LEFT JOIN profiles a ON t.assigned_to = a.id;
 
 -- Enable RLS
 ALTER TABLE profiles ENABLE ROW LEVEL SECURITY;
@@ -276,4 +276,28 @@ VALUES
     ('Jiwon Bora', 'jiwon.bora@example.com', '(GMT-07:00) Arizona', ARRAY[]::TEXT[], 'end-user', 'Example Corp'),
     ('Hikari Ito', 'hikari.ito@example.com', '(GMT-07:00) Arizona', ARRAY[]::TEXT[], 'end-user', 'Example Corp'),
     ('August Lee', 'august.lee@example.com', '(GMT-07:00) Arizona', ARRAY[]::TEXT[], 'end-user', 'Example Corp'),
-    ('The Customer', 'customer@example.com', '(GMT-07:00) Arizona', ARRAY[]::TEXT[], 'end-user', 'Example Corp'); 
+    ('The Customer', 'customer@example.com', '(GMT-07:00) Arizona', ARRAY[]::TEXT[], 'end-user', 'Example Corp');
+
+-- Add function to handle new users
+CREATE OR REPLACE FUNCTION public.handle_new_user()
+RETURNS trigger AS $$
+BEGIN
+    INSERT INTO public.profiles (id, email, full_name, role)
+    VALUES (
+        NEW.id,
+        NEW.email,
+        COALESCE(NEW.raw_user_meta_data->>'full_name', NEW.email),
+        CASE 
+            WHEN NEW.raw_user_meta_data->>'role' = 'customer' THEN 'user'::user_role
+            ELSE (COALESCE(NEW.raw_user_meta_data->>'role', 'user'))::user_role
+        END
+    );
+    RETURN NEW;
+END;
+$$ language plpgsql security definer;
+
+-- Add trigger for new user handling
+DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
+CREATE TRIGGER on_auth_user_created
+    AFTER INSERT ON auth.users
+    FOR EACH ROW EXECUTE FUNCTION public.handle_new_user(); 

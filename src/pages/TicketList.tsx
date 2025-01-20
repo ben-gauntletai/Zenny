@@ -45,7 +45,7 @@ const TicketList: React.FC = () => {
     try {
       setLoading(true);
       let query = supabase
-        .from('tickets')
+        .from('tickets_with_users')
         .select('*');
 
       // Apply filters
@@ -70,27 +70,7 @@ const TicketList: React.FC = () => {
 
       if (fetchError) throw fetchError;
 
-      // Fetch user information for each ticket
-      const userIds = Array.from(new Set(ticketData?.map((t: SupabaseTicket) => t.user_id) || []));
-      const assignedToIds = Array.from(new Set(ticketData?.map((t: SupabaseTicket) => t.assigned_to).filter(Boolean) || []));
-      const allUserIds = Array.from(new Set([...userIds, ...assignedToIds]));
-
-      const { data: userData, error: userError } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .in('id', allUserIds);
-
-      if (userError) throw userError;
-
-      const userMap = (userData || []).reduce<Record<string, UserMapProfile>>((acc, user) => {
-        acc[user.id] = {
-          id: user.id,
-          email: user.email
-        };
-        return acc;
-      }, {});
-      
-      const formattedTickets: FormattedTicket[] = (ticketData || []).map((ticket: SupabaseTicket) => ({
+      const formattedTickets: FormattedTicket[] = (ticketData || []).map((ticket) => ({
         id: ticket.id,
         subject: ticket.subject,
         status: ticket.status,
@@ -102,8 +82,8 @@ const TicketList: React.FC = () => {
         topic: ticket.topic,
         customer_type: ticket.customer_type,
         group_id: ticket.group_id,
-        user: { email: userMap[ticket.user_id]?.email || 'Unknown' },
-        agent: ticket.assigned_to ? { email: userMap[ticket.assigned_to]?.email || 'Unassigned' } : undefined
+        user: { email: ticket.creator_email || 'Unknown' },
+        agent: ticket.agent_email ? { email: ticket.agent_email } : undefined
       }));
 
       setTickets(formattedTickets);

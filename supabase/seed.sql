@@ -1,10 +1,22 @@
+-- Seed users first
+INSERT INTO auth.users (id, email, raw_user_meta_data)
+VALUES 
+    ('d7bed82c-89ac-4d1e-9366-fe3c0b3b5e0b', 'john.agent@example.com', '{"role":"agent"}'::jsonb),
+    ('e9be4f7d-4b1e-4043-89e5-1c59895cb5c1', 'sarah.admin@example.com', '{"role":"admin"}'::jsonb),
+    ('f8cf7d2e-3c2f-4f1a-b5d9-2d9a9e6f8b1a', 'alice.user@example.com', '{"role":"customer"}'::jsonb),
+    ('a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d', 'bob.user@example.com', '{"role":"customer"}'::jsonb),
+    ('b1d6dddd-b69b-49e2-a3eb-8fca0afb4119', 'ttttsmurf1@gmail.com', '{"role":"user"}'::jsonb)
+ON CONFLICT (id) DO NOTHING;
+
 -- Insert sample profiles
 INSERT INTO profiles (id, email, full_name, role)
 VALUES 
     ('d7bed82c-89ac-4d1e-9366-fe3c0b3b5e0b', 'john.agent@example.com', 'John Agent', 'agent'),
     ('e9be4f7d-4b1e-4043-89e5-1c59895cb5c1', 'sarah.admin@example.com', 'Sarah Admin', 'admin'),
     ('f8cf7d2e-3c2f-4f1a-b5d9-2d9a9e6f8b1a', 'alice.user@example.com', 'Alice User', 'user'),
-    ('a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d', 'bob.user@example.com', 'Bob User', 'user');
+    ('a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d', 'bob.user@example.com', 'Bob User', 'user'),
+    ('b1d6dddd-b69b-49e2-a3eb-8fca0afb4119', 'ttttsmurf1@gmail.com', 'Test User', 'user')
+ON CONFLICT (id) DO NOTHING;
 
 -- Get the Support group ID
 DO $$
@@ -85,22 +97,68 @@ BEGIN
         'f8cf7d2e-3c2f-4f1a-b5d9-2d9a9e6f8b1a', -- Alice
         'd7bed82c-89ac-4d1e-9366-fe3c0b3b5e0b', -- John
         support_group_id
+    ),
+    (
+        'Need help with login issues',
+        'I cannot log in to my account after the recent update.',
+        'open',
+        'high',
+        'incident',
+        'ISSUE',
+        'STANDARD_CUSTOMER',
+        'b1d6dddd-b69b-49e2-a3eb-8fca0afb4119', -- Your user
+        'd7bed82c-89ac-4d1e-9366-fe3c0b3b5e0b', -- John
+        support_group_id
+    ),
+    (
+        'Feature suggestion for dashboard',
+        'Would it be possible to add custom widgets to the dashboard?',
+        'pending',
+        'normal',
+        'task',
+        'OTHER',
+        'STANDARD_CUSTOMER',
+        'b1d6dddd-b69b-49e2-a3eb-8fca0afb4119', -- Your user
+        'e9be4f7d-4b1e-4043-89e5-1c59895cb5c1', -- Sarah
+        support_group_id
+    ),
+    (
+        'Billing question',
+        'I have a question about my recent invoice.',
+        'open',
+        'normal',
+        'question',
+        'PAYMENTS',
+        'STANDARD_CUSTOMER',
+        'b1d6dddd-b69b-49e2-a3eb-8fca0afb4119', -- Your user
+        NULL, -- Unassigned
+        support_group_id
     );
 END $$;
 
--- Insert sample ticket comments
-INSERT INTO ticket_comments (ticket_id, user_id, content)
+-- Insert sample replies
+INSERT INTO replies (ticket_id, content, user_id, is_public)
 SELECT 
-  t.id,
-  t.assigned_to,
-  'I am looking into this issue and will update you shortly.'
+    t.id,
+    'Hi! I''d be happy to help you troubleshoot. Could you please tell me what specific issues you''re encountering?',
+    'd7bed82c-89ac-4d1e-9366-fe3c0b3b5e0b'::uuid, -- John (agent)
+    true
+FROM tickets t 
+WHERE t.subject = 'Cannot access my account'
+UNION ALL
+SELECT 
+    t.id,
+    'When I try to log in, it says "Invalid credentials" even though I''m sure my password is correct.',
+    'f8cf7d2e-3c2f-4f1a-b5d9-2d9a9e6f8b1a'::uuid, -- Alice (user)
+    true
 FROM tickets t
 WHERE t.subject = 'Cannot access my account'
 UNION ALL
 SELECT 
-  t.id,
-  t.user_id,
-  'Thank you for the quick response. Looking forward to the resolution.'
+    t.id,
+    'Thanks for the details. Let me check if there are any issues with your account. Have you tried resetting your password?',
+    'd7bed82c-89ac-4d1e-9366-fe3c0b3b5e0b'::uuid, -- John (agent)
+    true
 FROM tickets t
 WHERE t.subject = 'Cannot access my account';
 

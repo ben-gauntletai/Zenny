@@ -1,28 +1,7 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-import type { TicketStatus, TicketPriority, TicketType, TicketTopic, CustomerType } from '../types/supabase';
-
-interface FormattedTicket {
-  id: number;
-  subject: string;
-  description: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  ticket_type: TicketType;
-  topic: TicketTopic;
-  customer_type: CustomerType;
-  created_at: string;
-  updated_at: string;
-  group_id: string | null;
-  user: { email: string };
-  agent?: { email: string };
-}
-
-interface UserMapProfile {
-  id: string;
-  email: string;
-}
+import type { TicketWithUsers } from '../types/supabase';
 
 interface DashboardStats {
   ticketStats: {
@@ -31,30 +10,14 @@ interface DashboardStats {
     inProgress: number;
     resolved: number;
   };
-  recentTickets: any[];
+  recentTickets: TicketWithUsers[];
   recentCustomers: any[];
   activityFeed: any[];
 }
 
-interface TicketWithProfiles {
-  id: number;
-  subject: string;
-  description: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  ticket_type: TicketType;
-  topic: TicketTopic;
-  customer_type: CustomerType;
-  created_at: string;
-  updated_at: string;
-  group_id: string | null;
-  profiles: { email: string }[];
-  agents: { email: string }[] | null;
-}
-
 interface DashboardContextType {
   stats: DashboardStats;
-  tickets: FormattedTicket[];
+  tickets: TicketWithUsers[];
   loading: boolean;
   isUpdating: boolean;
   refreshStats: () => Promise<void>;
@@ -93,24 +56,6 @@ const mockActivities = [
   }
 ];
 
-const createLoadingTicket = (id: number = 0): FormattedTicket => ({
-  id,
-  subject: 'Loading...',
-  description: '',
-  status: 'open' as TicketStatus,
-  priority: 'normal' as TicketPriority,
-  ticket_type: 'question' as TicketType,
-  topic: 'general' as TicketTopic,
-  customer_type: 'customer' as CustomerType,
-  created_at: new Date().toISOString(),
-  updated_at: new Date().toISOString(),
-  group_id: null,
-  user: { email: 'Loading...' },
-  agent: { email: 'Loading...' }
-});
-
-const initialTickets: FormattedTicket[] = [createLoadingTicket()];
-
 const initialStats: DashboardStats = {
   ticketStats: { total: 0, open: 0, inProgress: 0, resolved: 0 },
   recentTickets: [],
@@ -124,14 +69,23 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { user } = useAuth();
   const isAgent = user?.user_metadata?.role === 'agent';
   const [stats, setStats] = useState<DashboardStats>(initialStats);
-  const [tickets, setTickets] = useState<FormattedTicket[]>([]);
+  const [tickets, setTickets] = useState<TicketWithUsers[]>([]);
   const [loading, setLoading] = useState(false);
   const [isUpdating, setIsUpdating] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
-    if (!user?.id) return;
+    if (!user?.id) {
+      console.log('No user ID available');
+      return;
+    }
     
     try {
+      console.log('Fetching dashboard data for user:', {
+        userId: user.id,
+        isAgent,
+        role: user.user_metadata?.role
+      });
+
       // Only set loading on first load
       if (!tickets.length) {
         setLoading(true);
@@ -139,74 +93,64 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       setIsUpdating(true);
 
       // Optimize query to fetch only needed fields
-      const ticketQuery = supabase
-        .from('tickets')
-        .select(`
-          id,
-          subject,
-          status,
-          priority,
-          ticket_type,
-          topic,
-          customer_type,
-          created_at,
-          updated_at,
-          profiles!tickets_user_id_fkey(email),
-          agents:profiles!tickets_assigned_to_fkey(email)
-        `)
+      let query = supabase
+        .from('tickets_with_users')
+        .select('*')
         .order('updated_at', { ascending: false })
         .limit(50);
 
       if (!isAgent && user.id) {
-        ticketQuery.eq('user_id', user.id);
+        query = query.eq('user_id', user.id);
+        console.log('Filtering tickets for regular user');
+      } else {
+        console.log('Fetching all tickets for agent');
       }
 
-      const { data: ticketData, error: ticketError } = await ticketQuery;
+      const { data: ticketData, error: ticketError } = await query;
 
-      if (ticketError) throw ticketError;
+      if (ticketError) {
+        console.error('Error fetching tickets:', ticketError);
+        throw ticketError;
+      }
+
+      console.log('Received ticket data:', {
+        count: ticketData?.length || 0,
+        firstTicket: ticketData?.[0]
+      });
 
       if (!ticketData?.length) {
+        console.log('No tickets found, resetting to initial state');
         setStats(initialStats);
         setTickets([]);
         return;
       }
 
-      // Format tickets with joined user data - only include necessary fields
-      const formattedTickets: FormattedTicket[] = ticketData.map((ticket: any) => ({
-        id: ticket.id,
-        subject: ticket.subject,
-        description: '', // Not needed immediately
-        status: ticket.status as TicketStatus,
-        priority: ticket.priority as TicketPriority,
-        ticket_type: ticket.ticket_type || ('question' as TicketType),
-        topic: ticket.topic || ('general' as TicketTopic),
-        customer_type: ticket.customer_type || ('customer' as CustomerType),
-        created_at: ticket.created_at,
-        updated_at: ticket.updated_at,
-        group_id: null,
-        user: { email: ticket.profiles?.[0]?.email || 'Unknown' },
-        agent: ticket.agents?.[0] ? { email: ticket.agents[0].email } : undefined
-      }));
-
       // Calculate ticket stats
       const ticketStats = {
-        total: formattedTickets.length,
-        open: formattedTickets.filter(t => t.status === ('open' as TicketStatus)).length,
-        inProgress: formattedTickets.filter(t => t.status === ('in_progress' as TicketStatus)).length,
-        resolved: formattedTickets.filter(t => t.status === ('resolved' as TicketStatus)).length
+        total: ticketData.length,
+        open: ticketData.filter(t => t.status === 'open').length,
+        inProgress: ticketData.filter(t => t.status === 'pending').length,
+        resolved: ticketData.filter(t => t.status === 'solved').length
       };
+
+      console.log('Calculated ticket stats:', ticketStats);
 
       // Update state in one batch
       setStats({
         ticketStats,
-        recentTickets: formattedTickets.slice(0, 5),
+        recentTickets: ticketData.slice(0, 5),
         recentCustomers: [],
         activityFeed: mockActivities
       });
-      setTickets(formattedTickets);
+      setTickets(ticketData);
+      
+      console.log('Updated dashboard state with:', {
+        ticketCount: ticketData.length,
+        stats: ticketStats
+      });
       
     } catch (error: any) {
-      console.error('Error fetching dashboard data:', error.message);
+      console.error('Error fetching dashboard data:', error.message, error.stack);
       setStats(initialStats);
       setTickets([]);
     } finally {
@@ -217,10 +161,16 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
 
   // Fetch data immediately when user is available
   useEffect(() => {
+    console.log('DashboardProvider effect triggered:', {
+      hasUserId: !!user?.id,
+      isAgent,
+      currentTicketCount: tickets.length
+    });
+    
     if (user?.id) {
       fetchDashboardData();
     }
-  }, [user?.id]);
+  }, [user?.id, fetchDashboardData]);
 
   return (
     <DashboardContext.Provider value={{

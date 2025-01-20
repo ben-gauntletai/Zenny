@@ -2,22 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-
-interface Ticket {
-  id: string;
-  title: string;
-  status: 'open' | 'pending' | 'closed';
-  priority: 'low' | 'medium' | 'high';
-  created_at: string;
-  user_id: string;
-  assigned_to: string | null;
-  users: {
-    email: string;
-  };
-  assigned_user?: {
-    email: string;
-  };
-}
+import { TicketWithUsers } from '../types/supabase';
 
 interface FilterState {
   status: string;
@@ -26,7 +11,7 @@ interface FilterState {
 }
 
 const TicketList: React.FC = () => {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [tickets, setTickets] = useState<TicketWithUsers[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [filters, setFilters] = useState<FilterState>({
@@ -46,12 +31,8 @@ const TicketList: React.FC = () => {
     try {
       setLoading(true);
       let query = supabase
-        .from('tickets')
-        .select(`
-          *,
-          users!tickets_user_id_fkey (email),
-          assigned_user:users!tickets_assigned_to_fkey (email)
-        `)
+        .from('tickets_with_users')
+        .select('*')
         .order('created_at', { ascending: false });
 
       // Apply filters
@@ -61,7 +42,9 @@ const TicketList: React.FC = () => {
       if (filters.priority) {
         query = query.eq('priority', filters.priority);
       }
-      if (filters.assignee === 'me') {
+      if (!isAgent) {
+        query = query.eq('user_id', user?.id);
+      } else if (filters.assignee === 'me') {
         query = query.eq('assigned_to', user?.id);
       } else if (filters.assignee === 'unassigned') {
         query = query.is('assigned_to', null);
@@ -83,8 +66,13 @@ const TicketList: React.FC = () => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  if (loading) return <div className="loading">Loading tickets...</div>;
-  if (error) return <div className="error">{error}</div>;
+  if (loading) {
+    return <div className="loading">Loading tickets...</div>;
+  }
+
+  if (error) {
+    return <div className="error">{error}</div>;
+  }
 
   return (
     <div className="ticket-list">
@@ -100,9 +88,10 @@ const TicketList: React.FC = () => {
           value={filters.status}
           onChange={(e) => handleFilterChange('status', e.target.value)}
         >
-          <option value="">All Statuses</option>
+          <option value="">All Status</option>
           <option value="open">Open</option>
           <option value="pending">Pending</option>
+          <option value="solved">Solved</option>
           <option value="closed">Closed</option>
         </select>
 
@@ -110,10 +99,11 @@ const TicketList: React.FC = () => {
           value={filters.priority}
           onChange={(e) => handleFilterChange('priority', e.target.value)}
         >
-          <option value="">All Priorities</option>
+          <option value="">All Priority</option>
           <option value="low">Low</option>
-          <option value="medium">Medium</option>
+          <option value="normal">Normal</option>
           <option value="high">High</option>
+          <option value="urgent">Urgent</option>
         </select>
 
         {isAgent && (
@@ -133,7 +123,7 @@ const TicketList: React.FC = () => {
           <thead>
             <tr>
               <th>ID</th>
-              <th>Title</th>
+              <th>Subject</th>
               <th>Status</th>
               <th>Priority</th>
               <th>Requester</th>
@@ -144,10 +134,10 @@ const TicketList: React.FC = () => {
           <tbody>
             {tickets.map(ticket => (
               <tr key={ticket.id}>
-                <td>#{ticket.id.slice(0, 8)}</td>
+                <td>#{ticket.id}</td>
                 <td>
                   <Link to={`/tickets/${ticket.id}`} className="ticket-link">
-                    {ticket.title}
+                    {ticket.subject}
                   </Link>
                 </td>
                 <td>
@@ -160,8 +150,8 @@ const TicketList: React.FC = () => {
                     {ticket.priority}
                   </span>
                 </td>
-                <td>{ticket.users.email}</td>
-                <td>{ticket.assigned_user?.email || 'Unassigned'}</td>
+                <td>{ticket.creator_email}</td>
+                <td>{ticket.agent_email || 'Unassigned'}</td>
                 <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
               </tr>
             ))}

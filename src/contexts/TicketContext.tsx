@@ -1,118 +1,162 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { useAuth } from './AuthContext';
 
 interface Ticket {
-  id: string;
-  title: string;
+  id: number;
+  subject: string;
   description: string;
-  status: string;
-  priority: string;
-  assigned_to?: string;
-  created_by: string;
+  status: 'open' | 'in_progress' | 'resolved';
+  priority: 'low' | 'normal' | 'high';
   created_at: string;
   updated_at: string;
-  category?: string;
-  tags?: string[];
+  user_id: string;
+  assigned_to?: string;
+  profiles?: { email: string };
+  agents?: { email: string };
+}
+
+interface Reply {
+  id: number;
+  ticket_id: number;
+  content: string;
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  is_public: boolean;
+  user_email: string;
 }
 
 interface TicketContextType {
-  tickets: Ticket[];
+  ticket: Ticket | null;
+  replies: Reply[];
   loading: boolean;
-  searchTickets: (query: string) => Promise<void>;
-  refreshTickets: () => Promise<void>;
-  createTicket: (ticket: Partial<Ticket>) => Promise<void>;
-  updateTicket: (id: string, updates: Partial<Ticket>) => Promise<void>;
+  error: string | null;
+  addReply: (content: string, isPublic: boolean) => Promise<void>;
+  updateTicket: (updates: Partial<Ticket>) => Promise<void>;
 }
 
 const TicketContext = createContext<TicketContextType | undefined>(undefined);
 
-export const TicketProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [tickets, setTickets] = useState<Ticket[]>([]);
+export const TicketProvider: React.FC<{ children: React.ReactNode; ticketId: string }> = ({ children, ticketId }) => {
+  const { user } = useAuth();
+  const [ticket, setTicket] = useState<Ticket | null>(null);
+  const [replies, setReplies] = useState<Reply[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  const fetchTickets = async () => {
+  const fetchTicket = useCallback(async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('tickets')
-        .select('*')
-        .order('updated_at', { ascending: false });
+      setError(null);
 
-      if (error) throw error;
-      setTickets(data || []);
-    } catch (error: any) {
-      console.error('Error fetching tickets:', error.message);
+      const { data: ticketData, error: ticketError } = await supabase
+        .from('tickets')
+        .select(`
+          *,
+          profiles!tickets_user_id_fkey(email),
+          agents:profiles!tickets_assigned_to_fkey(email)
+        `)
+        .eq('id', ticketId)
+        .single();
+
+      if (ticketError) throw ticketError;
+
+      const { data: repliesData, error: repliesError } = await supabase
+        .from('replies_with_users')
+        .select('*')
+        .eq('ticket_id', ticketId)
+        .order('created_at', { ascending: true });
+
+      if (repliesError) throw repliesError;
+
+      setTicket(ticketData);
+      setReplies(repliesData || []);
+    } catch (err: any) {
+      setError(err.message);
     } finally {
       setLoading(false);
     }
+  }, [ticketId]);
+
+  const addReply = async (content: string, isPublic: boolean) => {
+    if (!user?.id || !ticket) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('replies')
+        .insert([
+          {
+            ticket_id: ticket.id,
+            content,
+            user_id: user.id,
+            is_public: isPublic
+          }
+        ])
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      setReplies(prev => [...prev, data]);
+
+      // Update ticket updated_at timestamp
+      await supabase
+        .from('tickets')
+        .update({ updated_at: new Date().toISOString() })
+        .eq('id', ticket.id);
+
+    } catch (err: any) {
+      setError(err.message);
+    }
   };
 
-  const searchTickets = async (query: string) => {
+  const updateTicket = async (updates: Partial<Ticket>) => {
+    if (!ticket) return;
+
     try {
       const { data, error } = await supabase
         .from('tickets')
-        .select('*')
-        .or(`title.ilike.%${query}%,description.ilike.%${query}%`)
-        .order('updated_at', { ascending: false });
+        .update({
+          ...updates,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', ticket.id)
+        .select()
+        .single();
 
       if (error) throw error;
-      setTickets(data || []);
-    } catch (error: any) {
-      console.error('Error searching tickets:', error.message);
-    }
-  };
 
-  const createTicket = async (ticket: Partial<Ticket>) => {
-    try {
-      const { error } = await supabase
-        .from('tickets')
-        .insert([ticket]);
-
-      if (error) throw error;
-      await fetchTickets();
-    } catch (error: any) {
-      console.error('Error creating ticket:', error.message);
-    }
-  };
-
-  const updateTicket = async (id: string, updates: Partial<Ticket>) => {
-    try {
-      const { error } = await supabase
-        .from('tickets')
-        .update(updates)
-        .eq('id', id);
-
-      if (error) throw error;
-      await fetchTickets();
-    } catch (error: any) {
-      console.error('Error updating ticket:', error.message);
+      setTicket(data);
+    } catch (err: any) {
+      setError(err.message);
     }
   };
 
   useEffect(() => {
-    fetchTickets();
-  }, []);
+    if (ticketId) {
+      fetchTicket();
+    }
+  }, [ticketId, fetchTicket]);
 
   return (
-    <TicketContext.Provider
-      value={{
-        tickets,
-        loading,
-        searchTickets,
-        refreshTickets: fetchTickets,
-        createTicket,
-        updateTicket
-      }}
-    >
+    <TicketContext.Provider value={{
+      ticket,
+      replies,
+      loading,
+      error,
+      addReply,
+      updateTicket
+    }}>
       {children}
     </TicketContext.Provider>
   );
 };
 
-export const useTickets = () => {
+export const useTicket = () => {
   const context = useContext(TicketContext);
   if (context === undefined) {
-    throw new Error('useTickets must be used within a TicketProvider');
+    throw new Error('useTicket must be used within a TicketProvider');
   }
   return context;
 }; 

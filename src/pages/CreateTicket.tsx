@@ -45,7 +45,7 @@ const CreateTicket: React.FC = () => {
           {
             ...formData,
             user_id: user.id,
-            status: 'NEW'
+            status: 'open'
           }
         ])
         .select()

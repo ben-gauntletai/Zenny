@@ -1,446 +1,166 @@
-import React, { useState, useEffect } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
-import type { TicketStatus, TicketPriority, TicketType, TicketTopic, CustomerType } from '../types/supabase';
-import type { Ticket as SupabaseTicket } from '../lib/supabaseClient';
+import React, { useState } from 'react';
+import { useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { useNotifications } from '../contexts/NotificationContext';
+import { useTicket } from '../contexts/TicketContext';
+import { TicketProvider } from '../contexts/TicketContext';
 import '../styles/TicketDetail.css';
 
-interface Comment {
-  id: string;
-  content: string;
-  created_at: string;
-  user_id: string;
-  user_email: string;
-}
-
-interface Ticket {
-  id: number;
-  subject: string;
-  description: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  ticket_type: TicketType;
-  topic: TicketTopic;
-  customer_type: CustomerType;
-  created_at: string;
-  updated_at: string;
-  group_id: string | null;
-  user_email: string;
-  agent_email?: string;
-}
-
-interface DatabaseProfile {
-  id: string;
-  email: string;
-}
-
-interface DatabaseComment {
-  id: string;
-  content: string;
-  created_at: string;
-  user_id: string;
-  profiles: DatabaseProfile;
-}
-
-interface DatabaseTicket {
-  id: number;
-  subject: string;
-  description: string;
-  status: string;
-  priority: string;
-  ticket_type: TicketType;
-  topic: TicketTopic;
-  customer_type: CustomerType;
-  created_at: string;
-  updated_at: string;
-  group_id: string | null;
-  user_id: string;
-  assigned_to: string | null;
-}
-
-interface CommentData {
-  id: string;
-  content: string;
-  created_at: string;
-  user_id: string;
-  profiles: {
-    email: string;
-  };
-}
-
-const TicketDetail: React.FC = () => {
-  const { ticketId } = useParams<{ ticketId: string }>();
-  const navigate = useNavigate();
+const TicketContent: React.FC = () => {
+  const { ticket, replies, loading, error, addReply } = useTicket();
+  const [replyContent, setReplyContent] = useState('');
   const { user } = useAuth();
-  const { addNotification } = useNotifications();
-  const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [newComment, setNewComment] = useState('');
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
-  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (ticketId) {
-      fetchTicketDetails();
-    }
-  }, [ticketId]);
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
+  if (!ticket) return <div>Ticket not found</div>;
 
-  const fetchTicketDetails = async () => {
-    try {
-      setLoading(true);
-      setError('');
-
-      // Fetch ticket details
-      const { data: ticketData, error: ticketError } = await supabase
-        .from('tickets')
-        .select('*')
-        .eq('id', ticketId)
-        .single();
-
-      if (ticketError) throw ticketError;
-
-      const typedTicketData = ticketData as DatabaseTicket;
-
-      // Fetch user information
-      const { data: userData, error: userError } = await supabase
-        .from('profiles')
-        .select('id, email')
-        .in('id', [typedTicketData.user_id, typedTicketData.assigned_to].filter(Boolean));
-
-      if (userError) throw userError;
-
-      const userMap = (userData || []).reduce<Record<string, DatabaseProfile>>((acc, user) => {
-        acc[user.id] = user;
-        return acc;
-      }, {});
-
-      // Format ticket data
-      const formattedTicket: Ticket = {
-        id: typedTicketData.id,
-        subject: typedTicketData.subject,
-        description: typedTicketData.description,
-        status: typedTicketData.status as TicketStatus,
-        priority: typedTicketData.priority as TicketPriority,
-        ticket_type: typedTicketData.ticket_type,
-        topic: typedTicketData.topic,
-        customer_type: typedTicketData.customer_type,
-        created_at: typedTicketData.created_at,
-        updated_at: typedTicketData.updated_at,
-        group_id: typedTicketData.group_id,
-        user_email: userMap[typedTicketData.user_id]?.email || 'Unknown',
-        agent_email: typedTicketData.assigned_to ? userMap[typedTicketData.assigned_to]?.email : undefined
-      };
-
-      // Fetch comments
-      const { data: commentsData, error: commentsError } = await supabase
-        .from('ticket_comments')
-        .select(`
-          id,
-          content,
-          created_at,
-          user_id,
-          profiles!inner (
-            email
-          )
-        `)
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true });
-
-      if (commentsError) throw commentsError;
-
-      const typedCommentsData = commentsData as unknown as DatabaseComment[];
-      const formattedComments: Comment[] = typedCommentsData.map(comment => ({
-        id: comment.id,
-        content: comment.content,
-        created_at: comment.created_at,
-        user_id: comment.user_id,
-        user_email: comment.profiles.email
-      }));
-
-      setTicket(formattedTicket);
-      setComments(formattedComments);
-    } catch (err) {
-      console.error('Error fetching ticket details:', err);
-      setError('Failed to load ticket details');
-      addNotification({
-        message: 'Failed to load ticket details',
-        type: 'error'
-      });
-    } finally {
-      setLoading(false);
-    }
+  const handleSubmitReply = async () => {
+    if (!replyContent.trim()) return;
+    await addReply(replyContent, true);
+    setReplyContent('');
   };
-
-  const handleStatusChange = async (newStatus: string) => {
-    if (!user || !ticket) return;
-
-    try {
-      setSubmitting(true);
-      const { error: updateError } = await supabase
-        .from('tickets')
-        .update({ status: newStatus })
-        .eq('id', ticket.id);
-
-      if (updateError) throw updateError;
-
-      setTicket(prev => prev ? { ...prev, status: newStatus as TicketStatus } : null);
-      addNotification({
-        message: 'Ticket status updated successfully',
-        type: 'success'
-      });
-    } catch (err) {
-      console.error('Error updating ticket status:', err);
-      addNotification({
-        message: 'Failed to update ticket status',
-        type: 'error'
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handlePriorityChange = async (newPriority: string) => {
-    if (!user || !ticket) return;
-
-    try {
-      setSubmitting(true);
-      const { error: updateError } = await supabase
-        .from('tickets')
-        .update({ priority: newPriority })
-        .eq('id', ticket.id);
-
-      if (updateError) throw updateError;
-
-      setTicket(prev => prev ? { ...prev, priority: newPriority as TicketPriority } : null);
-      addNotification({
-        message: `Ticket priority updated to ${newPriority}`,
-        type: 'success'
-      });
-    } catch (err) {
-      console.error('Error updating ticket priority:', err);
-      setError('Failed to update ticket priority');
-      addNotification({
-        message: 'Failed to update ticket priority',
-        type: 'error'
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleAssign = async () => {
-    if (!user || !ticket) return;
-
-    try {
-      setSubmitting(true);
-      const { error: updateError } = await supabase
-        .from('tickets')
-        .update({ assigned_to: user.id })
-        .eq('id', ticket.id);
-
-      if (updateError) throw updateError;
-
-      setTicket(prev => prev ? {
-        ...prev,
-        agent: { email: user.email || '' }
-      } : null);
-      addNotification({
-        message: 'Ticket assigned to you successfully',
-        type: 'success'
-      });
-    } catch (err) {
-      console.error('Error assigning ticket:', err);
-      setError('Failed to assign ticket');
-      addNotification({
-        message: 'Failed to assign ticket',
-        type: 'error'
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  const handleCommentSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!user || !newComment.trim() || !ticket) return;
-
-    try {
-      setSubmitting(true);
-      const { data: rawCommentData, error: commentError } = await supabase
-        .from('ticket_comments')
-        .insert([
-          {
-            ticket_id: ticket.id,
-            content: newComment.trim(),
-            user_id: user.id
-          }
-        ])
-        .select(`
-          id,
-          content,
-          created_at,
-          user_id,
-          profiles!inner (
-            email
-          )
-        `)
-        .single();
-
-      if (commentError) throw commentError;
-
-      // Cast the raw data to our expected type
-      const commentData = {
-        ...rawCommentData,
-        profiles: {
-          email: rawCommentData.profiles[0].email
-        }
-      } as CommentData;
-
-      const typedComment: Comment = {
-        id: commentData.id,
-        content: commentData.content,
-        created_at: commentData.created_at,
-        user_id: commentData.user_id,
-        user_email: commentData.profiles.email
-      };
-
-      setComments(prev => [...prev, typedComment]);
-      setNewComment('');
-      addNotification({
-        message: 'Comment added successfully',
-        type: 'success'
-      });
-    } catch (err) {
-      console.error('Error adding comment:', err);
-      setError('Failed to add comment');
-      addNotification({
-        message: 'Failed to add comment',
-        type: 'error'
-      });
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  if (loading) {
-    return <div className="loading">Loading ticket details...</div>;
-  }
-
-  if (error) {
-    return <div className="error">{error}</div>;
-  }
-
-  if (!ticket) {
-    return <div className="error">Ticket not found</div>;
-  }
 
   return (
     <div className="ticket-detail">
-      <header className="ticket-header">
-        <div className="header-content">
-          <h1>{ticket.subject}</h1>
-          <div className="ticket-meta">
-            <span className={`status-badge ${ticket.status.toLowerCase()}`}>
-              {ticket.status}
-            </span>
-            <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
-              {ticket.priority}
-            </span>
-            <span className="meta-item">
-              Created by {ticket.user_email}
-            </span>
-            <span className="meta-item">
-              {new Date(ticket.created_at).toLocaleString()}
-            </span>
+      <div className="ticket-main">
+        <header className="ticket-header">
+          <div className="ticket-title">
+            <h1>{ticket.subject}</h1>
+            <div className="ticket-subtitle">Via sample ticket</div>
           </div>
-        </div>
-
-        {ticket.agent_email && (
           <div className="ticket-actions">
-            <select
-              value={ticket.status}
-              onChange={(e) => handleStatusChange(e.target.value)}
-              disabled={submitting}
-              className="action-select"
-            >
-              <option value="open">Open</option>
-              <option value="pending">Pending</option>
-              <option value="solved">Solved</option>
-            </select>
-
-            <select
-              value={ticket.priority}
-              onChange={(e) => handlePriorityChange(e.target.value)}
-              disabled={submitting}
-              className="action-select"
-            >
-              <option value="low">Low</option>
-              <option value="medium">Medium</option>
-              <option value="high">High</option>
-            </select>
-
-            {!ticket.agent_email && (
-              <button
-                onClick={handleAssign}
-                disabled={submitting}
-                className="assign-button"
-              >
-                Assign to Me
-              </button>
-            )}
+            <button className="icon-button"><i className="filter-icon" /></button>
+            <button className="icon-button"><i className="time-icon" /></button>
+            <button className="icon-button"><i className="more-icon" /></button>
           </div>
-        )}
-      </header>
+        </header>
 
-      <div className="ticket-content">
-        <div className="ticket-description">
-          <h2>Description</h2>
-          <p>{ticket.description}</p>
-        </div>
+        <div className="ticket-conversation">
+          <div className="message">
+            <div className="message-avatar">
+              <img src="/default-avatar.png" alt="The Customer" />
+            </div>
+            <div className="message-content">
+              <div className="message-header">
+                <span className="message-author">{ticket.profiles?.email || 'Unknown User'}</span>
+                <span className="message-time">
+                  {new Date(ticket.created_at).toLocaleString()}
+                </span>
+              </div>
+              <div className="message-body">
+                <p>{ticket.description}</p>
+              </div>
+            </div>
+          </div>
 
-        <div className="ticket-comments">
-          <h2>Comments</h2>
-          
-          <div className="comments-list">
-            {comments.map(comment => (
-              <div key={comment.id} className="comment">
-                <div className="comment-header">
-                  <span className="comment-author">{comment.user_email}</span>
-                  <span className="comment-date">
-                    {new Date(comment.created_at).toLocaleString()}
+          {replies.map(reply => (
+            <div key={reply.id} className="message">
+              <div className="message-avatar">
+                <img src="/default-avatar.png" alt="User" />
+              </div>
+              <div className="message-content">
+                <div className="message-header">
+                  <span className="message-author">{reply.user_email}</span>
+                  <span className="message-time">
+                    {new Date(reply.created_at).toLocaleString()}
                   </span>
                 </div>
-                <p className="comment-content">{comment.content}</p>
+                <div className="message-body">
+                  <p>{reply.content}</p>
+                </div>
               </div>
-            ))}
+            </div>
+          ))}
+        </div>
 
-            {comments.length === 0 && (
-              <p className="no-comments">No comments yet</p>
-            )}
+        <div className="reply-box">
+          <div className="reply-header">
+            <div className="reply-type">
+              <button className="reply-type-button">Public reply</button>
+            </div>
+            <div className="reply-to">
+              To: <span className="recipient">The Customer</span>
+            </div>
+            <button className="cc-button">CC</button>
           </div>
-
-          <form onSubmit={handleCommentSubmit} className="comment-form">
-            <textarea
-              value={newComment}
-              onChange={(e) => setNewComment(e.target.value)}
-              placeholder="Add a comment..."
-              required
-              className="comment-input"
+          <div className="reply-editor">
+            <div className="editor-toolbar">
+              <button className="toolbar-button"><i className="format-text" /></button>
+              <button className="toolbar-button"><i className="format-bold" /></button>
+              <button className="toolbar-button"><i className="format-emoji" /></button>
+              <button className="toolbar-button"><i className="format-attachment" /></button>
+              <button className="toolbar-button"><i className="format-link" /></button>
+            </div>
+            <textarea 
+              value={replyContent}
+              onChange={(e) => setReplyContent(e.target.value)}
+              placeholder="Write your reply..."
+              className="reply-textarea"
             />
-            <button
-              type="submit"
-              disabled={submitting || !newComment.trim()}
-              className="submit-button"
-            >
-              {submitting ? 'Adding...' : 'Add Comment'}
-            </button>
-          </form>
+          </div>
+        </div>
+      </div>
+
+      <div className="ticket-sidebar">
+        <div className="sidebar-section">
+          <div className="customer-info">
+            <div className="customer-header">
+              <img src="/default-avatar.png" alt="The Customer" className="customer-avatar" />
+              <div className="customer-name">The Customer</div>
+            </div>
+            <div className="customer-details">
+              <div className="detail-row">
+                <label>Email</label>
+                <div className="detail-value">customer@example.com</div>
+              </div>
+              <div className="detail-row">
+                <label>Local time</label>
+                <div className="detail-value">Sun, 11:14 MST</div>
+              </div>
+              <div className="detail-row">
+                <label>Language</label>
+                <div className="detail-value">English (United States)</div>
+              </div>
+              <div className="detail-row">
+                <label>Notes</label>
+                <textarea 
+                  placeholder="Add user notes..."
+                  className="notes-textarea"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="sidebar-section">
+          <h3>Interaction history</h3>
+          <div className="interaction-list">
+            <div className="interaction-item">
+              <div className="interaction-icon" />
+              <div className="interaction-content">
+                <div className="interaction-title">{ticket.subject}</div>
+                <div className="interaction-meta">
+                  {new Date(ticket.created_at).toLocaleString()}
+                </div>
+                <div className="interaction-status">Status: {ticket.status}</div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
+  );
+};
+
+const TicketDetail: React.FC = () => {
+  const { ticketId } = useParams();
+  
+  if (!ticketId) return <div>Invalid ticket ID</div>;
+
+  return (
+    <TicketProvider ticketId={ticketId}>
+      <TicketContent />
+    </TicketProvider>
   );
 };
 
