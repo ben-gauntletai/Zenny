@@ -202,87 +202,140 @@ async function handleTicketUpdate(req: Request, supabaseClient: any, user: any) 
 }
 
 async function handleTicketList(req: Request, supabaseClient: any, user: any) {
-  const url = new URL(req.url)
-  const status = url.searchParams.get('status')
-  const limit = parseInt(url.searchParams.get('limit') ?? '10')
-  const offset = parseInt(url.searchParams.get('offset') ?? '0')
+  try {
+    const url = new URL(req.url)
+    const status = url.searchParams.get('status')
+    const limit = parseInt(url.searchParams.get('limit') ?? '10')
+    const offset = parseInt(url.searchParams.get('offset') ?? '0')
 
-  console.log('Handling ticket list request for user:', { 
-    id: user.id, 
-    email: user.email,
-    metadata_role: user.user_metadata?.role,
-    full_request_url: req.url
-  })
+    console.log('Handling ticket list request:', { 
+      user_id: user.id, 
+      user_email: user.email,
+      user_metadata: user.user_metadata,
+      status,
+      limit,
+      offset
+    })
 
-  // Get or create user profile
-  const userProfile = await getUserProfile(supabaseClient, user)
-  const effectiveRole = userProfile?.role || 'user'
-  
-  console.log('Using role for access control:', effectiveRole)
+    // Get or create user profile
+    const userProfile = await getUserProfile(supabaseClient, user)
+    const effectiveRole = userProfile?.role || 'user'
+    
+    console.log('User profile and role:', {
+      profile: userProfile,
+      effectiveRole,
+      isAdmin: effectiveRole === 'admin',
+      isAgent: effectiveRole === 'agent'
+    })
 
-  // Build the query
-  const query = supabaseClient
-    .from('tickets')
-    .select(`
-      *,
-      creator:profiles!tickets_user_id_fkey (email, full_name),
-      assignee:profiles!tickets_assigned_to_fkey (email, full_name)
-    `)
+    // Use service role client to bypass RLS
+    const serviceRoleClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+    )
 
-  // Add filters
-  if (status) {
-    console.log('Applying status filter:', status)
-    query.eq('status', status)
-  }
+    // Build the query
+    const query = serviceRoleClient
+      .from('tickets')
+      .select(`
+        *,
+        creator:profiles!tickets_user_id_fkey (email, full_name),
+        assignee:profiles!tickets_assigned_to_fkey (email, full_name)
+      `)
 
-  if (effectiveRole !== 'admin' && effectiveRole !== 'agent') {
-    console.log('Restricting to user tickets only for user:', user.id)
-    query.eq('user_id', user.id)
-  } else {
-    console.log('Showing all tickets (admin/agent access)')
-  }
-
-  // Add ordering and pagination
-  query
-    .order('created_at', { ascending: false })
-    .range(offset, offset + limit - 1)
-
-  // Execute query
-  const { data: tickets, error: queryError } = await query
-  
-  console.log('Query result:', {
-    ticketCount: tickets?.length,
-    error: queryError,
-    firstTicket: tickets?.[0],
-    hasTickets: tickets && tickets.length > 0
-  })
-
-  if (queryError) {
-    console.error('Error fetching tickets:', queryError)
-    throw queryError
-  }
-
-  // Transform the data to match the expected format
-  const transformedTickets = tickets.map((ticket: any) => ({
-    ...ticket,
-    creator_email: ticket.creator?.email,
-    creator_name: ticket.creator?.full_name,
-    agent_email: ticket.assignee?.email,
-    agent_name: ticket.assignee?.full_name
-  }))
-
-  console.log('Transformed tickets:', {
-    count: transformedTickets.length,
-    firstTransformed: transformedTickets[0]
-  })
-
-  return new Response(
-    JSON.stringify({ tickets: transformedTickets }),
-    { 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      status: 200 
+    // Add filters
+    if (status) {
+      console.log('Applying status filter:', status)
+      query.eq('status', status)
     }
-  )
+
+    if (effectiveRole !== 'admin' && effectiveRole !== 'agent') {
+      console.log('Restricting to user tickets:', {
+        user_id: user.id,
+        reason: 'User is not admin/agent'
+      })
+      query.eq('user_id', user.id)
+    } else {
+      console.log('Showing all tickets:', {
+        reason: `User is ${effectiveRole}`
+      })
+    }
+
+    // Add ordering and pagination
+    query
+      .order('created_at', { ascending: false })
+      .range(offset, offset + limit - 1)
+
+    // Execute query
+    const { data: tickets, error: queryError } = await query
+    
+    console.log('Query result:', {
+      success: !queryError,
+      ticketCount: tickets?.length,
+      error: queryError,
+      firstTicket: tickets?.[0],
+      query: {
+        filters: {
+          user_id: effectiveRole !== 'admin' && effectiveRole !== 'agent' ? user.id : null,
+          status: status || null
+        },
+        range: [offset, offset + limit - 1]
+      }
+    })
+
+    if (queryError) {
+      console.error('Error fetching tickets:', {
+        error: queryError,
+        message: queryError.message,
+        details: queryError.details,
+        code: queryError.code,
+        hint: queryError.hint
+      })
+      throw queryError
+    }
+
+    // Transform the data to match the expected format
+    const transformedTickets = tickets.map((ticket: any) => ({
+      ...ticket,
+      creator_email: ticket.creator?.email,
+      creator_name: ticket.creator?.full_name,
+      agent_email: ticket.assignee?.email,
+      agent_name: ticket.assignee?.full_name
+    }))
+
+    console.log('Response data:', {
+      ticketCount: transformedTickets.length,
+      firstTicket: transformedTickets[0],
+      userProfile,
+      effectiveRole
+    })
+
+    return new Response(
+      JSON.stringify({ tickets: transformedTickets }),
+      { 
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 200 
+      }
+    )
+  } catch (error) {
+    console.error('Error in handleTicketList:', {
+      error,
+      message: error.message,
+      details: error.details || null,
+      code: error.code || null,
+      hint: error.hint || null
+    })
+    return new Response(
+      JSON.stringify({ 
+        error: error.message,
+        details: error.details || null
+      }),
+      {
+        status: 400,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      }
+    )
+  }
 }
 
 async function getUserProfile(supabaseClient: any, user: any) {

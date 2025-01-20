@@ -94,22 +94,56 @@ export const ticketService = {
       ? `${EDGE_FUNCTION_URL}?${queryParams.toString()}`
       : EDGE_FUNCTION_URL;
 
+    console.log('Fetching tickets:', {
+      url,
+      params,
+      session_user: session.user,
+      auth_header_present: !!session.access_token
+    });
+
     const response = await fetch(url, {
       method: 'GET',
       headers: {
-        'Authorization': `Bearer ${session.access_token}`
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
       }
     });
 
     if (!response.ok) {
+      let errorMessage = `Failed to fetch tickets: ${response.status}`;
       try {
-        const error = await response.json();
-        throw new Error(error.message || 'Failed to fetch tickets');
-      } catch {
-        throw new Error(`Failed to fetch tickets: ${response.status}`);
+        const errorData = await response.json();
+        console.error('Server error response:', {
+          status: response.status,
+          statusText: response.statusText,
+          error: errorData,
+          url,
+          params,
+          user: {
+            id: session.user.id,
+            email: session.user.email,
+            role: session.user.user_metadata?.role
+          }
+        });
+        errorMessage = errorData.error || errorData.message || errorMessage;
+      } catch (parseError) {
+        console.error('Error parsing error response:', {
+          parseError,
+          status: response.status,
+          statusText: response.statusText,
+          url,
+          params
+        });
       }
+      throw new Error(errorMessage);
     }
 
-    return response.json();
+    const data = await response.json();
+    console.log('Tickets fetched successfully:', {
+      count: data.tickets?.length,
+      first_ticket: data.tickets?.[0],
+      params
+    });
+    return data;
   }
 }; 
