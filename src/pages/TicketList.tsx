@@ -1,13 +1,21 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import type { Ticket as SupabaseTicket, Profile } from '../lib/supabaseClient';
-import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
+import { ticketService } from '../services/ticketService';
 import '../styles/TicketList.css';
 
-interface FormattedTicket extends Omit<SupabaseTicket, 'user_id' | 'assigned_to'> {
-  user: { email: string };
-  agent?: { email: string };
+interface FormattedTicket {
+  id: string;
+  subject: string;
+  status: 'open' | 'pending' | 'solved' | 'closed';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  created_at: string;
+  description: string;
+  updated_at: string;
+  ticket_type: string;
+  topic: string;
+  creator_email: string;
+  agent_email?: string;
 }
 
 interface FilterState {
@@ -16,11 +24,6 @@ interface FilterState {
   assignee: string;
   sortBy: 'created_at' | 'priority' | 'status';
   sortOrder: 'asc' | 'desc';
-}
-
-interface UserMapProfile {
-  id: string;
-  email: string;
 }
 
 const TicketList: React.FC = () => {
@@ -44,49 +47,41 @@ const TicketList: React.FC = () => {
   const fetchTickets = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('tickets_with_users')
-        .select('*');
+      const response = await ticketService.listTickets({
+        status: filters.status || undefined,
+        limit: 100,
+        offset: 0
+      });
 
-      // Apply filters
-      if (filters.status) {
-        query = query.eq('status', filters.status);
+      if (!response.tickets) {
+        throw new Error('Invalid response format');
       }
+
+      let filteredTickets = response.tickets;
+
+      // Apply client-side filters
       if (filters.priority) {
-        query = query.eq('priority', filters.priority);
+        filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => ticket.priority === filters.priority);
       }
-      if (!isAgent) {
-        query = query.eq('user_id', user?.id);
-      } else if (filters.assignee === 'me') {
-        query = query.eq('assigned_to', user?.id);
-      } else if (filters.assignee === 'unassigned') {
-        query = query.is('assigned_to', null);
+
+      if (isAgent && filters.assignee === 'me') {
+        filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => ticket.agent_email === user?.email);
+      } else if (isAgent && filters.assignee === 'unassigned') {
+        filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => !ticket.agent_email);
       }
 
       // Apply sorting
-      query = query.order(filters.sortBy, { ascending: filters.sortOrder === 'asc' });
+      filteredTickets.sort((a: FormattedTicket, b: FormattedTicket) => {
+        const aValue = a[filters.sortBy];
+        const bValue = b[filters.sortBy];
+        const order = filters.sortOrder === 'asc' ? 1 : -1;
+        
+        if (aValue < bValue) return -1 * order;
+        if (aValue > bValue) return 1 * order;
+        return 0;
+      });
 
-      const { data: ticketData, error: fetchError } = await query;
-
-      if (fetchError) throw fetchError;
-
-      const formattedTickets: FormattedTicket[] = (ticketData || []).map((ticket) => ({
-        id: ticket.id,
-        subject: ticket.subject,
-        status: ticket.status,
-        priority: ticket.priority,
-        created_at: ticket.created_at,
-        description: ticket.description,
-        updated_at: ticket.updated_at,
-        ticket_type: ticket.ticket_type,
-        topic: ticket.topic,
-        customer_type: ticket.customer_type,
-        group_id: ticket.group_id,
-        user: { email: ticket.creator_email || 'Unknown' },
-        agent: ticket.agent_email ? { email: ticket.agent_email } : undefined
-      }));
-
-      setTickets(formattedTickets);
+      setTickets(filteredTickets);
     } catch (err) {
       console.error('Error fetching tickets:', err);
       setError('Failed to load tickets');
@@ -129,6 +124,7 @@ const TicketList: React.FC = () => {
           <option value="open">Open</option>
           <option value="pending">Pending</option>
           <option value="solved">Solved</option>
+          <option value="closed">Closed</option>
         </select>
 
         <select
@@ -138,8 +134,9 @@ const TicketList: React.FC = () => {
         >
           <option value="">All Priority</option>
           <option value="low">Low</option>
-          <option value="medium">Medium</option>
+          <option value="normal">Normal</option>
           <option value="high">High</option>
+          <option value="urgent">Urgent</option>
         </select>
 
         {isAgent && (
@@ -213,8 +210,8 @@ const TicketList: React.FC = () => {
                     </span>
                   </td>
                   <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
-                  {isAgent && <td>{ticket.user.email}</td>}
-                  <td>{ticket.agent?.email || 'Unassigned'}</td>
+                  {isAgent && <td>{ticket.creator_email}</td>}
+                  <td>{ticket.agent_email || 'Unassigned'}</td>
                 </tr>
               ))}
             </tbody>

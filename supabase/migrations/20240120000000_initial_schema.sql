@@ -391,4 +391,32 @@ CREATE POLICY "Only admins can update customers"
             WHERE profiles.id = auth.uid()
             AND profiles.role = 'admin'
         )
-    ); 
+    );
+
+-- Create policies for profiles table
+CREATE POLICY "Users can view their own profile"
+    ON profiles FOR SELECT
+    TO authenticated
+    USING (auth.uid() = id);
+
+CREATE POLICY "Agents and admins can view all profiles"
+    ON profiles FOR SELECT
+    TO authenticated
+    USING (
+        EXISTS (
+            SELECT 1 FROM profiles
+            WHERE profiles.id = auth.uid()
+            AND profiles.role IN ('agent', 'admin')
+        )
+    );
+
+CREATE POLICY "Users can update their own profile"
+    ON profiles FOR UPDATE
+    TO authenticated
+    USING (auth.uid() = id)
+    WITH CHECK (auth.uid() = id);
+
+CREATE POLICY "Allow profile creation"
+    ON profiles FOR INSERT
+    TO authenticated
+    WITH CHECK (true); 

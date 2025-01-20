@@ -1,161 +1,133 @@
-import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
-import { useAuth } from './AuthContext';
+import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ticketService } from '../services/ticketService';
-import type { TicketWithUsers } from '../types/supabase';
+import { useAuth } from './AuthContext';
 
-interface DashboardStats {
-  ticketStats: {
-    total: number;
-    open: number;
-    inProgress: number;
-    resolved: number;
+export interface Ticket {
+  id: number;
+  subject: string;
+  status: 'open' | 'pending' | 'solved' | 'closed';
+  priority: 'low' | 'medium' | 'high';
+  updated_at: string;
+  created_at: string;
+  assigned_to?: string;
+  creator_email: string;
+  creator_name: string;
+  agent_email?: string;
+  agent_name?: string;
+  assignee?: {
+    email: string;
+    name?: string;
   };
-  recentTickets: TicketWithUsers[];
-  recentCustomers: any[];
-  activityFeed: any[];
+  users?: {
+    email: string;
+    name?: string;
+  };
+}
+
+export interface ActivityFeedItem {
+  id: string;
+  type: 'assigned' | 'priority_changed';
+  ticketId: string;
+  ticketSubject: string;
+  actor: string;
+  timestamp: string;
 }
 
 interface DashboardContextType {
-  stats: DashboardStats;
-  tickets: TicketWithUsers[];
+  stats: {
+    ticketStats: {
+      total: number;
+      open: number;
+      inProgress: number;
+      resolved: number;
+    };
+    activityFeed: ActivityFeedItem[];
+  };
+  tickets: Ticket[];
   loading: boolean;
-  isUpdating: boolean;
-  refreshStats: () => Promise<void>;
+  error: string | null;
+  refreshData: () => Promise<void>;
 }
-
-const mockActivities = [
-  {
-    id: '1',
-    type: 'priority_changed',
-    ticketId: '1',
-    ticketSubject: 'Need help with billing',
-    actor: 'Support Agent',
-    timestamp: new Date().toISOString(),
-    details: {
-      priority: 'high'
-    }
-  },
-  {
-    id: '2',
-    type: 'assigned',
-    ticketId: '2',
-    ticketSubject: 'Login issues after update',
-    actor: 'System',
-    timestamp: new Date(Date.now() - 30 * 60000).toISOString()
-  },
-  {
-    id: '3',
-    type: 'priority_changed',
-    ticketId: '3',
-    ticketSubject: 'Feature request: Dark mode',
-    actor: 'Support Agent',
-    timestamp: new Date(Date.now() - 60 * 60000).toISOString(),
-    details: {
-      priority: 'medium'
-    }
-  }
-];
-
-const initialStats: DashboardStats = {
-  ticketStats: { total: 0, open: 0, inProgress: 0, resolved: 0 },
-  recentTickets: [],
-  recentCustomers: [],
-  activityFeed: mockActivities
-};
 
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
 export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
+  const [stats, setStats] = useState({
+    ticketStats: {
+      total: 0,
+      open: 0,
+      inProgress: 0,
+      resolved: 0
+    },
+    activityFeed: []
+  });
+  const [tickets, setTickets] = useState<Ticket[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
-  const [stats, setStats] = useState<DashboardStats>(initialStats);
-  const [tickets, setTickets] = useState<TicketWithUsers[]>([]);
-  const [loading, setLoading] = useState(false);
-  const [isUpdating, setIsUpdating] = useState(false);
 
-  const fetchDashboardData = useCallback(async () => {
-    if (!user?.id) {
-      console.log('No user ID available');
-      return;
-    }
-    
+  const fetchDashboardData = async () => {
     try {
-      console.log('Fetching dashboard data for user:', {
-        userId: user.id,
-        role: user.user_metadata?.role
-      });
+      setLoading(true);
+      setError(null);
 
-      // Only set loading on first load
-      if (!tickets.length) {
-        setLoading(true);
-      }
-      setIsUpdating(true);
+      console.log('Current user:', user);
+      console.log('User metadata:', user?.user_metadata);
+      console.log('User role:', user?.user_metadata?.role);
 
-      // Fetch tickets using the Edge Function
-      const { tickets: ticketData } = await ticketService.listTickets({
-        limit: 50
-      });
+      console.log('Fetching tickets...');
+      const response = await ticketService.listTickets();
+      console.log('Response from listTickets:', response);
 
-      if (!ticketData?.length) {
-        console.log('No tickets found, resetting to initial state');
-        setStats(initialStats);
-        setTickets([]);
+      if (!response.tickets || !Array.isArray(response.tickets)) {
+        console.error('Invalid response format:', response);
+        setError('Invalid response format from server');
         return;
       }
 
-      // Calculate ticket stats
-      const ticketStats = {
-        total: ticketData.length,
-        open: ticketData.filter((t: TicketWithUsers) => t.status === 'open').length,
-        inProgress: ticketData.filter((t: TicketWithUsers) => t.status === 'pending').length,
-        resolved: ticketData.filter((t: TicketWithUsers) => t.status === 'solved').length
+      const { tickets: fetchedTickets } = response;
+      console.log('Fetched tickets:', fetchedTickets);
+      setTickets(fetchedTickets);
+      
+      // Calculate stats
+      const newStats = {
+        ticketStats: {
+          total: fetchedTickets.length,
+          open: fetchedTickets.filter((t: Ticket) => t.status === 'open').length,
+          inProgress: fetchedTickets.filter((t: Ticket) => t.status === 'pending').length,
+          resolved: fetchedTickets.filter((t: Ticket) => t.status === 'solved' || t.status === 'closed').length
+        },
+        activityFeed: fetchedTickets
+          .sort((a: Ticket, b: Ticket) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
+          .slice(0, 5)
+          .map((ticket: Ticket) => ({
+            id: ticket.id.toString(),
+            type: ticket.assigned_to ? 'assigned' : 'priority_changed',
+            ticketId: ticket.id.toString(),
+            ticketSubject: ticket.subject,
+            actor: ticket.agent_email || ticket.creator_email || 'System',
+            timestamp: ticket.updated_at
+          }))
       };
 
-      console.log('Calculated ticket stats:', ticketStats);
-
-      // Update state in one batch
-      setStats({
-        ticketStats,
-        recentTickets: ticketData.slice(0, 5),
-        recentCustomers: [],
-        activityFeed: mockActivities
-      });
-      setTickets(ticketData);
-      
-      console.log('Updated dashboard state with:', {
-        ticketCount: ticketData.length,
-        stats: ticketStats
-      });
-      
-    } catch (error: any) {
-      console.error('Error fetching dashboard data:', error.message);
-      setStats(initialStats);
-      setTickets([]);
+      console.log('Calculated stats:', newStats);
+      setStats(newStats);
+    } catch (err) {
+      console.error('Error fetching dashboard data:', err);
+      setError('Failed to load dashboard data');
     } finally {
       setLoading(false);
-      setIsUpdating(false);
     }
-  }, [user?.id, tickets.length]);
+  };
 
-  // Fetch data immediately when user is available
   useEffect(() => {
-    console.log('DashboardProvider effect triggered:', {
-      hasUserId: !!user?.id,
-      currentTicketCount: tickets.length
-    });
-    
-    if (user?.id) {
+    if (user) {
       fetchDashboardData();
     }
-  }, [user?.id, fetchDashboardData]);
+  }, [user]);
 
   return (
-    <DashboardContext.Provider value={{
-      stats,
-      tickets,
-      loading,
-      isUpdating,
-      refreshStats: fetchDashboardData
-    }}>
+    <DashboardContext.Provider value={{ stats, tickets, loading, error, refreshData: fetchDashboardData }}>
       {children}
     </DashboardContext.Provider>
   );

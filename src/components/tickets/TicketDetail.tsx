@@ -17,7 +17,7 @@ interface TicketDetails {
   id: string;
   title: string;
   description: string;
-  status: 'open' | 'pending' | 'closed';
+  status: 'open' | 'pending' | 'solved' | 'closed';
   priority: 'low' | 'medium' | 'high';
   created_at: string;
   users: {
@@ -99,7 +99,7 @@ const TicketDetail: React.FC = () => {
     }
   };
 
-  const handleStatusChange = async (newStatus: 'open' | 'pending' | 'closed') => {
+  const handleStatusChange = async (newStatus: 'open' | 'pending' | 'solved' | 'closed') => {
     try {
       const { error } = await supabase
         .from('tickets')
@@ -107,7 +107,10 @@ const TicketDetail: React.FC = () => {
         .eq('id', id);
 
       if (error) throw error;
-      setTicket(ticket ? { ...ticket, status: newStatus } : null);
+      if (ticket) {
+        const updatedTicket: TicketDetails = { ...ticket, status: newStatus };
+        setTicket(updatedTicket);
+      }
     } catch (err) {
       console.error('Error updating ticket status:', err);
       setError('Failed to update ticket status');
@@ -188,10 +191,11 @@ const TicketDetail: React.FC = () => {
             <label>Status:</label>
             <select
               value={ticket.status}
-              onChange={(e) => handleStatusChange(e.target.value as 'open' | 'pending' | 'closed')}
+              onChange={(e) => handleStatusChange(e.target.value as 'open' | 'pending' | 'solved' | 'closed')}
             >
               <option value="open">Open</option>
               <option value="pending">Pending</option>
+              <option value="solved">Solved</option>
               <option value="closed">Closed</option>
             </select>
           </div>

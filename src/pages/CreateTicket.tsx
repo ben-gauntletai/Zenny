@@ -1,19 +1,15 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-import { useNotifications } from '../contexts/NotificationContext';
-import type { TicketPriority, TicketType, TicketTopic, CustomerType } from '../types/supabase';
+import { ticketService } from '../services/ticketService';
 import '../styles/CreateTicket.css';
 
 interface TicketFormData {
   subject: string;
   description: string;
-  priority: TicketPriority;
-  ticket_type: TicketType;
-  topic: TicketTopic;
-  customer_type: CustomerType;
-  status: string;
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  ticket_type: 'question' | 'incident' | 'problem' | 'task';
+  topic: 'ISSUE' | 'INQUIRY' | 'OTHER' | 'PAYMENTS' | 'NONE';
 }
 
 const CreateTicket: React.FC = () => {
@@ -24,9 +20,7 @@ const CreateTicket: React.FC = () => {
     description: '',
     priority: 'normal',
     ticket_type: 'question',
-    topic: 'NONE',
-    customer_type: 'STANDARD_CUSTOMER',
-    status: 'open'
+    topic: 'NONE'
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -39,20 +33,8 @@ const CreateTicket: React.FC = () => {
     setError('');
 
     try {
-      const { data, error: insertError } = await supabase
-        .from('tickets')
-        .insert([
-          {
-            ...formData,
-            user_id: user.id,
-            status: 'open'
-          }
-        ])
-        .select()
-        .single();
-
-      if (insertError) throw insertError;
-      navigate('/tickets/' + data.id);
+      const { ticket } = await ticketService.createTicket(formData);
+      navigate('/tickets/' + ticket.id);
     } catch (err) {
       console.error('Error creating ticket:', err);
       setError('Failed to create ticket. Please try again.');
@@ -68,10 +50,22 @@ const CreateTicket: React.FC = () => {
     }));
   };
 
+  const getCharCountClass = (length: number, max: number) => {
+    if (length >= max) return 'char-count at-limit';
+    if (length >= max * 0.8) return 'char-count near-limit';
+    return 'char-count';
+  };
+
   return (
     <div className="create-ticket">
-      <h1>Create New Ticket</h1>
-      <form onSubmit={handleSubmit}>
+      <div className="create-ticket-header">
+        <h2>Create New Support Ticket</h2>
+        <p className="subtitle">Provide details about your issue</p>
+      </div>
+
+      {error && <div className="error-message">{error}</div>}
+
+      <form onSubmit={handleSubmit} className="ticket-form">
         <div className="form-group">
           <label htmlFor="subject">Subject</label>
           <input
@@ -81,7 +75,14 @@ const CreateTicket: React.FC = () => {
             value={formData.subject}
             onChange={(e) => handleInputChange('subject', e.target.value)}
             required
+            maxLength={100}
+            placeholder="Brief summary"
           />
+          <div className="help-text">
+            <p className={getCharCountClass(formData.subject.length, 100)}>
+              {formData.subject.length}/100
+            </p>
+          </div>
         </div>
 
         <div className="form-group">
@@ -92,8 +93,33 @@ const CreateTicket: React.FC = () => {
             value={formData.description}
             onChange={(e) => handleInputChange('description', e.target.value)}
             required
-            rows={5}
+            rows={4}
+            placeholder="What happened? What did you expect?"
           />
+          <div className="help-text">
+            <ul>
+              <li>Steps to reproduce</li>
+              <li>Actual result</li>
+              <li>Expected result</li>
+              <li>Error messages</li>
+            </ul>
+          </div>
+        </div>
+
+        <div className="form-group">
+          <label htmlFor="priority">Priority</label>
+          <select
+            id="priority"
+            name="priority"
+            value={formData.priority}
+            onChange={(e) => handleInputChange('priority', e.target.value as TicketFormData['priority'])}
+            required
+          >
+            <option value="low">Low Priority</option>
+            <option value="normal">Normal Priority</option>
+            <option value="high">High Priority</option>
+            <option value="urgent">Urgent</option>
+          </select>
         </div>
 
         <div className="form-group">
@@ -102,7 +128,7 @@ const CreateTicket: React.FC = () => {
             id="ticket_type"
             name="ticket_type"
             value={formData.ticket_type}
-            onChange={(e) => handleInputChange('ticket_type', e.target.value)}
+            onChange={(e) => handleInputChange('ticket_type', e.target.value as TicketFormData['ticket_type'])}
             required
           >
             <option value="question">Question</option>
@@ -113,60 +139,36 @@ const CreateTicket: React.FC = () => {
         </div>
 
         <div className="form-group">
-          <label htmlFor="priority">Priority</label>
-          <select
-            id="priority"
-            name="priority"
-            value={formData.priority}
-            onChange={(e) => handleInputChange('priority', e.target.value)}
-            required
-          >
-            <option value="low">Low</option>
-            <option value="normal">Normal</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        </div>
-
-        <div className="form-group">
           <label htmlFor="topic">Topic</label>
           <select
             id="topic"
             name="topic"
             value={formData.topic}
-            onChange={(e) => handleInputChange('topic', e.target.value)}
+            onChange={(e) => handleInputChange('topic', e.target.value as TicketFormData['topic'])}
             required
           >
-            <option value="NONE">-</option>
-            <option value="ISSUE">Issue</option>
-            <option value="INQUIRY">Inquiry</option>
-            <option value="OTHER">Other</option>
+            <option value="ISSUE">Technical Issue</option>
+            <option value="INQUIRY">General Inquiry</option>
             <option value="PAYMENTS">Payments</option>
+            <option value="OTHER">Other</option>
+            <option value="NONE">Not Sure</option>
           </select>
         </div>
 
-        <div className="form-group">
-          <label htmlFor="customer_type">Customer Type</label>
-          <select
-            id="customer_type"
-            name="customer_type"
-            value={formData.customer_type}
-            onChange={(e) => handleInputChange('customer_type', e.target.value)}
-            required
-          >
-            <option value="STANDARD_CUSTOMER">Standard Customer</option>
-            <option value="VIP_CUSTOMER">VIP Customer</option>
-          </select>
-        </div>
-
-        {error && <div className="error-message">{error}</div>}
-        
         <div className="form-actions">
-          <button type="submit" disabled={loading} className="primary-button">
-            {loading ? 'Creating...' : 'Create Ticket'}
-          </button>
-          <button type="button" onClick={() => navigate(-1)} className="secondary-button">
+          <button
+            type="button"
+            className="cancel-button"
+            onClick={() => navigate('/tickets')}
+          >
             Cancel
+          </button>
+          <button
+            type="submit"
+            className="submit-button"
+            disabled={loading}
+          >
+            {loading ? 'Creating...' : 'Create Ticket'}
           </button>
         </div>
       </form>
