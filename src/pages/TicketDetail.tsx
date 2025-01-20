@@ -1,12 +1,14 @@
 import React, { useState } from 'react';
 import { useParams } from 'react-router-dom';
-import { useTicket, type Reply } from 'hooks/useTicket';
+import { useTicket, type Reply, type Ticket } from 'hooks/useTicket';
 import { useAuth } from 'contexts/AuthContext';
 import { TicketProvider } from 'contexts/TicketContext';
+import TicketDetailPanel from 'components/TicketDetailPanel';
+import { Box, Flex } from '@chakra-ui/react';
 import 'styles/TicketDetail.css';
 
 const TicketContent: React.FC = () => {
-  const { ticket, replies, loading, error, addReply } = useTicket();
+  const { ticket, replies, loading, error, addReply, updateTicket } = useTicket();
   const [replyContent, setReplyContent] = useState('');
   const { user } = useAuth();
 
@@ -20,9 +22,31 @@ const TicketContent: React.FC = () => {
     setReplyContent('');
   };
 
+  const handleUpdateTicket = (field: string, value: unknown) => {
+    if (updateTicket) {
+      updateTicket({ [field]: value });
+    }
+  };
+
   return (
-    <div className="ticket-detail">
-      <div className="ticket-main">
+    <Flex height="100vh">
+      <TicketDetailPanel
+        ticket={{
+          requester: ticket.profiles || null,
+          assignee: ticket.agents || null,
+          followers: [],
+          tags: [],
+          type: 'incident',
+          priority: ticket.priority === 'normal' ? 'Normal' :
+                   ticket.priority === 'low' ? 'Low' :
+                   ticket.priority === 'high' ? 'High' : 'Normal',
+          linkedProblem: undefined,
+          topic: undefined,
+          customerType: undefined
+        }}
+        onUpdate={handleUpdateTicket}
+      />
+      <Box flex="1" className="ticket-main">
         <header className="ticket-header">
           <div className="ticket-title">
             <h1>{ticket.subject}</h1>
@@ -107,7 +131,7 @@ const TicketContent: React.FC = () => {
             </div>
           </div>
         </div>
-      </div>
+      </Box>
 
       <div className="ticket-sidebar">
         <div className="sidebar-section">
@@ -172,7 +196,7 @@ const TicketContent: React.FC = () => {
           </div>
         </div>
       </div>
-    </div>
+    </Flex>
   );
 };
 

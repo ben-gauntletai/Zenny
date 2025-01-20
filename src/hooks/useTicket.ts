@@ -51,8 +51,8 @@ export const useTicket = () => {
         .from('tickets')
         .select(`
           *,
-          profiles!tickets_user_id_fkey(email),
-          agents:profiles!tickets_assigned_to_fkey(email)
+          profiles:user_id(email),
+          agents:assigned_to(email)
         `)
         .eq('id', ticketId)
         .single();
@@ -60,8 +60,8 @@ export const useTicket = () => {
       if (ticketError) throw ticketError;
 
       const { data: repliesData, error: repliesError } = await supabase
-        .from('replies_with_users')
-        .select('*')
+        .from('replies')
+        .select('*, user_email:profiles(email)')
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: true });
 
@@ -69,54 +69,52 @@ export const useTicket = () => {
 
       setTicket(ticketData);
       setReplies(repliesData || []);
-    } catch (err: any) {
-      setError(err.message);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
   };
 
   const addReply = async (content: string, isPublic = true): Promise<Reply> => {
-    if (!user?.id || !ticket) {
-      throw new Error('User must be logged in and ticket must exist to add a reply');
-    }
+    if (!user) throw new Error('User not authenticated');
+    if (!ticket) throw new Error('No ticket loaded');
 
-    try {
-      const { data, error } = await supabase
-        .from('replies')
-        .insert([
-          {
-            ticket_id: ticket.id,
-            content,
-            user_id: user.id,
-            is_public: isPublic
-          }
-        ])
-        .select()
-        .single();
+    const { data, error } = await supabase
+      .from('replies')
+      .insert({
+        ticket_id: ticket.id,
+        content,
+        user_id: user.id,
+        is_public: isPublic
+      })
+      .select('*, user_email:profiles(email)')
+      .single();
 
-      if (error) throw error;
+    if (error) throw error;
 
-      // Update ticket updated_at timestamp
-      await supabase
-        .from('tickets')
-        .update({ updated_at: new Date().toISOString() })
-        .eq('id', ticket.id);
+    setReplies(prev => [...prev, data]);
+    return data;
+  };
 
-      // Refresh replies
-      const { data: repliesData, error: repliesError } = await supabase
-        .from('replies_with_users')
-        .select('*')
-        .eq('ticket_id', ticket.id)
-        .order('created_at', { ascending: true });
+  const updateTicket = async (updates: Partial<Ticket>) => {
+    if (!ticket) throw new Error('No ticket loaded');
 
-      if (repliesError) throw repliesError;
-      setReplies(repliesData || []);
+    const { data, error } = await supabase
+      .from('tickets')
+      .update(updates)
+      .eq('id', ticket.id)
+      .select(`
+        *,
+        profiles:user_id(email),
+        agents:assigned_to(email)
+      `)
+      .single();
 
-      return data;
-    } catch (err: any) {
-      throw new Error(err.message);
-    }
+    if (error) throw error;
+
+    setTicket(data);
+    return data;
   };
 
   return {
@@ -124,6 +122,7 @@ export const useTicket = () => {
     replies,
     loading,
     error,
-    addReply
+    addReply,
+    updateTicket
   };
 };
