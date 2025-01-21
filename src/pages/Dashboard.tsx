@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import type { 
   TicketStatus, 
   TicketPriority, 
@@ -229,6 +229,21 @@ const Dashboard: React.FC = () => {
   const [error, setError] = useState('');
   const { stats, tickets, loading: dashboardLoading } = useDashboard();
   const userRole = user?.user_metadata?.role || 'user';
+  const [priorityFilter, setPriorityFilter] = useState<string>('all');
+  const [sortField, setSortField] = useState<string>('id');
+  const [sortDirection, setSortDirection] = useState<'asc' | 'desc'>('asc');
+  const navigate = useNavigate();
+  const initialLoadComplete = useRef(false);
+
+  useEffect(() => {
+    if (!dashboardLoading && tickets.length > 0 && !initialLoadComplete.current) {
+      initialLoadComplete.current = true;
+    }
+  }, [dashboardLoading, tickets]);
+
+  const capitalizeFirstLetter = (str: string) => {
+    return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
+  };
 
   useEffect(() => {
     console.log('Dashboard mounted with:', { stats, tickets, dashboardLoading });
@@ -259,6 +274,72 @@ const Dashboard: React.FC = () => {
       newSelected.delete(ticketId);
     }
     setSelectedTickets(newSelected);
+  };
+
+  const handleSort = (field: string) => {
+    if (sortField === field) {
+      setSortDirection(sortDirection === 'asc' ? 'desc' : 'asc');
+    } else {
+      setSortField(field);
+      setSortDirection('asc');
+    }
+  };
+
+  const getSortIndicator = (field: string) => {
+    if (sortField !== field) return '↕';
+    return sortDirection === 'asc' ? '↑' : '↓';
+  };
+
+  const getPriorityOrder = (priority: string): number => {
+    switch (priority.toLowerCase()) {
+      case 'low': return 1;
+      case 'normal': return 2;
+      case 'high': return 3;
+      case 'urgent': return 4;
+      default: return 0;
+    }
+  };
+
+  const filteredTickets = tickets.filter(ticket => {
+    if (priorityFilter === 'all') return true;
+    return ticket.priority.toLowerCase() === priorityFilter;
+  });
+
+  const sortedAndFilteredTickets = filteredTickets.sort((a, b) => {
+    if (!sortField) return 0;
+    
+    const direction = sortDirection === 'asc' ? 1 : -1;
+    
+    switch (sortField) {
+      case 'id':
+        return (a.id - b.id) * direction;
+      case 'status':
+        return a.status.localeCompare(b.status) * direction;
+      case 'priority':
+        return (getPriorityOrder(a.priority) - getPriorityOrder(b.priority)) * direction;
+      case 'subject':
+        return a.subject.localeCompare(b.subject) * direction;
+      case 'requester':
+        return a.creator_email.localeCompare(b.creator_email) * direction;
+      case 'updated':
+        return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * direction;
+      case 'group':
+        return ('Support').localeCompare('Support') * direction;
+      case 'assignee':
+        const aAssignee = a.agent_email || 'Unassigned';
+        const bAssignee = b.agent_email || 'Unassigned';
+        return aAssignee.localeCompare(bAssignee) * direction;
+      default:
+        return 0;
+    }
+  });
+
+  const handleRowClick = (ticketId: number, event: React.MouseEvent) => {
+    // Prevent navigation if clicking checkbox cell
+    if ((event.target as HTMLElement).closest('.checkbox-cell')) {
+      return;
+    }
+    navigate(`/tickets/${ticketId}`);
   };
 
   if (error) {
@@ -368,11 +449,16 @@ const Dashboard: React.FC = () => {
               <div className="ticket-filters">
                 <div className="filter-item">
                   <span>Priority: </span>
-                  <select className="filter-select">
+                  <select 
+                    className="filter-select"
+                    value={priorityFilter}
+                    onChange={(e) => setPriorityFilter(e.target.value)}
+                  >
                     <option value="all">All</option>
                     <option value="low">Low</option>
-                    <option value="medium">Medium</option>
+                    <option value="normal">Normal</option>
                     <option value="high">High</option>
+                    <option value="urgent">Urgent</option>
                   </select>
                 </div>
                 <div className="filter-divider" />
@@ -384,16 +470,10 @@ const Dashboard: React.FC = () => {
               </div>
             </div>
             <div className="header-right">
-              <button className="play-button">
-                Play
-                <svg className="play-icon" viewBox="0 0 20 20" fill="currentColor" width="16" height="16">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM9.555 7.168A1 1 0 008 8v4a1 1 0 001.555.832l3-2a1 1 0 000-1.664l-3-2z" clipRule="evenodd" />
-                </svg>
-              </button>
             </div>
           </div>
           <div className="tickets-table-container">
-            <table className="tickets-table">
+            <table className={`tickets-table ${!initialLoadComplete.current ? 'initial-load' : ''}`}>
               <thead>
                 <tr>
                   <th className="checkbox-header">
@@ -405,18 +485,39 @@ const Dashboard: React.FC = () => {
                       />
                     </div>
                   </th>
-                  <th>Status</th>
-                  <th>ID</th>
-                  <th>Subject</th>
-                  <th>Requester</th>
-                  <th>Requester updated</th>
-                  <th>Group</th>
-                  <th>Assignee</th>
+                  <th onClick={() => handleSort('id')} className="sortable-header">
+                    ID {getSortIndicator('id')}
+                  </th>
+                  <th onClick={() => handleSort('status')} className="sortable-header">
+                    Status {getSortIndicator('status')}
+                  </th>
+                  <th onClick={() => handleSort('priority')} className="sortable-header">
+                    Priority {getSortIndicator('priority')}
+                  </th>
+                  <th onClick={() => handleSort('subject')} className="sortable-header">
+                    Subject {getSortIndicator('subject')}
+                  </th>
+                  <th onClick={() => handleSort('requester')} className="sortable-header">
+                    Requester {getSortIndicator('requester')}
+                  </th>
+                  <th onClick={() => handleSort('updated')} className="sortable-header">
+                    Requester updated {getSortIndicator('updated')}
+                  </th>
+                  <th onClick={() => handleSort('group')} className="sortable-header">
+                    Group {getSortIndicator('group')}
+                  </th>
+                  <th onClick={() => handleSort('assignee')} className="sortable-header">
+                    Assignee {getSortIndicator('assignee')}
+                  </th>
                 </tr>
               </thead>
               <tbody>
-                {tickets.map((ticket, index) => (
-                  <tr key={ticket.id}>
+                {sortedAndFilteredTickets.map((ticket, index) => (
+                  <tr 
+                    key={ticket.id}
+                    onClick={(e) => handleRowClick(ticket.id, e)}
+                    className="clickable-row"
+                  >
                     <td className="checkbox-cell">
                       <div className="checkbox-wrapper">
                         <input 
@@ -426,16 +527,19 @@ const Dashboard: React.FC = () => {
                         />
                       </div>
                     </td>
+                    <td className="ticket-id">#{ticket.id}</td>
                     <td>
                       <span className={`status-badge ${ticket.status.toLowerCase()}`}>
-                        {ticket.status.replace('_', ' ')}
+                        {capitalizeFirstLetter(ticket.status.replace('_', ' '))}
                       </span>
                     </td>
-                    <td className="ticket-id">#{index + 1}</td>
+                    <td>
+                      <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
+                        {capitalizeFirstLetter(ticket.priority)}
+                      </span>
+                    </td>
                     <td className="subject-cell">
-                      <Link to={`/tickets/${ticket.id}`} className="ticket-subject">
-                        {ticket.subject}
-                      </Link>
+                      {ticket.subject}
                     </td>
                     <td>{ticket.creator_email}</td>
                     <td>{formatDate(ticket.updated_at)}</td>

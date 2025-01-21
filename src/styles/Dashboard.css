@@ -49,13 +49,19 @@
   padding: 1rem;
   border-bottom: 2px solid #e2e8f0;
   opacity: 0;
-  animation: fadeIn 0.3s ease forwards;
+  animation: fadeInSlide 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
   transition: background-color 0.2s ease, transform 0.2s ease;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes fadeInSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .activity-item:nth-child(1) { animation-delay: 0.1s; }
@@ -370,7 +376,6 @@
   top: 0;
   background: white;
   z-index: 1;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
 .tickets-table th {
@@ -382,7 +387,8 @@
   z-index: 1;
   height: 48px;
   padding: 0 1rem;
-  border-bottom: 2px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  transition: none;
 }
 
 /* Base styles for all cells */
@@ -413,12 +419,16 @@
   padding: 0 8px;
 }
 
-.tickets-table .status-column {
-  width: 80px;
+.tickets-table .id-column {
+  width: 60px;
 }
 
-.tickets-table .id-column {
-  width: 50px;
+.tickets-table .status-column {
+  width: 100px;
+}
+
+.tickets-table .priority-column {
+  width: 100px;
 }
 
 .tickets-table .subject-column {
@@ -427,7 +437,7 @@
 }
 
 .tickets-table .requester-column {
-  width: 120px;
+  width: 160px;
 }
 
 .tickets-table .updated-column {
@@ -439,7 +449,20 @@
 }
 
 .tickets-table .assignee-column {
-  width: 120px;
+  width: 160px;
+}
+
+/* Table cell styles */
+.ticket-id {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+/* Ensure badges are centered in their cells */
+.tickets-table td:nth-child(3),
+.tickets-table td:nth-child(4) {
+  text-align: center;
 }
 
 /* Status and priority badges should not be cut off */
@@ -527,17 +550,7 @@
 }
 
 .dashboard .play-button {
-  padding: 4px 12px;
-  font-size: 12px;
-  color: #4a5568;
-  background: #edf2f7;
-  border: none;
-  border-radius: 3px;
-  cursor: pointer;
-}
-
-.dashboard .play-button:hover {
-  background: #e2e8f0;
+  display: none;
 }
 
 .dashboard .tickets-table th:hover {
@@ -700,78 +713,65 @@
   height: 56px; /* Fixed row height */
 }
 
-/* Smoother hover effects */
+/* Remove animations for table rows since data is already loaded */
 .tickets-table tr {
-  animation: fadeInSlide 0.3s ease forwards;
-  opacity: 0;
-  transform: translateX(-10px);
+  opacity: 1;
+  transform: none;
 }
 
-@keyframes fadeInSlide {
-  from {
-    opacity: 0;
-    transform: translateX(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
+/* Remove staggered animations */
+.tickets-table tr:nth-child(1),
+.tickets-table tr:nth-child(2),
+.tickets-table tr:nth-child(3),
+.tickets-table tr:nth-child(4),
+.tickets-table tr:nth-child(5),
+.tickets-table tr:nth-child(6),
+.tickets-table tr:nth-child(7),
+.tickets-table tr:nth-child(8),
+.tickets-table tr:nth-child(9),
+.tickets-table tr:nth-child(10) {
+  animation: none;
 }
 
-/* Add staggered animations for each row */
-.tickets-table tr:nth-child(1) { animation-delay: 0.1s; }
-.tickets-table tr:nth-child(2) { animation-delay: 0.15s; }
-.tickets-table tr:nth-child(3) { animation-delay: 0.2s; }
-.tickets-table tr:nth-child(4) { animation-delay: 0.25s; }
-.tickets-table tr:nth-child(5) { animation-delay: 0.3s; }
-.tickets-table tr:nth-child(6) { animation-delay: 0.35s; }
-.tickets-table tr:nth-child(7) { animation-delay: 0.4s; }
-.tickets-table tr:nth-child(8) { animation-delay: 0.45s; }
-.tickets-table tr:nth-child(9) { animation-delay: 0.5s; }
-.tickets-table tr:nth-child(10) { animation-delay: 0.55s; }
-
-/* Smooth transitions for data updates */
-.tickets-table td {
-  transition: all 0.2s ease-in-out;
-}
-
-/* Status and priority badge transitions */
-.status-badge,
-.priority-badge {
-  transition: all 0.2s ease-in-out;
-}
-
-/* Enhance hover effect */
-.tickets-table tr:hover {
-  transform: translateX(4px);
-  background-color: #f7fafc;
-  transition: all 0.2s ease-in-out;
-}
-
-/* Add transition for checkbox interactions */
-.checkbox-wrapper input[type="checkbox"] {
-  transition: all 0.2s ease-in-out;
-}
-
-/* Smooth sorting transitions */
+/* Remove sorting transitions */
 .tickets-table.sorting tbody {
-  opacity: 0.7;
-  transition: opacity 0.2s ease-in-out;
+  opacity: 1;
+  transition: none;
 }
 
 .tickets-table.sorting.sorted tbody {
   opacity: 1;
 }
 
+/* Keep hover effect but make it snappier */
+.tickets-table tr:hover {
+  transform: none;
+  background-color: #f7fafc;
+  transition: background-color 0.1s ease-in-out;
+}
+
+/* Keep smooth transitions for interactive elements only */
+.status-badge,
+.priority-badge,
+.checkbox-wrapper input[type="checkbox"] {
+  transition: all 0.1s ease-in-out;
+}
+
 /* Activity feed improvements */
 .activity-item {
   opacity: 0;
-  animation: fadeIn 0.3s ease forwards;
+  animation: fadeInSlide 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
-@keyframes fadeIn {
-  from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+@keyframes fadeInSlide {
+  0% {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .activity-item:nth-child(1) { animation-delay: 0.1s; }
@@ -813,4 +813,141 @@
 
 .tickets-table tr:last-child td {
   border-bottom: none;
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-right: 20px !important;
+  white-space: nowrap;
+}
+
+.sortable-header:hover {
+  background-color: var(--background-secondary);
+}
+
+.sortable-header::after {
+  display: inline-block;
+  margin-left: 8px;
+  font-size: 14px;
+  color: var(--text-secondary);
+}
+
+.tickets-table th {
+  padding: 12px 16px;
+  text-align: left;
+  font-weight: 500;
+  color: var(--text-secondary);
+  border-bottom: 1px solid var(--border-color);
+  background-color: var(--background-primary);
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* Remove any transitions during sorting */
+.tickets-table * {
+  transition: none;
+}
+
+/* Only keep transitions for interactive states */
+.tickets-table tr:hover td {
+  transition: background-color 0.1s ease-in-out;
+}
+
+.status-badge,
+.priority-badge,
+.checkbox-wrapper input[type="checkbox"] {
+  transition: all 0.1s ease-in-out;
+}
+
+/* Ensure clean borders */
+.tickets-table th,
+.tickets-table td {
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.tickets-table th:last-child,
+.tickets-table td:last-child {
+  border-right: none;
+}
+
+.tickets-table tr:last-child td {
+  border-bottom: none;
+}
+
+.clickable-row {
+  cursor: pointer;
+}
+
+.clickable-row:hover td {
+  background-color: #f7fafc;
+}
+
+.clickable-row td {
+  transition: background-color 0.1s ease-in-out;
+}
+
+/* Remove link styles from subject since entire row is clickable */
+.subject-cell {
+  color: #2d3748;
+}
+
+/* Ensure checkbox still looks clickable */
+.checkbox-cell {
+  cursor: default;
+}
+
+.checkbox-wrapper input[type="checkbox"] {
+  cursor: pointer;
+}
+
+/* Animation for initial page load only */
+.tickets-table.initial-load tr {
+  opacity: 0;
+  animation: fadeInSlide 0.3s ease forwards;
+}
+
+@keyframes fadeInSlide {
+  from {
+    opacity: 0;
+    transform: translateX(-10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
+  }
+}
+
+/* Add staggered delays for initial load only */
+.tickets-table.initial-load tr:nth-child(1) { animation-delay: 0.1s; }
+.tickets-table.initial-load tr:nth-child(2) { animation-delay: 0.15s; }
+.tickets-table.initial-load tr:nth-child(3) { animation-delay: 0.2s; }
+.tickets-table.initial-load tr:nth-child(4) { animation-delay: 0.25s; }
+.tickets-table.initial-load tr:nth-child(5) { animation-delay: 0.3s; }
+.tickets-table.initial-load tr:nth-child(6) { animation-delay: 0.35s; }
+.tickets-table.initial-load tr:nth-child(7) { animation-delay: 0.4s; }
+.tickets-table.initial-load tr:nth-child(8) { animation-delay: 0.45s; }
+.tickets-table.initial-load tr:nth-child(9) { animation-delay: 0.5s; }
+.tickets-table.initial-load tr:nth-child(10) { animation-delay: 0.55s; }
+
+/* Ensure rows are visible by default (no animation) */
+.tickets-table tr {
+  opacity: 1;
+  transform: none;
+}
+
+/* Keep hover effects snappy */
+.tickets-table tr:hover td {
+  background-color: #f7fafc;
+  transition: background-color 0.1s ease-in-out;
+}
+
+/* Interactive elements transitions */
+.status-badge,
+.priority-badge,
+.checkbox-wrapper input[type="checkbox"] {
+  transition: all 0.1s ease-in-out;
 } 
