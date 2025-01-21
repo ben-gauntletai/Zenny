@@ -27,6 +27,8 @@ interface TicketDetailPanelProps {
     type: string;
     priority: 'Low' | 'Normal' | 'High' | 'Urgent';
     topic?: string;
+    status?: string;
+    assigned_to?: string;
   };
   onUpdate: (field: string, value: unknown) => void;
 }
@@ -81,12 +83,12 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate 
           <HStack justify="space-between" align="center" spacing={2}>
             <Select
               size="sm"
-              value={ticket.assignee?.id || ''}
+              value={ticket.assigned_to || ''}
               onChange={async (e) => {
                 try {
-                  const value = e.target.value || null;
+                  const value = e.target.value;
                   console.log('Updating assignee to:', value);
-                  await onUpdate('assigned_to', value);
+                  await onUpdate('assigned_to', value === '' ? null : value);
                 } catch (err) {
                   console.error('Error updating assignee:', err);
                 }
@@ -154,6 +156,22 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate 
             <option value="incident">Incident</option>
             <option value="problem">Problem</option>
             <option value="task">Task</option>
+            <option value="question">Question</option>
+          </Select>
+        </Box>
+
+        <Box className="field-group">
+          <Text className="field-label">Status</Text>
+          <Select
+            value={ticket.status || 'open'}
+            onChange={(e) => onUpdate('status', e.target.value)}
+            size="sm"
+          >
+            <option value="open">Open</option>
+            <option value="in_progress">In Progress</option>
+            <option value="pending">Pending</option>
+            <option value="resolved">Resolved</option>
+            <option value="closed">Closed</option>
           </Select>
         </Box>
 
@@ -177,9 +195,12 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate 
             value={ticket.topic || ''}
             onChange={(e) => onUpdate('topic', e.target.value || null)}
             size="sm"
-            placeholder="-"
           >
             <option value="">None</option>
+            <option value="issue">Issue</option>
+            <option value="inquiry">Inquiry</option>
+            <option value="payment">Payment</option>
+            <option value="other">Other</option>
           </Select>
         </Box>
       </Stack>

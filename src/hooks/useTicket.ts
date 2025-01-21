@@ -11,7 +11,7 @@ export interface Reply {
   updated_at: string;
   user_id: string;
   is_public: boolean;
-  user_email: string;
+  user_email: string | { email: string };
 }
 
 export interface Ticket {
@@ -20,6 +20,8 @@ export interface Ticket {
   description: string;
   status: 'open' | 'in_progress' | 'resolved';
   priority: 'low' | 'normal' | 'high';
+  ticket_type: 'question' | 'incident' | 'problem' | 'task';
+  topic: 'ISSUE' | 'INQUIRY' | 'OTHER' | 'PAYMENTS' | 'NONE';
   created_at: string;
   updated_at: string;
   user_id: string;
@@ -115,11 +117,17 @@ export const useTicket = () => {
 
     try {
       console.log('Updating ticket with:', updates);
-      // Convert tags array to JSONB format if it exists in updates
+      
+      // Handle special fields
       const formattedUpdates = {
         ...updates,
-        tags: updates.tags ? JSON.stringify(updates.tags) : undefined
+        // Convert tags array to JSONB if it exists
+        tags: updates.tags ? JSON.stringify(updates.tags) : undefined,
+        // Handle assignee update
+        assigned_to: updates.assigned_to
       };
+
+      console.log('Formatted updates:', formattedUpdates);
 
       const { data, error } = await supabase
         .from('tickets')
@@ -143,7 +151,8 @@ export const useTicket = () => {
         tags: Array.isArray(data.tags) ? data.tags : JSON.parse(data.tags || '[]')
       };
 
-      console.log('Ticket updated successfully:', parsedTicket);
+      console.log('Raw response data:', data);
+      console.log('Parsed ticket:', parsedTicket);
       setTicket(parsedTicket);
       return parsedTicket;
     } catch (err) {

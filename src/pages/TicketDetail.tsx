@@ -35,38 +35,73 @@ const TicketContent: React.FC = () => {
   };
 
   return (
-    <Flex height="100vh">
+    <Flex 
+      width="100%" 
+      height="calc(100vh - 110px)"
+      margin="0" 
+      marginLeft="1rem"
+      marginBottom="50px"
+      padding="0" 
+      overflow="hidden"
+      position="fixed"
+      left="0"
+      right="0"
+      sx={{
+        '& > *': {
+          margin: 0,
+          padding: '1rem'
+        }
+      }}
+    >
       <TicketDetailPanel
         ticket={{
           requester: ticket.profiles || null,
-          assignee: ticket.agents ? {
-            id: ticket.assigned_to,
-            email: ticket.agents.email,
-            full_name: ticket.agents.full_name
-          } : null,
+          assignee: ticket.agents || null,
+          assigned_to: ticket.assigned_to,
           tags: ticket.tags || [],
-          type: 'incident',
-          priority: ticket.priority === 'normal' ? 'Normal' :
-                   ticket.priority === 'low' ? 'Low' :
-                   ticket.priority === 'high' ? 'High' : 'Normal',
-          topic: undefined
+          type: ticket.ticket_type || 'incident',
+          priority: ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1) as 'Low' | 'Normal' | 'High' | 'Urgent',
+          topic: ticket.topic,
+          status: ticket.status
         }}
         onUpdate={handleUpdateTicket}
       />
-      <Box flex="1" className="ticket-main">
-        <header className="ticket-header">
+
+      <Box 
+        flex={1} 
+        margin={0} 
+        padding={0} 
+        paddingTop="0"
+        height="calc(100vh - 60px)"
+        display="flex"
+        flexDirection="column"
+        overflow="auto"
+      >
+        <header className="ticket-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0.5rem 1rem' }}>
           <div className="ticket-title">
             <h1>{ticket.subject}</h1>
-            <div className="ticket-subtitle">Via sample ticket</div>
           </div>
           <div className="ticket-actions">
-            <button className="icon-button" title="Filter"><i className="fas fa-filter" /></button>
-            <button className="icon-button" title="Time"><i className="fas fa-clock" /></button>
-            <button className="icon-button" title="More"><i className="fas fa-ellipsis-v" /></button>
+            <button 
+              className="suspend-button"
+              onClick={() => {
+                console.log('Suspend customer clicked');
+              }}
+              style={{
+                padding: '0.5rem 1rem',
+                backgroundColor: '#dc3545',
+                color: 'white',
+                border: 'none',
+                borderRadius: '4px',
+                cursor: 'pointer'
+              }}
+            >
+              Suspend Customer
+            </button>
           </div>
         </header>
 
-        <div className="ticket-conversation">
+        <div className="ticket-conversation" style={{ flex: 1, overflowY: 'auto' }}>
           <div className="message">
             <div className="message-avatar">
               <img src={`https://www.gravatar.com/avatar/${ticket.user_id}?d=mp`} alt="User avatar" />
@@ -89,7 +124,7 @@ const TicketContent: React.FC = () => {
               </div>
               <div className="message-content">
                 <div className="message-header">
-                  <span className="message-author">{reply.user_email}</span>
+                  <span className="message-author">{typeof reply.user_email === 'object' && reply.user_email !== null ? reply.user_email.email : reply.user_email}</span>
                   <span className="message-time">{new Date(reply.created_at).toLocaleString()}</span>
                 </div>
                 <div className="message-body">
@@ -100,20 +135,8 @@ const TicketContent: React.FC = () => {
           ))}
         </div>
 
-        <div className="reply-box">
-          <div className="reply-header">
-            <div className="reply-type">
-              <button className="reply-type-button">
-                <i className="fas fa-reply"></i>
-                Public reply
-              </button>
-            </div>
-            <div className="reply-to">
-              To: <span className="recipient">{ticket.profiles?.email}</span>
-            </div>
-            <button className="cc-button">CC</button>
-          </div>
-          <div className="reply-editor">
+        <div className="reply-box" style={{ marginTop: 'auto' }}>
+          <div className="reply-editor" style={{ padding: '1rem', width: '100%' }}>
             <div className="editor-toolbar">
               <button className="toolbar-button" title="Text"><i className="fas fa-font"></i></button>
               <button className="toolbar-button" title="Bold"><i className="fas fa-bold"></i></button>
@@ -121,70 +144,92 @@ const TicketContent: React.FC = () => {
               <button className="toolbar-button" title="Attach"><i className="fas fa-paperclip"></i></button>
               <button className="toolbar-button" title="Link"><i className="fas fa-link"></i></button>
             </div>
-            <textarea
-              className="reply-textarea"
-              value={replyContent}
-              onChange={(e) => setReplyContent(e.target.value)}
-              placeholder="Write your reply..."
-            />
-            <div className="reply-actions">
-              <button 
-                className="submit-button"
-                onClick={handleSubmitReply}
-                disabled={!replyContent.trim()}
-              >
-                Submit as {ticket.status}
-              </button>
+            <div style={{ display: 'flex', gap: '1rem', alignItems: 'flex-start', marginTop: '0.5rem' }}>
+              <textarea
+                className="reply-textarea"
+                value={replyContent}
+                onChange={(e) => setReplyContent(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmitReply();
+                  }
+                }}
+                placeholder="Write your reply... (Press Enter to submit)"
+                style={{ 
+                  flex: 1, 
+                  minHeight: '100px',
+                  border: '1px solid #ccc',
+                  borderRadius: '4px',
+                  padding: '0.5rem',
+                  fontSize: '0.875rem',
+                  marginBottom: '7%'
+                }}
+              />
             </div>
           </div>
         </div>
       </Box>
 
       <div className="ticket-sidebar">
-        <div className="sidebar-section">
-          <div className="customer-info">
-            <div className="customer-header">
-              <img 
-                src={`https://www.gravatar.com/avatar/${ticket.user_id}?d=mp`}
-                alt="Customer avatar"
-                className="customer-avatar"
-              />
-              <div className="customer-details">
-                <span className="customer-name">{ticket.profiles?.email}</span>
-                <span className="customer-type">The Customer</span>
+        <div className="sidebar-content">
+          <div className="sidebar-section">
+            <div className="customer-info">
+              <div className="customer-header">
+                <img 
+                  src={`https://www.gravatar.com/avatar/${ticket.user_id}?d=mp`}
+                  alt="Customer avatar"
+                  className="customer-avatar"
+                />
+                <div className="customer-details">
+                  <span className="customer-name">{ticket.profiles?.email}</span>
+                  <span className="customer-type">The Customer</span>
+                </div>
               </div>
-            </div>
-            <div className="detail-row">
-              <label>Email</label>
-              <div className="detail-value">
-                <a href={`mailto:${ticket.profiles?.email}`}>{ticket.profiles?.email}</a>
+              <div className="detail-row">
+                <label>Email</label>
+                <div className="detail-value">
+                  <a href={`mailto:${ticket.profiles?.email}`}>{ticket.profiles?.email}</a>
+                </div>
               </div>
-            </div>
-            <div className="detail-row">
-              <label>Local time</label>
-              <div className="detail-value">
-                {new Intl.DateTimeFormat('en-US', {
-                  weekday: 'short',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                  timeZoneName: 'short'
-                }).format(new Date())}
+              <div className="detail-row">
+                <label>Local time</label>
+                <div className="detail-value">
+                  {new Intl.DateTimeFormat('en-US', {
+                    weekday: 'short',
+                    hour: '2-digit',
+                    minute: '2-digit',
+                    timeZoneName: 'short'
+                  }).format(new Date())}
+                </div>
               </div>
-            </div>
-            <div className="detail-row">
-              <label>Language</label>
-              <div className="detail-value">English (United States)</div>
-            </div>
-            <div className="detail-row">
-              <label>Notes</label>
-              <textarea
-                className="notes-textarea"
-                placeholder="Add user notes..."
-              />
+              <div className="detail-row">
+                <label>Language</label>
+                <div className="detail-value">English (United States)</div>
+              </div>
+              <div className="detail-row">
+                <label>Notes</label>
+                <textarea
+                  className="notes-textarea"
+                  placeholder="Add user notes..."
+                />
+              </div>
             </div>
           </div>
         </div>
+        <div className="save-button-container" style={{ padding: '1rem', marginBottom: '20%' }}>
+          <button 
+            className="save-button"
+            onClick={() => {
+              console.log('Save clicked');
+            }}
+          >
+            Save Changes
+          </button>
+        </div>
+      </div>
 
+      <div className="interaction-sidebar">
         <div className="sidebar-section">
           <h3>Interaction history</h3>
           <div className="interaction-list">

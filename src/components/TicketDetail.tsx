@@ -67,11 +67,16 @@ const TicketDetail: React.FC = () => {
           {replies.map((reply) => (
             <div key={reply.id} className="message">
               <div className="message-avatar">
-                <img src={getAvatarUrl(reply.user_id)} alt={reply.user_email} />
+                <img 
+                  src={getAvatarUrl(reply.user_id)} 
+                  alt={typeof reply.user_email === 'object' ? reply.user_email.email : reply.user_email} 
+                />
               </div>
               <div className="message-content">
                 <div className="message-header">
-                  <span className="message-author">{reply.user_email}</span>
+                  <span className="message-author">
+                    {typeof reply.user_email === 'object' ? reply.user_email.email : reply.user_email}
+                  </span>
                   <span className="message-time">
                     {formatTimeAgo(reply.created_at)}
                   </span>
