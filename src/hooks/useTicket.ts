@@ -24,8 +24,15 @@ export interface Ticket {
   updated_at: string;
   user_id: string;
   assigned_to?: string;
-  profiles?: { email: string };
-  agents?: { email: string };
+  tags: string[];
+  profiles?: { 
+    email: string;
+    full_name?: string | null;
+  };
+  agents?: { 
+    email: string;
+    full_name?: string | null;
+  };
 }
 
 export const useTicket = () => {
@@ -51,13 +58,19 @@ export const useTicket = () => {
         .from('tickets')
         .select(`
           *,
-          profiles:user_id(email),
-          agents:assigned_to(email)
+          profiles:user_id(email, full_name),
+          agents:assigned_to(email, full_name)
         `)
         .eq('id', ticketId)
         .single();
 
       if (ticketError) throw ticketError;
+
+      // Parse the tags from JSONB to array
+      const parsedTicket = {
+        ...ticketData,
+        tags: Array.isArray(ticketData.tags) ? ticketData.tags : JSON.parse(ticketData.tags || '[]')
+      };
 
       const { data: repliesData, error: repliesError } = await supabase
         .from('replies')
@@ -67,7 +80,7 @@ export const useTicket = () => {
 
       if (repliesError) throw repliesError;
 
-      setTicket(ticketData);
+      setTicket(parsedTicket);
       setReplies(repliesData || []);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An error occurred');
@@ -100,21 +113,43 @@ export const useTicket = () => {
   const updateTicket = async (updates: Partial<Ticket>) => {
     if (!ticket) throw new Error('No ticket loaded');
 
-    const { data, error } = await supabase
-      .from('tickets')
-      .update(updates)
-      .eq('id', ticket.id)
-      .select(`
-        *,
-        profiles:user_id(email),
-        agents:assigned_to(email)
-      `)
-      .single();
+    try {
+      console.log('Updating ticket with:', updates);
+      // Convert tags array to JSONB format if it exists in updates
+      const formattedUpdates = {
+        ...updates,
+        tags: updates.tags ? JSON.stringify(updates.tags) : undefined
+      };
 
-    if (error) throw error;
+      const { data, error } = await supabase
+        .from('tickets')
+        .update(formattedUpdates)
+        .eq('id', ticket.id)
+        .select(`
+          *,
+          profiles:user_id(email, full_name),
+          agents:assigned_to(email, full_name)
+        `)
+        .single();
 
-    setTicket(data);
-    return data;
+      if (error) {
+        console.error('Error updating ticket:', error);
+        throw error;
+      }
+
+      // Parse the tags back from JSONB to array
+      const parsedTicket = {
+        ...data,
+        tags: Array.isArray(data.tags) ? data.tags : JSON.parse(data.tags || '[]')
+      };
+
+      console.log('Ticket updated successfully:', parsedTicket);
+      setTicket(parsedTicket);
+      return parsedTicket;
+    } catch (err) {
+      console.error('Failed to update ticket:', err);
+      throw err;
+    }
   };
 
   return {

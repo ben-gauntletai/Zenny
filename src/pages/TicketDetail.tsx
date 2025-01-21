@@ -22,9 +22,15 @@ const TicketContent: React.FC = () => {
     setReplyContent('');
   };
 
-  const handleUpdateTicket = (field: string, value: unknown) => {
-    if (updateTicket) {
-      updateTicket({ [field]: value });
+  const handleUpdateTicket = async (field: string, value: unknown) => {
+    try {
+      console.log('Handling ticket update:', { field, value });
+      if (updateTicket) {
+        await updateTicket({ [field]: value });
+      }
+    } catch (err) {
+      console.error('Error in handleUpdateTicket:', err);
+      // You might want to show an error toast or message here
     }
   };
 
@@ -33,16 +39,17 @@ const TicketContent: React.FC = () => {
       <TicketDetailPanel
         ticket={{
           requester: ticket.profiles || null,
-          assignee: ticket.agents || null,
-          followers: [],
-          tags: [],
+          assignee: ticket.agents ? {
+            id: ticket.assigned_to,
+            email: ticket.agents.email,
+            full_name: ticket.agents.full_name
+          } : null,
+          tags: ticket.tags || [],
           type: 'incident',
           priority: ticket.priority === 'normal' ? 'Normal' :
                    ticket.priority === 'low' ? 'Low' :
                    ticket.priority === 'high' ? 'High' : 'Normal',
-          linkedProblem: undefined,
-          topic: undefined,
-          customerType: undefined
+          topic: undefined
         }}
         onUpdate={handleUpdateTicket}
       />

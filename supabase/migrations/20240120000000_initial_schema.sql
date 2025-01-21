@@ -75,7 +75,8 @@ CREATE TABLE tickets (
     last_requester_update timestamptz DEFAULT now(),
     last_agent_update timestamptz DEFAULT now(),
     CONSTRAINT tickets_user_id_fkey FOREIGN KEY (user_id) REFERENCES profiles(id),
-    CONSTRAINT tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES profiles(id)
+    CONSTRAINT tickets_assigned_to_fkey FOREIGN KEY (assigned_to) REFERENCES profiles(id),
+    tags jsonb DEFAULT '[]'::jsonb
 );
 
 -- Create replies table (replacing ticket_comments)

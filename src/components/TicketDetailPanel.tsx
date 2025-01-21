@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   Stack,
   Text,
@@ -11,89 +11,136 @@ import {
   Tooltip
 } from '@chakra-ui/react';
 import { CloseIcon, InfoIcon } from '@chakra-ui/icons';
+import { supabase } from '../lib/supabaseClient';
 
 interface Profile {
+  id?: string;
   email: string;
+  full_name?: string | null;
 }
 
 interface TicketDetailPanelProps {
   ticket: {
     requester: Profile | null;
     assignee: Profile | null;
-    followers: Profile[];
     tags: string[];
     type: string;
     priority: 'Low' | 'Normal' | 'High' | 'Urgent';
-    linkedProblem?: string;
     topic?: string;
-    customerType?: string;
   };
   onUpdate: (field: string, value: unknown) => void;
 }
 
 const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate }) => {
+  const [agents, setAgents] = useState<Profile[]>([]);
+  const [newTag, setNewTag] = useState('');
+
+  useEffect(() => {
+    fetchAgents();
+  }, []);
+
+  const fetchAgents = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, email, full_name')
+        .in('role', ['agent', 'admin']);
+
+      if (error) throw error;
+      setAgents(data || []);
+    } catch (err) {
+      console.error('Error fetching agents:', err);
+    }
+  };
+
+  const getDisplayName = (agent: Profile) => {
+    return agent.full_name || agent.email;
+  };
+
+  const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && newTag.trim()) {
+      const tagToAdd = newTag.trim();
+      if (!ticket.tags.includes(tagToAdd)) {
+        const newTags = [...ticket.tags, tagToAdd];
+        onUpdate('tags', newTags);
+      }
+      setNewTag('');
+    }
+  };
+
   return (
     <Box className="ticket-detail-panel">
       <Stack spacing={0}>
         <Box className="field-group">
           <Text className="field-label">Requester</Text>
-          <Text className="field-value">{ticket.requester?.email || 'No requester'}</Text>
+          <Text className="field-value">{ticket.requester?.full_name || ticket.requester?.email || 'No requester'}</Text>
         </Box>
 
         <Box className="field-group">
           <Text className="field-label">Assignee</Text>
           <HStack justify="space-between" align="center" spacing={2}>
-            <Text className="field-value" noOfLines={1}>{ticket.assignee?.email || 'Unassigned'}</Text>
-            <Button
-              className="action-button"
-              variant="ghost"
-              size="xs"
-              onClick={() => onUpdate('assignee', null)}
+            <Select
+              size="sm"
+              value={ticket.assignee?.id || ''}
+              onChange={async (e) => {
+                try {
+                  const value = e.target.value || null;
+                  console.log('Updating assignee to:', value);
+                  await onUpdate('assigned_to', value);
+                } catch (err) {
+                  console.error('Error updating assignee:', err);
+                }
+              }}
             >
-              Take It
-            </Button>
-          </HStack>
-        </Box>
-
-        <Box className="field-group">
-          <HStack justify="space-between" align="center" mb={1} spacing={2}>
-            <Text className="field-label">Followers</Text>
-            <Tooltip label="People who will be notified of updates">
-              <Icon as={InfoIcon} color="gray.400" boxSize={3} cursor="help" />
-            </Tooltip>
-          </HStack>
-          <HStack justify="space-between" align="center" spacing={2}>
-            <Text className="field-value" noOfLines={1}>
-              {ticket.followers.length > 0 ? ticket.followers.map(f => f.email).join(', ') : 'No followers'}
-            </Text>
-            <Button
-              className="action-button"
-              variant="ghost"
-              size="xs"
-            >
-              Follow
-            </Button>
+              <option value="">Unassigned</option>
+              {agents.map((agent) => (
+                <option key={agent.id} value={agent.id}>
+                  {getDisplayName(agent)}
+                </option>
+              ))}
+            </Select>
           </HStack>
         </Box>
 
         <Box className="field-group">
           <Text className="field-label">Tags</Text>
-          <Box className="tag-container">
-            {ticket.tags.map(tag => (
-              <Box key={tag} className="tag">
-                <Text>{tag}</Text>
-                <Box
-                  as="span"
-                  className="tag-close"
+          <Box>
+            <Input
+              size="sm"
+              placeholder="Add tag and press Enter"
+              value={newTag}
+              onChange={(e) => setNewTag(e.target.value)}
+              onKeyDown={handleAddTag}
+              mb={2}
+            />
+            <Box className="tag-container">
+              {ticket.tags.map(tag => (
+                <Box 
+                  key={tag} 
+                  className="tag"
+                  as="button"
                   onClick={() => {
                     const newTags = ticket.tags.filter(t => t !== tag);
                     onUpdate('tags', newTags);
                   }}
+                  aria-label={`Remove ${tag} tag`}
+                  position="relative"
                 >
-                  <CloseIcon boxSize={2} />
+                  <Text>{tag}</Text>
+                  <Box
+                    className="tag-remove"
+                    position="absolute"
+                    top="-10px"
+                    right="-10px"
+                    color="red.500"
+                    opacity="0"
+                    _groupHover={{ opacity: 1 }}
+                  >
+                    <CloseIcon boxSize={5} />
+                  </Box>
                 </Box>
-              </Box>
-            ))}
+              ))}
+            </Box>
           </Box>
         </Box>
 
@@ -125,44 +172,10 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate 
         </Box>
 
         <Box className="field-group">
-          <HStack justify="space-between" align="center" mb={1} spacing={2}>
-            <Text className="field-label">Linked problem</Text>
-            <Button
-              className="action-button"
-              variant="ghost"
-              size="xs"
-              onClick={() => onUpdate('linkedProblem', null)}
-            >
-              Unlink
-            </Button>
-          </HStack>
-          <Select
-            value={ticket.linkedProblem || ''}
-            onChange={(e) => onUpdate('linkedProblem', e.target.value || null)}
-            size="sm"
-            placeholder="-"
-          >
-            <option value="">None</option>
-          </Select>
-        </Box>
-
-        <Box className="field-group">
           <Text className="field-label">Topic</Text>
           <Select
             value={ticket.topic || ''}
             onChange={(e) => onUpdate('topic', e.target.value || null)}
-            size="sm"
-            placeholder="-"
-          >
-            <option value="">None</option>
-          </Select>
-        </Box>
-
-        <Box className="field-group">
-          <Text className="field-label">Customer Type</Text>
-          <Select
-            value={ticket.customerType || ''}
-            onChange={(e) => onUpdate('customerType', e.target.value || null)}
             size="sm"
             placeholder="-"
           >
