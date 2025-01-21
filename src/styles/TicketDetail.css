@@ -356,26 +356,28 @@
 }
 
 .save-button {
-  width: 100%;
-  background-color: var(--chakra-colors-blue-500);
+  opacity: 1;
+  cursor: pointer;
+  background-color: #3182ce;
   color: white;
-  border: none;
-  border-radius: 6px;
   padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  transition: all 0.2s ease-in-out;
   font-size: 14px;
   font-weight: 500;
-  cursor: pointer;
-  transition: all 0.2s;
+  width: 100%;
 }
 
-.save-button:hover {
-  background-color: var(--chakra-colors-blue-600);
+.save-button:hover:not(:disabled) {
+  background-color: #2b6cb0;
   transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
-.save-button:active {
-  background-color: var(--chakra-colors-blue-700);
-  transform: translateY(0);
+.save-button:disabled {
+  opacity: 0.5;
+  cursor: default;
 }
 
 .interaction-sidebar {

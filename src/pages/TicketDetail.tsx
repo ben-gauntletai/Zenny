@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useTicket, type Reply, type Ticket } from 'hooks/useTicket';
 import { useAuth } from 'contexts/AuthContext';
 import { TicketProvider } from 'contexts/TicketContext';
@@ -8,8 +8,10 @@ import { Box, Flex } from '@chakra-ui/react';
 import 'styles/TicketDetail.css';
 
 const TicketContent: React.FC = () => {
-  const { ticket, replies, loading, error, addReply, updateTicket } = useTicket();
+  const navigate = useNavigate();
+  const { ticket, replies, loading, error, addReply, updateTicket, setTicket } = useTicket();
   const [replyContent, setReplyContent] = useState('');
+  const [pendingChanges, setPendingChanges] = useState<Partial<Ticket>>({});
   const { user } = useAuth();
 
   if (loading) return <div>Loading...</div>;
@@ -25,12 +27,38 @@ const TicketContent: React.FC = () => {
   const handleUpdateTicket = async (field: string, value: unknown) => {
     try {
       console.log('Handling ticket update:', { field, value });
-      if (updateTicket) {
-        await updateTicket({ [field]: value });
-      }
+      setPendingChanges(prev => {
+        const newChanges = {
+          ...prev,
+          [field]: value
+        };
+        console.log('New pending changes:', newChanges);
+        return newChanges;
+      });
     } catch (err) {
       console.error('Error in handleUpdateTicket:', err);
-      // You might want to show an error toast or message here
+    }
+  };
+
+  const handleSaveChanges = async () => {
+    try {
+      console.log('Saving changes:', pendingChanges);
+      const updatedTicket = await updateTicket(pendingChanges);
+      console.log('Updated ticket:', updatedTicket);
+      
+      if (updatedTicket) {
+        // Update the local ticket state with the new values
+        setTicket(prev => ({
+          ...prev,
+          ...updatedTicket
+        }));
+        
+        // Clear pending changes and navigate to dashboard
+        setPendingChanges({});
+        navigate('/');
+      }
+    } catch (err) {
+      console.error('Error saving changes:', err);
     }
   };
 
@@ -60,11 +88,12 @@ const TicketContent: React.FC = () => {
           assigned_to: ticket.assigned_to,
           tags: ticket.tags || [],
           type: ticket.ticket_type || 'incident',
-          priority: ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1) as 'Low' | 'Normal' | 'High' | 'Urgent',
-          topic: ticket.topic,
-          status: ticket.status
+          priority: ticket.priority.toLowerCase() as 'low' | 'normal' | 'high' | 'urgent',
+          topic: ticket.topic?.toUpperCase() as 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE' | null,
+          status: ticket.status as 'open' | 'pending' | 'solved' | 'closed'
         }}
         onUpdate={handleUpdateTicket}
+        pendingChanges={pendingChanges}
       />
 
       <Box 
@@ -220,9 +249,7 @@ const TicketContent: React.FC = () => {
         <div className="save-button-container" style={{ padding: '1rem', marginBottom: '20%' }}>
           <button 
             className="save-button"
-            onClick={() => {
-              console.log('Save clicked');
-            }}
+            onClick={handleSaveChanges}
           >
             Save Changes
           </button>

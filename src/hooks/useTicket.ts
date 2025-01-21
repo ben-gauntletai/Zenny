@@ -16,17 +16,17 @@ export interface Reply {
 
 export interface Ticket {
   id: number;
+  user_id: string;
   subject: string;
   description: string;
-  status: 'open' | 'in_progress' | 'resolved';
-  priority: 'low' | 'normal' | 'high';
+  status: 'open' | 'pending' | 'solved' | 'closed';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
   ticket_type: 'question' | 'incident' | 'problem' | 'task';
-  topic: 'ISSUE' | 'INQUIRY' | 'OTHER' | 'PAYMENTS' | 'NONE';
+  topic: 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE' | null;
   created_at: string;
   updated_at: string;
-  user_id: string;
   assigned_to?: string;
-  tags: string[];
+  tags?: string[];
   profiles?: { 
     email: string;
     full_name?: string | null;
@@ -167,6 +167,7 @@ export const useTicket = () => {
     loading,
     error,
     addReply,
-    updateTicket
+    updateTicket,
+    setTicket
   };
 };

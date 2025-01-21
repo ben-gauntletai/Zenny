@@ -24,16 +24,24 @@ interface TicketDetailPanelProps {
     requester: Profile | null;
     assignee: Profile | null;
     tags: string[];
-    type: string;
-    priority: 'Low' | 'Normal' | 'High' | 'Urgent';
-    topic?: string;
-    status?: string;
+    type: 'question' | 'incident' | 'problem' | 'task';
+    priority: 'low' | 'normal' | 'high' | 'urgent';
+    topic: 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE' | null;
+    status: 'open' | 'pending' | 'solved' | 'closed';
     assigned_to?: string;
   };
   onUpdate: (field: string, value: unknown) => void;
+  pendingChanges: Partial<{
+    assigned_to?: string;
+    tags?: string[];
+    ticket_type?: string;
+    priority?: string;
+    topic?: string | null;
+    status?: string;
+  }>;
 }
 
-const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate }) => {
+const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate, pendingChanges }) => {
   const [agents, setAgents] = useState<Profile[]>([]);
   const [newTag, setNewTag] = useState('');
 
@@ -62,8 +70,9 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate 
   const handleAddTag = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && newTag.trim()) {
       const tagToAdd = newTag.trim();
-      if (!ticket.tags.includes(tagToAdd)) {
-        const newTags = [...ticket.tags, tagToAdd];
+      const currentTags = pendingChanges.tags || ticket.tags;
+      if (!currentTags.includes(tagToAdd)) {
+        const newTags = [...currentTags, tagToAdd];
         onUpdate('tags', newTags);
       }
       setNewTag('');
@@ -83,7 +92,7 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate 
           <HStack justify="space-between" align="center" spacing={2}>
             <Select
               size="sm"
-              value={ticket.assigned_to || ''}
+              value={pendingChanges.assigned_to ?? (ticket.assigned_to || '')}
               onChange={async (e) => {
                 try {
                   const value = e.target.value;
@@ -116,13 +125,14 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate 
               mb={2}
             />
             <Box className="tag-container">
-              {ticket.tags.map(tag => (
+              {(pendingChanges.tags || ticket.tags).map(tag => (
                 <Box 
                   key={tag} 
                   className="tag"
                   as="button"
                   onClick={() => {
-                    const newTags = ticket.tags.filter(t => t !== tag);
+                    const currentTags = pendingChanges.tags || ticket.tags;
+                    const newTags = currentTags.filter(t => t !== tag);
                     onUpdate('tags', newTags);
                   }}
                   aria-label={`Remove ${tag} tag`}
@@ -149,28 +159,30 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate 
         <Box className="field-group">
           <Text className="field-label">Type</Text>
           <Select
-            value={ticket.type}
-            onChange={(e) => onUpdate('type', e.target.value)}
+            value={pendingChanges.ticket_type ?? ticket.type}
+            onChange={(e) => onUpdate('ticket_type', e.target.value)}
             size="sm"
           >
+            <option value="question">Question</option>
             <option value="incident">Incident</option>
             <option value="problem">Problem</option>
             <option value="task">Task</option>
-            <option value="question">Question</option>
           </Select>
         </Box>
 
         <Box className="field-group">
           <Text className="field-label">Status</Text>
           <Select
-            value={ticket.status || 'open'}
-            onChange={(e) => onUpdate('status', e.target.value)}
+            value={pendingChanges.status ?? ticket.status}
+            onChange={(e) => {
+              console.log('Status changed to:', e.target.value);
+              onUpdate('status', e.target.value);
+            }}
             size="sm"
           >
             <option value="open">Open</option>
-            <option value="in_progress">In Progress</option>
             <option value="pending">Pending</option>
-            <option value="resolved">Resolved</option>
+            <option value="solved">Solved</option>
             <option value="closed">Closed</option>
           </Select>
         </Box>
@@ -178,29 +190,32 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate 
         <Box className="field-group">
           <Text className="field-label">Priority</Text>
           <Select
-            value={ticket.priority}
-            onChange={(e) => onUpdate('priority', e.target.value)}
+            value={pendingChanges.priority ?? ticket.priority}
+            onChange={(e) => {
+              console.log('Priority changed to:', e.target.value);
+              onUpdate('priority', e.target.value.toLowerCase());
+            }}
             size="sm"
           >
-            <option value="Low">Low</option>
-            <option value="Normal">Normal</option>
-            <option value="High">High</option>
-            <option value="Urgent">Urgent</option>
+            <option value="low">Low</option>
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
           </Select>
         </Box>
 
         <Box className="field-group">
           <Text className="field-label">Topic</Text>
           <Select
-            value={ticket.topic || ''}
+            value={pendingChanges.topic ?? ticket.topic ?? 'NONE'}
             onChange={(e) => onUpdate('topic', e.target.value || null)}
             size="sm"
           >
-            <option value="">None</option>
-            <option value="issue">Issue</option>
-            <option value="inquiry">Inquiry</option>
-            <option value="payment">Payment</option>
-            <option value="other">Other</option>
+            <option value="NONE">None</option>
+            <option value="ISSUE">Issue</option>
+            <option value="INQUIRY">Inquiry</option>
+            <option value="PAYMENTS">Payments</option>
+            <option value="OTHER">Other</option>
           </Select>
         </Box>
       </Stack>
