@@ -13,14 +13,8 @@ interface Notification {
   type: 'TICKET_CREATED' | 'TICKET_UPDATED' | 'TICKET_ASSIGNED' | 'COMMENT_ADDED';
   ticket_id: number;
   user_id: string;
-  details: {
-    changes: Array<{
-      field: string;
-      oldValue: any;
-      newValue: any;
-    }>;
-    timestamp: string;
-  };
+  title: string;
+  message: string;
   created_at: string;
   user?: {
     email: string;
@@ -94,37 +88,7 @@ const TicketContent: React.FC = () => {
     }
   };
 
-  const formatChange = (change: { field: string; oldValue: any; newValue: any }) => {
-    const formatValue = (value: any) => {
-      if (value === null) return 'none';
-      if (Array.isArray(value)) return value.join(', ');
-      return value.toString();
-    };
-
-    // Format field names to be more readable
-    const formatFieldName = (field: string) => {
-      switch (field) {
-        case 'status':
-          return 'Status';
-        case 'priority':
-          return 'Priority';
-        case 'assigned_to':
-          return 'Assignee';
-        case 'ticket_type':
-          return 'Type';
-        case 'topic':
-          return 'Topic';
-        case 'tags':
-          return 'Tags';
-        default:
-          return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
-      }
-    };
-
-    return `Changed ${formatFieldName(change.field)} from ${formatValue(change.oldValue)} to ${formatValue(change.newValue)}`;
-  };
-
-  const getInteractionIcon = (type: string) => {
+  function getInteractionIcon(type: string) {
     switch (type) {
       case 'TICKET_CREATED':
         return 'fas fa-plus-circle';
@@ -137,7 +101,7 @@ const TicketContent: React.FC = () => {
       default:
         return 'fas fa-info-circle';
     }
-  };
+  }
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
@@ -392,26 +356,15 @@ const TicketContent: React.FC = () => {
                 </div>
                 <div className="interaction-content">
                   <div className="interaction-title">
-                    {notification.user?.full_name || notification.user?.email}
+                    {notification.title}
                   </div>
                   <div className="interaction-meta">
-                    {new Date(notification.created_at).toLocaleString()}
+                    {notification.user?.full_name || notification.user?.email} • {new Date(notification.created_at).toLocaleString()}
                   </div>
                   <div className="interaction-details">
-                    {notification.details?.changes && Array.isArray(notification.details.changes) ? (
-                      notification.details.changes.map((change: { field: string; oldValue: any; newValue: any }, index: number) => (
-                        <div key={index} className="change-item">
-                          {formatChange(change)}
-                        </div>
-                      ))
-                    ) : (
-                      <div className="change-item">
-                        {notification.type === 'TICKET_CREATED' ? 'Created ticket' :
-                         notification.type === 'COMMENT_ADDED' ? 'Added a comment' :
-                         notification.type === 'TICKET_ASSIGNED' ? 'Assigned ticket' :
-                         'Updated ticket'}
-                      </div>
-                    )}
+                    <div className="change-item">
+                      {notification.message}
+                    </div>
                   </div>
                 </div>
               </div>

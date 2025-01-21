@@ -15,16 +15,67 @@ interface TicketInteractionPayload {
   type: 'TICKET_CREATED' | 'TICKET_UPDATED' | 'TICKET_ASSIGNED' | 'COMMENT_ADDED';
 }
 
-function formatChangesMessage(changes: TicketChange[]): { title: string; message: string } {
-  const title = 'Ticket Updated'
-  const changeMessages = changes.map(change => 
-    `Changed ${change.field} from "${change.oldValue}" to "${change.newValue}"`
-  )
-  return {
-    title,
-    message: changeMessages.join('\n')
+function getChangeTitle(field: string): string {
+  const fieldLower = field.toLowerCase()
+  switch (fieldLower) {
+    case 'assigned_to':
+      return 'Ticket Assignment'
+    case 'comment':
+      return 'New Comment'
+    case 'status':
+      return 'Status Update'
+    case 'priority':
+      return 'Priority Change'
+    case 'type':
+    case 'ticket_type':
+      return 'Type Change'
+    case 'topic':
+      return 'Topic Update'
+    case 'tags':
+      return 'Tags Modified'
+    default:
+      return 'Ticket Updated'
   }
 }
+
+function formatFieldName(field: string): string {
+  // Special cases for multi-word fields
+  switch (field) {
+    case 'assigned_to':
+      return 'Assignee';
+    case 'ticket_type':
+      return 'Type';
+    default:
+      // Capitalize first letter and replace underscores with spaces
+      return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
+  }
+}
+
+function capitalizeValue(value: any): string {
+  if (value === null || value === undefined) return 'None';
+  return value.toString().charAt(0).toUpperCase() + value.toString().slice(1).toLowerCase();
+}
+
+const formatChangeMessage = async (field: string, oldValue: any, newValue: any, supabaseClient: any) => {
+  switch (field) {
+    case 'assigned_to':
+      if (!newValue || newValue === '') {
+        return 'Ticket Assignment changed to Unassigned';
+      }
+      const { data: assignee } = await supabaseClient
+        .from('profiles')
+        .select('full_name, email')
+        .eq('id', newValue)
+        .single();
+      return `Ticket Assignment changed to ${assignee?.full_name || assignee?.email || 'Unknown user'}`;
+    case 'tags':
+      return 'Tags were updated';
+    case 'comment':
+      return 'New comment added';
+    default:
+      return `${capitalizeValue(field)} changed from ${capitalizeValue(oldValue)} to ${capitalizeValue(newValue)}`;
+  }
+};
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -51,25 +102,27 @@ serve(async (req) => {
       )
     }
 
-    // Format changes into title and message
-    const { title, message } = formatChangesMessage(changes)
+    // Create a notification for each change
+    const notifications = []
+    for (const change of changes) {
+      const { data: notification, error: notificationError } = await supabaseClient
+        .from('notifications')
+        .insert({
+          ticket_id: ticketId,
+          user_id: userId,
+          type,
+          title: getChangeTitle(change.field),
+          message: await formatChangeMessage(change.field, change.oldValue, change.newValue, supabaseClient),
+          read: false
+        })
+        .select()
+        .single()
 
-    // Create notification
-    const { data: notification, error: notificationError } = await supabaseClient
-      .from('notifications')
-      .insert({
-        ticket_id: ticketId,
-        user_id: userId,
-        type,
-        title,
-        message,
-        read: false
-      })
-      .select()
-      .single()
+      if (notificationError) {
+        throw notificationError
+      }
 
-    if (notificationError) {
-      throw notificationError
+      notifications.push(notification)
     }
 
     // Get updated ticket
@@ -88,7 +141,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ notification, ticket }),
+      JSON.stringify({ notifications, ticket }),
       { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     )
 

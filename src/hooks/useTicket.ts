@@ -140,8 +140,8 @@ export const useTicket = () => {
         ...updates,
         // Convert tags array to JSONB if it exists
         tags: updates.tags ? JSON.stringify(updates.tags) : undefined,
-        // Handle assignee update
-        assigned_to: updates.assigned_to
+        // Handle assignee update - explicitly set to null if empty string or undefined
+        assigned_to: 'assigned_to' in updates ? (updates.assigned_to || null) : undefined
       };
 
       console.log('Formatted updates:', formattedUpdates);

@@ -92,12 +92,12 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
           <HStack justify="space-between" align="center" spacing={2}>
             <Select
               size="sm"
-              value={pendingChanges.assigned_to ?? (ticket.assigned_to || '')}
+              value={pendingChanges.assigned_to !== undefined ? pendingChanges.assigned_to : (ticket.assigned_to || '')}
               onChange={async (e) => {
                 try {
                   const value = e.target.value;
                   console.log('Updating assignee to:', value);
-                  await onUpdate('assigned_to', value === '' ? null : value);
+                  await onUpdate('assigned_to', value || null);
                 } catch (err) {
                   console.error('Error updating assignee:', err);
                 }
