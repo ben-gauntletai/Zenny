@@ -114,10 +114,27 @@ export const useTicket = () => {
 
   const updateTicket = async (updates: Partial<Ticket>) => {
     if (!ticket) throw new Error('No ticket loaded');
+    if (!user) throw new Error('User not authenticated');
 
     try {
       console.log('Updating ticket with:', updates);
       
+      // Store the old values for change tracking
+      const oldValues: Record<string, any> = {};
+      const changes: Array<{ field: string; oldValue: any; newValue: any }> = [];
+      
+      // Track changes for each updated field
+      Object.keys(updates).forEach(field => {
+        oldValues[field] = ticket[field as keyof Ticket];
+        if (updates[field as keyof Ticket] !== ticket[field as keyof Ticket]) {
+          changes.push({
+            field,
+            oldValue: ticket[field as keyof Ticket],
+            newValue: updates[field as keyof Ticket]
+          });
+        }
+      });
+
       // Handle special fields
       const formattedUpdates = {
         ...updates,
@@ -150,6 +167,32 @@ export const useTicket = () => {
         ...data,
         tags: Array.isArray(data.tags) ? data.tags : JSON.parse(data.tags || '[]')
       };
+
+      // If there are changes, call the ticket-interactions function
+      if (changes.length > 0) {
+        const type = updates.assigned_to !== undefined ? 'TICKET_ASSIGNED' : 'TICKET_UPDATED';
+        
+        const response = await fetch(
+          `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/ticket-interactions`,
+          {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`
+            },
+            body: JSON.stringify({
+              ticketId: ticket.id,
+              userId: user.id,
+              changes,
+              type
+            })
+          }
+        );
+
+        if (!response.ok) {
+          console.error('Failed to record ticket interaction:', await response.json());
+        }
+      }
 
       console.log('Raw response data:', data);
       console.log('Parsed ticket:', parsedTicket);

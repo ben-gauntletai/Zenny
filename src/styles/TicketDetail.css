@@ -505,20 +505,25 @@
   background: var(--chakra-colors-gray-50);
   border: 1px solid var(--chakra-colors-gray-200);
   border-radius: 0.375rem;
-  margin-bottom: 0.5rem;
+  transition: all 0.2s;
+}
+
+.interaction-item:hover {
+  background: var(--chakra-colors-gray-100);
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
 }
 
 .interaction-icon {
-  width: 20px;
-  height: 20px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
-  background: #e2e8f0;
-  flex-shrink: 0;
+  background: var(--chakra-colors-blue-100);
+  color: var(--chakra-colors-blue-500);
   display: flex;
   align-items: center;
   justify-content: center;
-  color: #718096;
-  font-size: 0.75rem;
+  flex-shrink: 0;
 }
 
 .interaction-content {
@@ -527,21 +532,30 @@
 }
 
 .interaction-title {
-  font-weight: 500;
-  color: #2d3748;
+  font-weight: 600;
+  color: var(--chakra-colors-gray-900);
   font-size: 0.875rem;
   margin-bottom: 0.25rem;
 }
 
 .interaction-meta {
+  color: var(--chakra-colors-gray-500);
   font-size: 0.75rem;
-  color: #718096;
-  margin-bottom: 0.25rem;
+  margin-bottom: 0.5rem;
 }
 
-.interaction-status {
-  font-size: 0.75rem;
-  color: #4a5568;
+.interaction-details {
+  font-size: 0.813rem;
+  color: var(--chakra-colors-gray-700);
+}
+
+.change-item {
+  padding: 0.25rem 0;
+  border-bottom: 1px dashed var(--chakra-colors-gray-200);
+}
+
+.change-item:last-child {
+  border-bottom: none;
 }
 
 @media (max-width: 1600px) {

@@ -1,18 +1,143 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTicket, type Reply, type Ticket } from 'hooks/useTicket';
 import { useAuth } from 'contexts/AuthContext';
 import { TicketProvider } from 'contexts/TicketContext';
 import TicketDetailPanel from 'components/TicketDetailPanel';
-import { Box, Flex } from '@chakra-ui/react';
+import { Box, Flex, Text } from '@chakra-ui/react';
+import { supabase } from '../lib/supabaseClient';
 import 'styles/TicketDetail.css';
+
+interface Notification {
+  id: string;
+  type: 'TICKET_CREATED' | 'TICKET_UPDATED' | 'TICKET_ASSIGNED' | 'COMMENT_ADDED';
+  ticket_id: number;
+  user_id: string;
+  details: {
+    changes: Array<{
+      field: string;
+      oldValue: any;
+      newValue: any;
+    }>;
+    timestamp: string;
+  };
+  created_at: string;
+  user?: {
+    email: string;
+    full_name: string | null;
+  };
+}
 
 const TicketContent: React.FC = () => {
   const navigate = useNavigate();
   const { ticket, replies, loading, error, addReply, updateTicket, setTicket } = useTicket();
   const [replyContent, setReplyContent] = useState('');
   const [pendingChanges, setPendingChanges] = useState<Partial<Ticket>>({});
+  const [notifications, setNotifications] = useState<Notification[]>([]);
   const { user } = useAuth();
+
+  useEffect(() => {
+    if (ticket) {
+      fetchNotifications();
+
+      // Subscribe to notifications for this ticket
+      const subscription = supabase
+        .channel(`ticket-${ticket.id}-notifications`)
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'notifications',
+            filter: `ticket_id=eq.${ticket.id}`
+          },
+          async (payload) => {
+            // Fetch the complete notification with actor info
+            const { data, error } = await supabase
+              .from('notifications')
+              .select(`
+                *,
+                user:profiles!notifications_user_id_fkey(email, full_name)
+              `)
+              .eq('id', payload.new.id)
+              .single();
+
+            if (!error && data) {
+              setNotifications(prev => [data, ...prev]);
+            }
+          }
+        )
+        .subscribe();
+
+      // Cleanup subscription on unmount
+      return () => {
+        subscription.unsubscribe();
+      };
+    }
+  }, [ticket]);
+
+  const fetchNotifications = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('notifications')
+        .select(`
+          *,
+          user:profiles!notifications_user_id_fkey(email, full_name)
+        `)
+        .eq('ticket_id', ticket?.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('Error fetching notifications:', err);
+    }
+  };
+
+  const formatChange = (change: { field: string; oldValue: any; newValue: any }) => {
+    const formatValue = (value: any) => {
+      if (value === null) return 'none';
+      if (Array.isArray(value)) return value.join(', ');
+      return value.toString();
+    };
+
+    // Format field names to be more readable
+    const formatFieldName = (field: string) => {
+      switch (field) {
+        case 'status':
+          return 'Status';
+        case 'priority':
+          return 'Priority';
+        case 'assigned_to':
+          return 'Assignee';
+        case 'ticket_type':
+          return 'Type';
+        case 'topic':
+          return 'Topic';
+        case 'tags':
+          return 'Tags';
+        default:
+          return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
+      }
+    };
+
+    return `Changed ${formatFieldName(change.field)} from ${formatValue(change.oldValue)} to ${formatValue(change.newValue)}`;
+  };
+
+  const getInteractionIcon = (type: string) => {
+    switch (type) {
+      case 'TICKET_CREATED':
+        return 'fas fa-plus-circle';
+      case 'TICKET_UPDATED':
+        return 'fas fa-edit';
+      case 'TICKET_ASSIGNED':
+        return 'fas fa-user-plus';
+      case 'COMMENT_ADDED':
+        return 'fas fa-comment';
+      default:
+        return 'fas fa-info-circle';
+    }
+  };
 
   if (loading) return <div>Loading...</div>;
   if (error) return <div>Error: {error}</div>;
@@ -260,18 +385,37 @@ const TicketContent: React.FC = () => {
         <div className="sidebar-section">
           <h3>Interaction history</h3>
           <div className="interaction-list">
-            <div className="interaction-item">
-              <div className="interaction-icon">
-                <i className="fas fa-comment"></i>
-              </div>
-              <div className="interaction-content">
-                <div className="interaction-title">{ticket.subject}</div>
-                <div className="interaction-meta">
-                  {new Date(ticket.created_at).toLocaleString()}
+            {notifications.map((notification) => (
+              <div key={notification.id} className="interaction-item">
+                <div className="interaction-icon">
+                  <i className={getInteractionIcon(notification.type)}></i>
                 </div>
-                <div className="interaction-status">Status: {ticket.status}</div>
+                <div className="interaction-content">
+                  <div className="interaction-title">
+                    {notification.user?.full_name || notification.user?.email}
+                  </div>
+                  <div className="interaction-meta">
+                    {new Date(notification.created_at).toLocaleString()}
+                  </div>
+                  <div className="interaction-details">
+                    {notification.details?.changes && Array.isArray(notification.details.changes) ? (
+                      notification.details.changes.map((change: { field: string; oldValue: any; newValue: any }, index: number) => (
+                        <div key={index} className="change-item">
+                          {formatChange(change)}
+                        </div>
+                      ))
+                    ) : (
+                      <div className="change-item">
+                        {notification.type === 'TICKET_CREATED' ? 'Created ticket' :
+                         notification.type === 'COMMENT_ADDED' ? 'Added a comment' :
+                         notification.type === 'TICKET_ASSIGNED' ? 'Assigned ticket' :
+                         'Updated ticket'}
+                      </div>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
+            ))}
           </div>
         </div>
       </div>
