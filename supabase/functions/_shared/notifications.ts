@@ -6,8 +6,9 @@
  * - Ticket assignments
  * - Comments
  * 
- * @version 1.0.0
+ * @version 1.0.1
  * @lastUpdated 2025-01-22
+ * @author AutoCRM Team
  */
 
 // Notification types and interfaces for the ticket system
