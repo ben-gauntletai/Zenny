@@ -1,7 +1,8 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
-import { getInitials, getProfileColor, formatFullName } from '../utils/profileUtils';
+import { getInitials, getProfileColor } from '../utils/profileUtils';
+import { supabase } from '../lib/supabaseClient';
 import '../styles/Navigation.css';
 
 const DefaultUserIcon = () => (
@@ -17,13 +18,29 @@ const DefaultUserIcon = () => (
 const Navigation: React.FC = () => {
   const { user, signOut } = useAuth();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [profile, setProfile] = useState<{ full_name: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
 
-  const firstName = user?.user_metadata?.firstName || '';
-  const lastName = user?.user_metadata?.lastName || '';
-  const fullName = formatFullName(firstName, lastName);
-  const initials = getInitials(fullName);
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (user?.id) {
+        const { data } = await supabase
+          .from('profiles')
+          .select('full_name')
+          .eq('id', user.id)
+          .single();
+        
+        if (data) {
+          setProfile(data);
+        }
+      }
+    };
+
+    fetchProfile();
+  }, [user?.id]);
+
+  const initials = getInitials(profile?.full_name || '');
   const profileColor = getProfileColor(user?.email || '');
 
   useEffect(() => {
@@ -93,8 +110,8 @@ const Navigation: React.FC = () => {
             <div className="profile-dropdown">
               <div className="profile-header">
                 <div className="profile-info">
-                  <span className="profile-name">{fullName || 'Anonymous User'}</span>
-                  <span className="profile-status">Online</span>
+                  <span className="profile-name">{profile?.full_name || 'Anonymous User'}</span>
+                  <span className="profile-email">{user?.email || ''}</span>
                 </div>
               </div>
               <div className="profile-menu-items">

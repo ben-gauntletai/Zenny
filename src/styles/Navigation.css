@@ -121,6 +121,12 @@
   color: #2d3748;
 }
 
+.profile-email {
+  font-size: 0.75rem;
+  color: #718096;
+  margin-top: 0.125rem;
+}
+
 .profile-status {
   font-size: 0.75rem;
   color: #718096;

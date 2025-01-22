@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { ticketService } from '../services/ticketService';
 import { useAuth } from './AuthContext';
+import { supabase } from '../lib/supabaseClient';
 
 export interface Ticket {
   id: number;
@@ -26,11 +27,13 @@ export interface Ticket {
 
 export interface ActivityFeedItem {
   id: string;
-  type: 'assigned' | 'priority_changed';
+  type: 'TICKET_CREATED' | 'TICKET_UPDATED' | 'TICKET_ASSIGNED' | 'COMMENT_ADDED';
   ticketId: string;
   ticketSubject: string;
   actor: string;
   timestamp: string;
+  title: string;
+  message: string;
 }
 
 interface DashboardContextType {
@@ -52,7 +55,7 @@ interface DashboardContextType {
 const DashboardContext = createContext<DashboardContextType | undefined>(undefined);
 
 export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<DashboardContextType['stats']>({
     ticketStats: {
       total: 0,
       open: 0,
@@ -86,31 +89,50 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       }
 
       const { tickets: fetchedTickets } = response;
-      console.log('Fetched tickets:', fetchedTickets);
-      setTickets(fetchedTickets);
+      const tickets = fetchedTickets;
+      console.log('Fetched tickets:', tickets);
+      setTickets(tickets);
       
-      // Calculate stats
-      const newStats = {
+      // Calculate ticket stats
+      const newStats: DashboardContextType['stats'] = {
         ticketStats: {
-          total: fetchedTickets.length,
-          open: fetchedTickets.filter((t: Ticket) => t.status === 'open').length,
-          inProgress: fetchedTickets.filter((t: Ticket) => t.status === 'pending').length,
-          resolved: fetchedTickets.filter((t: Ticket) => t.status === 'solved' || t.status === 'closed').length
+          total: tickets.length,
+          open: tickets.filter((t: Ticket) => t.status === 'open').length,
+          inProgress: tickets.filter((t: Ticket) => t.status === 'pending').length,
+          resolved: tickets.filter((t: Ticket) => t.status === 'solved' || t.status === 'closed').length
         },
-        activityFeed: fetchedTickets
-          .sort((a: Ticket, b: Ticket) => new Date(b.updated_at).getTime() - new Date(a.updated_at).getTime())
-          .slice(0, 5)
-          .map((ticket: Ticket) => ({
-            id: ticket.id.toString(),
-            type: ticket.assigned_to ? 'assigned' : 'priority_changed',
-            ticketId: ticket.id.toString(),
-            ticketSubject: ticket.subject,
-            actor: ticket.agent_email || ticket.creator_email || 'System',
-            timestamp: ticket.updated_at
-          }))
+        activityFeed: []
       };
 
-      console.log('Calculated stats:', newStats);
+      // Fetch notifications for the activity feed
+      const { data: notifications, error: notifError } = await supabase
+        .from('notifications')
+        .select(`
+          *,
+          user:profiles!notifications_user_id_fkey(email, full_name),
+          ticket:tickets!notifications_ticket_id_fkey(
+            subject,
+            profiles:user_id(email, full_name)
+          )
+        `)
+        .order('created_at', { ascending: false })
+        .limit(25);
+
+      if (notifError) {
+        console.error('Error fetching notifications:', notifError);
+      } else {
+        newStats.activityFeed = notifications.map((notification: any): ActivityFeedItem => ({
+          id: notification.id.toString(),
+          type: notification.type as ActivityFeedItem['type'],
+          ticketId: notification.ticket_id.toString(),
+          ticketSubject: notification.ticket?.subject || 'Unknown',
+          actor: notification.user_id === null ? 'System' : (notification.user?.full_name || notification.user?.email || 'Unknown User'),
+          timestamp: notification.created_at,
+          title: notification.title,
+          message: notification.message
+        }));
+      }
+
       setStats(newStats);
     } catch (err) {
       console.error('Error fetching dashboard data:', err);

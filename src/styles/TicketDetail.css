@@ -385,14 +385,19 @@
   min-width: 15%;
   background: white;
   border-left: 1px solid var(--chakra-colors-gray-200);
-  overflow-y: auto;
   display: flex;
   flex-direction: column;
   box-shadow: -1px 0 0 var(--chakra-colors-gray-100);
+  height: 100%;
+  overflow: hidden;
 }
 
 .interaction-sidebar .sidebar-section {
   padding: 1.25rem;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
 }
 
 .interaction-sidebar h3 {
@@ -400,6 +405,7 @@
   font-weight: 600;
   color: #2d3748;
   margin: 0 0 1rem;
+  flex-shrink: 0;
 }
 
 .customer-info {
@@ -493,37 +499,29 @@
 }
 
 .interaction-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
+  flex: 1;
+  overflow-y: auto;
+  min-height: 0;
+  margin: 0 -1.25rem;
+  padding: 0 1.25rem;
 }
 
 .interaction-item {
   display: flex;
   gap: 0.75rem;
-  padding: 0.75rem;
-  background: var(--chakra-colors-gray-50);
-  border: 1px solid var(--chakra-colors-gray-200);
-  border-radius: 0.375rem;
-  transition: all 0.2s;
+  padding: 0.75rem 0;
+  border-bottom: 1px solid var(--chakra-colors-gray-100);
 }
 
-.interaction-item:hover {
-  background: var(--chakra-colors-gray-100);
-  transform: translateY(-1px);
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+.interaction-item:last-child {
+  border-bottom: none;
 }
 
 .interaction-icon {
-  width: 24px;
-  height: 24px;
-  border-radius: 50%;
-  background: var(--chakra-colors-blue-100);
-  color: var(--chakra-colors-blue-500);
-  display: flex;
-  align-items: center;
-  justify-content: center;
   flex-shrink: 0;
+  color: var(--chakra-colors-gray-500);
+  font-size: 0.875rem;
+  padding-top: 0.125rem;
 }
 
 .interaction-content {
@@ -532,26 +530,42 @@
 }
 
 .interaction-title {
-  font-weight: 600;
-  color: var(--chakra-colors-gray-900);
   font-size: 0.875rem;
+  font-weight: 500;
+  color: #2d3748;
   margin-bottom: 0.25rem;
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 .interaction-meta {
-  color: var(--chakra-colors-gray-500);
   font-size: 0.75rem;
-  margin-bottom: 0.5rem;
+  color: #718096;
+  margin-bottom: 0.25rem;
+  white-space: normal;
+  word-wrap: break-word;
 }
 
-.interaction-details {
-  font-size: 0.813rem;
-  color: var(--chakra-colors-gray-700);
+.interaction-message {
+  font-size: 0.875rem;
+  color: #4a5568;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+.interaction-description {
+  font-size: 0.875rem;
+  color: #4a5568;
+  white-space: normal;
+  word-wrap: break-word;
+  margin-top: 0.25rem;
 }
 
 .change-item {
   padding: 0.25rem 0;
   border-bottom: 1px dashed var(--chakra-colors-gray-200);
+  white-space: normal;
+  word-wrap: break-word;
 }
 
 .change-item:last-child {

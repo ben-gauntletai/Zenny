@@ -359,36 +359,29 @@ const Dashboard: React.FC = () => {
         <div className="activity-feed-header">
           Updates to your tickets
         </div>
-        <div className="activity-list">
+        <div className="interaction-list">
           {stats.activityFeed.length === 0 ? (
             <div className="activity-empty">
               No recent activity
             </div>
           ) : (
-            stats.activityFeed.map((activity: ActivityFeedItem, index: number) => (
-              <div key={index} className="activity-item">
-                <div className="activity-header">
-                  <div className="activity-icon">
-                    {activity.type === 'assigned' ? (
-                      <svg viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M9 6a3 3 0 11-6 0 3 3 0 016 0zM17 6a3 3 0 11-6 0 3 3 0 016 0zM12.93 17c.046-.327.07-.66.07-1a6.97 6.97 0 00-1.5-4.33A5 5 0 0119 16v1h-6.07zM6 11a5 5 0 015 5v1H1v-1a5 5 0 015-5z" />
-                      </svg>
-                    ) : (
-                      <svg viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M3 6a3 3 0 013-3h10a1 1 0 01.8 1.6L14.25 8l2.55 3.4A1 1 0 0116 13H6a1 1 0 00-1 1v3a1 1 0 11-2 0V6z" clipRule="evenodd" />
-                      </svg>
-                    )}
-                  </div>
-                  <div className="activity-title">
-                    <strong>{activity.actor}</strong>{' '}
-                    {activity.type === 'assigned' ? 'assigned' : 'increased the priority'} on{' '}
-                    <Link to={`/tickets/${activity.ticketId}`} className="activity-link">
-                      "{activity.ticketSubject}"
-                    </Link>
-                  </div>
+            stats.activityFeed.map((activity: ActivityFeedItem) => (
+              <div key={activity.id} className="interaction-item">
+                <div className="interaction-icon">
+                  <i className={getInteractionIcon(activity.type)}></i>
                 </div>
-                <div className="activity-meta">
-                  {formatDate(activity.timestamp)}
+                <div className="interaction-content">
+                  <div className="interaction-title">
+                    {activity.title}
+                  </div>
+                  <div className="interaction-meta">
+                    {activity.actor} • {new Date(activity.timestamp).toLocaleString()}
+                  </div>
+                  <div className="interaction-details">
+                    <div className="change-item">
+                      {activity.message}
+                    </div>
+                  </div>
                 </div>
               </div>
             ))
@@ -555,5 +548,20 @@ const Dashboard: React.FC = () => {
     </div>
   );
 };
+
+function getInteractionIcon(type: string) {
+  switch (type) {
+    case 'TICKET_CREATED':
+      return 'fas fa-plus-circle';
+    case 'TICKET_UPDATED':
+      return 'fas fa-edit';
+    case 'TICKET_ASSIGNED':
+      return 'fas fa-user-plus';
+    case 'COMMENT_ADDED':
+      return 'fas fa-comment';
+    default:
+      return 'fas fa-info-circle';
+  }
+}
 
 export default Dashboard; 
