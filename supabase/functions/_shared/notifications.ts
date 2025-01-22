@@ -5,6 +5,9 @@
  * - Ticket updates
  * - Ticket assignments
  * - Comments
+ * 
+ * @version 1.0.0
+ * @lastUpdated 2025-01-22
  */
 
 // Notification types and interfaces for the ticket system
