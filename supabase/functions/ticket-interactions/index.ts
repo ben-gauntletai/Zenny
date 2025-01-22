@@ -13,6 +13,7 @@ interface TicketInteractionPayload {
   userId: string;
   changes: TicketChange[];
   type: 'TICKET_CREATED' | 'TICKET_UPDATED' | 'TICKET_ASSIGNED' | 'COMMENT_ADDED';
+  isNewTicket: boolean;
 }
 
 function getChangeTitle(field: string): string {
@@ -104,6 +105,15 @@ serve(async (req) => {
 
     // Create a notification for each change
     const notifications = []
+
+    // Skip all notifications if this is a new ticket
+    if (type === 'TICKET_CREATED' || payload.isNewTicket) {
+      return new Response(
+        JSON.stringify({ notifications: [], ticket: null }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
     for (const change of changes) {
       const { data: notification, error: notificationError } = await supabaseClient
         .from('notifications')

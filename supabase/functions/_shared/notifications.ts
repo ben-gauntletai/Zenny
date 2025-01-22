@@ -29,35 +29,53 @@ export async function notifyTicketCreated(
   ticket: any,
   creator: any
 ) {
-  // Notify assigned agent if exists
-  if (ticket.assigned_to) {
-    await createNotification(supabaseClient, {
-      user_id: ticket.assigned_to,
-      title: 'New Ticket Assigned',
-      message: `Ticket "${ticket.subject}" has been assigned to you by ${creator.email}`,
-      type: 'TICKET_ASSIGNED',
-      ticket_id: ticket.id
+  try {
+    console.log('Starting notifyTicketCreated with:', {
+      ticket_id: ticket.id,
+      creator_id: creator.id,
+      client_type: supabaseClient.auth.admin ? 'service_role' : 'regular'
     });
-  }
 
-  // Notify all agents if unassigned
-  else {
-    const { data: agents } = await supabaseClient
-      .from('profiles')
-      .select('id')
-      .eq('role', 'agent');
+    // Create a single notification without deleting existing ones first
+    const { data: notification, error: insertError } = await supabaseClient
+      .from('notifications')
+      .insert({
+        user_id: null,  // NULL user_id means this is a system notification visible to agents/admins
+        title: 'New Unassigned Ticket',
+        message: `New ticket '${ticket.subject}' needs assignment`,
+        type: 'TICKET_CREATED',
+        ticket_id: ticket.id,
+        read: false
+      })
+      .select()
+      .single();
 
-    if (agents) {
-      for (const agent of agents) {
-        await createNotification(supabaseClient, {
-          user_id: agent.id,
-          title: 'New Unassigned Ticket',
-          message: `New ticket "${ticket.subject}" needs assignment`,
-          type: 'TICKET_CREATED',
-          ticket_id: ticket.id
-        });
-      }
+    if (insertError) {
+      console.error('Error creating notification:', {
+        error: insertError,
+        message: insertError.message,
+        details: insertError.details,
+        code: insertError.code,
+        hint: insertError.hint,
+        payload: {
+          ticket_id: ticket.id,
+          subject: ticket.subject
+        }
+      });
+      throw insertError;
     }
+
+    console.log('Successfully created notification:', notification);
+    return notification;
+  } catch (error) {
+    console.error('Unexpected error in notifyTicketCreated:', {
+      error,
+      message: error.message,
+      stack: error.stack,
+      ticket_id: ticket?.id,
+      creator_id: creator?.id
+    });
+    throw error;
   }
 }
 

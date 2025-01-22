@@ -53,6 +53,12 @@ export const ticketService = {
 
     const data = await response.json();
     console.log('Ticket created successfully:', data);
+    
+    // Add isNewTicket flag to the ticket data
+    if (data.ticket) {
+      data.ticket.isNewTicket = true;
+    }
+    
     return data;
   },
 

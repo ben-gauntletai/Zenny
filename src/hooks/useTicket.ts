@@ -27,6 +27,7 @@ export interface Ticket {
   updated_at: string;
   assigned_to?: string;
   tags?: string[];
+  isNewTicket?: boolean;
   profiles?: { 
     email: string;
     full_name?: string | null;
@@ -168,8 +169,8 @@ export const useTicket = () => {
         tags: Array.isArray(data.tags) ? data.tags : JSON.parse(data.tags || '[]')
       };
 
-      // If there are changes, call the ticket-interactions function
-      if (changes.length > 0) {
+      // If there are changes and it's not a new ticket, call the ticket-interactions function
+      if (changes.length > 0 && !parsedTicket.isNewTicket) {
         const type = updates.assigned_to !== undefined ? 'TICKET_ASSIGNED' : 'TICKET_UPDATED';
         
         const response = await fetch(
@@ -184,7 +185,8 @@ export const useTicket = () => {
               ticketId: ticket.id,
               userId: user.id,
               changes,
-              type
+              type,
+              isNewTicket: false
             })
           }
         );

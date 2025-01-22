@@ -12,4 +12,5 @@ export interface TicketDetails {
   assigned_user?: {
     email: string;
   };
+  isNewTicket?: boolean;
 } 

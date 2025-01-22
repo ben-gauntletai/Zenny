@@ -8,18 +8,33 @@ import { Box, Flex, Text } from '@chakra-ui/react';
 import { supabase } from '../lib/supabaseClient';
 import 'styles/TicketDetail.css';
 
+// Notification interface for ticket interactions
 interface Notification {
   id: string;
   type: 'TICKET_CREATED' | 'TICKET_UPDATED' | 'TICKET_ASSIGNED' | 'COMMENT_ADDED';
   ticket_id: number;
-  user_id: string;
+  user_id: string | null;
   title: string;
   message: string;
   created_at: string;
-  user?: {
+  user: {
     email: string;
     full_name: string | null;
-  };
+  } | null;
+  ticket: {
+    profiles: {
+      email: string;
+      full_name: string | null;
+    } | null;
+  } | null;
+}
+
+// Helper function to get the display name for a notification
+function getNotificationDisplayName(notification: Notification): string {
+  if (notification.user_id === null) {
+    return notification.ticket?.profiles?.email || "Support Team";
+  }
+  return notification.user?.full_name || notification.user?.email || "Unknown User";
 }
 
 const TicketContent: React.FC = () => {
@@ -51,13 +66,32 @@ const TicketContent: React.FC = () => {
               .from('notifications')
               .select(`
                 *,
-                user:profiles!notifications_user_id_fkey(email, full_name)
+                user:profiles!notifications_user_id_fkey(email, full_name),
+                ticket:tickets!notifications_ticket_id_fkey(
+                  profiles:user_id(email, full_name)
+                )
               `)
               .eq('id', payload.new.id)
               .single();
 
             if (!error && data) {
-              setNotifications(prev => [data, ...prev]);
+              setNotifications(prev => {
+                // Check if we already have a notification of this type at the same time
+                const timeKey = new Date(data.created_at).setMilliseconds(0);
+                const key = `${data.type}_${timeKey}`;
+                
+                // Filter out any existing notifications that match this key
+                const filteredPrev = prev.filter(n => {
+                  const nTimeKey = new Date(n.created_at).setMilliseconds(0);
+                  const nKey = `${n.type}_${nTimeKey}`;
+                  return nKey !== key;
+                });
+
+                // Add the new notification (preferring null user_id)
+                return [data as Notification, ...filteredPrev].sort((a, b) => 
+                  new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+                );
+              });
             }
           }
         )
@@ -76,13 +110,35 @@ const TicketContent: React.FC = () => {
         .from('notifications')
         .select(`
           *,
-          user:profiles!notifications_user_id_fkey(email, full_name)
+          user:profiles!notifications_user_id_fkey(email, full_name),
+          ticket:tickets!notifications_ticket_id_fkey(
+            profiles:user_id(email, full_name)
+          )
         `)
         .eq('ticket_id', ticket?.id)
         .order('created_at', { ascending: false });
 
       if (error) throw error;
-      setNotifications(data || []);
+
+      // Group notifications by type and created_at (rounded to the nearest second)
+      const groupedNotifications = (data as Notification[] | null)?.reduce((acc: { [key: string]: Notification }, notification: Notification) => {
+        // Round to nearest second to group notifications created at almost the same time
+        const timeKey = new Date(notification.created_at).setMilliseconds(0);
+        const key = `${notification.type}_${timeKey}`;
+        
+        // For each group, prefer notifications with null user_id (visible to all)
+        // or keep the first one if no null user_id exists
+        if (!acc[key] || notification.user_id === null) {
+          acc[key] = notification;
+        }
+        return acc;
+      }, {});
+
+      // Convert back to array and sort by created_at
+      const uniqueNotifications = Object.values(groupedNotifications || {})
+        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+
+      setNotifications(uniqueNotifications);
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }
@@ -359,7 +415,7 @@ const TicketContent: React.FC = () => {
                     {notification.title}
                   </div>
                   <div className="interaction-meta">
-                    {notification.user?.full_name || notification.user?.email} • {new Date(notification.created_at).toLocaleString()}
+                    {getNotificationDisplayName(notification)} • {new Date(notification.created_at).toLocaleString()}
                   </div>
                   <div className="interaction-details">
                     <div className="change-item">

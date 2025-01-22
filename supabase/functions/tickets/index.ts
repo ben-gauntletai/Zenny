@@ -93,12 +93,15 @@ async function handleTicketCreation(req: Request, supabaseClient: any, user: any
       throw error
     }
 
-    // Create the ticket using service role client to bypass RLS
+    // Create a single service role client to use for all operations
     const serviceRoleClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
+    console.log('Creating ticket using service role client')
+
+    // Create the ticket
     const { data: ticket, error: ticketError } = await serviceRoleClient
       .from('tickets')
       .insert({
@@ -106,7 +109,11 @@ async function handleTicketCreation(req: Request, supabaseClient: any, user: any
         user_id: user.id,
         status: 'open'
       })
-      .select()
+      .select(`
+        *,
+        profiles:user_id(email, full_name),
+        agents:assigned_to(email, full_name)
+      `)
       .single()
 
     if (ticketError) {
@@ -128,22 +135,44 @@ async function handleTicketCreation(req: Request, supabaseClient: any, user: any
 
     console.log('Ticket created successfully:', ticket)
 
-    // For now, we'll skip agent assignment since the last_assigned_at column doesn't exist
-    await notifyTicketCreated(supabaseClient, ticket, user)
+    // Create notification using the same service role client
+    try {
+      console.log('Creating notification for ticket:', ticket.id)
+      await notifyTicketCreated(serviceRoleClient, ticket, user)
+      console.log('Notification created successfully')
+    } catch (notificationError) {
+      console.error('Error creating notification:', {
+        error: notificationError,
+        message: notificationError.message,
+        details: notificationError.details,
+        code: notificationError.code,
+        hint: notificationError.hint,
+        stack: notificationError.stack
+      })
+      // Don't throw the error, just log it - we still want to return the ticket
+    }
 
     return new Response(
-      JSON.stringify({ ticket }),
+      JSON.stringify({ ticket, isNewTicket: true }),
       { 
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },
         status: 200 
       }
     )
   } catch (error) {
-    console.error('Error in handleTicketCreation:', error)
+    console.error('Error in handleTicketCreation:', {
+      error,
+      message: error.message,
+      stack: error.stack,
+      details: error.details || null,
+      code: error.code || null,
+      hint: error.hint || null
+    })
     return new Response(
       JSON.stringify({ 
         error: error.message,
-        details: error.details || null
+        details: error.details || null,
+        stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
       }),
       {
         status: 400,
