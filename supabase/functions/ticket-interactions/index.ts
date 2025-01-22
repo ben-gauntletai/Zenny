@@ -26,14 +26,14 @@ function getChangeTitle(field: string): string {
     case 'status':
       return 'Status Update'
     case 'priority':
-      return 'Priority Change'
+      return 'Priority Update'
     case 'type':
     case 'ticket_type':
-      return 'Type Change'
+      return 'Type Update'
     case 'topic':
       return 'Topic Update'
     case 'tags':
-      return 'Tags Modified'
+      return 'Tags Update'
     default:
       return 'Ticket Updated'
   }
@@ -45,7 +45,8 @@ function formatFieldName(field: string): string {
     case 'assigned_to':
       return 'Assignee';
     case 'ticket_type':
-      return 'Type';
+    case 'type':
+      return 'Ticket type';
     default:
       // Capitalize first letter and replace underscores with spaces
       return field.charAt(0).toUpperCase() + field.slice(1).replace(/_/g, ' ');
@@ -73,8 +74,11 @@ const formatChangeMessage = async (field: string, oldValue: any, newValue: any, 
       return 'Tags were updated';
     case 'comment':
       return 'New comment added';
+    case 'type':
+    case 'ticket_type':
+      return `Ticket type changed from ${capitalizeValue(oldValue)} to ${capitalizeValue(newValue)}`;
     default:
-      return `${capitalizeValue(field)} changed from ${capitalizeValue(oldValue)} to ${capitalizeValue(newValue)}`;
+      return `${formatFieldName(field)} changed from ${capitalizeValue(oldValue)} to ${capitalizeValue(newValue)}`;
   }
 };
 

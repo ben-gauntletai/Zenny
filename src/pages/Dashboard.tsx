@@ -6,7 +6,6 @@ import type {
   TicketType, 
   TicketTopic, 
   CustomerType,
-  Ticket,
   Profile
 } from '../types/supabase';
 import { supabase } from '../lib/supabaseClient';
@@ -15,7 +14,7 @@ import Navigation from '../components/Navigation';
 import '../styles/Dashboard.css';
 import { getInitials, getProfileColor, formatFullName } from '../utils/profileUtils';
 import { useDashboard } from '../contexts/DashboardContext';
-import { ActivityFeedItem } from '../contexts/DashboardContext';
+import { ActivityFeedItem, Ticket } from '../contexts/DashboardContext';
 
 interface TicketSummary {
   status: string;
@@ -25,22 +24,6 @@ interface TicketSummary {
 interface ArticleSummary {
   total: number;
   recent: number;
-}
-
-interface FormattedTicket {
-  id: number;
-  subject: string;
-  description: string;
-  status: TicketStatus;
-  priority: TicketPriority;
-  ticket_type: TicketType;
-  topic: TicketTopic;
-  customer_type: CustomerType;
-  created_at: string;
-  updated_at: string;
-  group_id: string | null;
-  user: { email: string };
-  agent?: { email: string };
 }
 
 interface UserMapProfile {
@@ -56,7 +39,7 @@ interface RecentTicketsProps {
 const ALL_STATUSES = ['open', 'pending', 'solved', 'closed'];
 
 const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
-  const [tickets, setTickets] = useState<FormattedTicket[]>([]);
+  const [tickets, setTickets] = useState<Ticket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -103,23 +86,7 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
 
       if (fetchError) throw fetchError;
 
-      const formattedTickets: FormattedTicket[] = (ticketData || []).map((ticket) => ({
-        id: ticket.id,
-        subject: ticket.subject,
-        description: ticket.description,
-        status: ticket.status,
-        priority: ticket.priority,
-        ticket_type: ticket.ticket_type,
-        topic: ticket.topic,
-        customer_type: ticket.customer_type,
-        created_at: ticket.created_at,
-        updated_at: ticket.updated_at,
-        group_id: ticket.group_id,
-        user: { email: ticket.creator_email || 'Unknown' },
-        agent: ticket.agent_email ? { email: ticket.agent_email } : undefined
-      }));
-
-      setTickets(formattedTickets);
+      setTickets(ticketData || []);
     } catch (err) {
       console.error('Error fetching tickets:', err);
       setError('Failed to load tickets');
@@ -212,8 +179,8 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
                 </span>
               </td>
               <td>{formatDate(ticket.created_at)}</td>
-              {isAgent && <td>{ticket.user.email}</td>}
-              <td>{ticket.agent?.email || 'Unassigned'}</td>
+              {isAgent && <td>{ticket.creator_email}</td>}
+              <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
             </tr>
           ))}
         </tbody>
@@ -326,8 +293,8 @@ const Dashboard: React.FC = () => {
       case 'group':
         return ('Support').localeCompare('Support') * direction;
       case 'assignee':
-        const aAssignee = a.agent_email || 'Unassigned';
-        const bAssignee = b.agent_email || 'Unassigned';
+        const aAssignee = a.agent_name || a.agent_email || 'Unassigned';
+        const bAssignee = b.agent_name || b.agent_email || 'Unassigned';
         return aAssignee.localeCompare(bAssignee) * direction;
       default:
         return 0;
@@ -537,7 +504,7 @@ const Dashboard: React.FC = () => {
                     <td>{ticket.creator_email}</td>
                     <td>{formatDate(ticket.updated_at)}</td>
                     <td>Support</td>
-                    <td>{ticket.agent_email || 'Unassigned'}</td>
+                    <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
                   </tr>
                 ))}
               </tbody>
