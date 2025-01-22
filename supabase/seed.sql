@@ -3,9 +3,9 @@ INSERT INTO auth.users (id, email, raw_user_meta_data)
 VALUES 
     ('d7bed82c-89ac-4d1e-9366-fe3c0b3b5e0b', 'john.agent@example.com', '{"role":"agent"}'::jsonb),
     ('e9be4f7d-4b1e-4043-89e5-1c59895cb5c1', 'sarah.admin@example.com', '{"role":"admin"}'::jsonb),
-    ('f8cf7d2e-3c2f-4f1a-b5d9-2d9a9e6f8b1a', 'alice.user@example.com', '{"role":"user"}'::jsonb),
-    ('a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d', 'bob.user@example.com', '{"role":"user"}'::jsonb),
-    ('b1d6dddd-b69b-49e2-a3eb-8fca0afb4119', 'ttttsmurf1@gmail.com', '{"role":"admin"}'::jsonb)
+    ('f8cf7d2e-3c2f-4f1a-b5d9-2d9a9e6f8b1a', 'alice.user@example.com', '{"role":"customer"}'::jsonb),
+    ('a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d', 'bob.user@example.com', '{"role":"customer"}'::jsonb),
+    ('b1d6dddd-b69b-49e2-a3eb-8fca0afb4119', 'ttttsmurf1@gmail.com', '{"role":"user"}'::jsonb)
 ON CONFLICT (id) DO NOTHING;
 
 -- Insert sample profiles
@@ -15,7 +15,7 @@ VALUES
     ('e9be4f7d-4b1e-4043-89e5-1c59895cb5c1', 'sarah.admin@example.com', 'Sarah Admin', 'admin'),
     ('f8cf7d2e-3c2f-4f1a-b5d9-2d9a9e6f8b1a', 'alice.user@example.com', 'Alice User', 'user'),
     ('a1b2c3d4-e5f6-4a5b-8c7d-9e0f1a2b3c4d', 'bob.user@example.com', 'Bob User', 'user'),
-    ('b1d6dddd-b69b-49e2-a3eb-8fca0afb4119', 'ttttsmurf1@gmail.com', 'Test User', 'admin')
+    ('b1d6dddd-b69b-49e2-a3eb-8fca0afb4119', 'ttttsmurf1@gmail.com', 'Test User', 'user')
 ON CONFLICT (id) DO NOTHING;
 
 -- Insert sample customers with more detailed information
