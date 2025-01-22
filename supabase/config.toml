@@ -1,12 +1,11 @@
 # A string used to distinguish different Supabase projects on the same host. Defaults to the working
 # directory name when running `supabase init`.
+[global]
 project_id = "syyaqprmiekyqfoilbna"
 
 [api]
 # Port to use for the API URL.
 port = 54321
-# Schemes to use for the API URL.
-schemes = ["http", "https"]
 
 [db]
 # Port to use for the DB URL.
