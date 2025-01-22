@@ -24,5 +24,4 @@ jobs:
 
       - name: Deploy Edge Functions
         run: |
-          supabase link --project-ref $PROJECT_ID
           supabase functions deploy --project-ref $PROJECT_ID 
