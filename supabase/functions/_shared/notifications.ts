@@ -1,3 +1,13 @@
+/**
+ * Notification system for the ticket management system
+ * Handles creation and management of notifications for:
+ * - New ticket creation
+ * - Ticket updates
+ * - Ticket assignments
+ * - Comments
+ */
+
+// Notification types and interfaces for the ticket system
 interface NotificationPayload {
   user_id: string;
   title: string;
