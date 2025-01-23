@@ -261,8 +261,8 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       .from('tickets')
       .select(`
         *,
-        creator:profiles!tickets_user_id_fkey (email, full_name),
-        assignee:profiles!tickets_assigned_to_fkey (email, full_name, role)
+        creator:profiles!tickets_user_id_fkey (email, full_name, avatar_url),
+        assignee:profiles!tickets_assigned_to_fkey (email, full_name, role, avatar_url)
       `)
 
     // Log query parameters before applying filters
@@ -363,7 +363,7 @@ async function getUserProfile(supabaseClient: any, user: any) {
     console.log('Fetching user profile with service role client');
     const { data: profile, error: profileError } = await serviceRoleClient
       .from('profiles')
-      .select('*')
+      .select('*, avatar_url')
       .eq('id', user.id)
       .single();
 
@@ -385,7 +385,8 @@ async function getUserProfile(supabaseClient: any, user: any) {
           id: user.id,
           email: user.email,
           role: user.user_metadata?.role || 'user',
-          full_name: user.user_metadata?.full_name || user.email
+          full_name: user.user_metadata?.full_name || user.email,
+          avatar_url: `https://api.dicebear.com/7.x/avataaars/svg?seed=${user.email}`
         })
         .select()
         .single();
@@ -408,4 +409,18 @@ async function getUserProfile(supabaseClient: any, user: any) {
     console.error('Error in getUserProfile:', error);
     throw error;
   }
-} 
+}
+
+// Get replies for the ticket
+const { data: replies, error: repliesError } = await serviceRoleClient
+  .from('replies')
+  .select(`
+    *,
+    user_profile:profiles!replies_user_id_fkey (
+      full_name,
+      email,
+      avatar_url
+    )
+  `)
+  .eq('ticket_id', ticketId)
+  .order('created_at', { ascending: true }); 

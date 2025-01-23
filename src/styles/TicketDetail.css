@@ -76,73 +76,79 @@
 }
 
 .ticket-conversation {
-  flex: 1;
-  background: white;
-  padding: 1.5rem 2rem;
-  margin: 0;
-  border: none;
-  border-radius: 0;
-  overflow-y: auto;
-  max-height: calc(100vh - 400px); /* Significantly reduced from 300px to give more space for input */
-}
-
-.messages-container {
   display: flex;
   flex-direction: column;
+  gap: 1rem;
+  padding: 1rem;
 }
 
 .message {
   display: flex;
-  gap: 1.5rem;
-  margin-bottom: 1rem; /* Reduced from 1.5rem */
-  padding: 1rem; /* Reduced from 1.5rem */
-  background: var(--chakra-colors-gray-50);
-  border: 1px solid var(--chakra-colors-gray-200);
-  border-radius: 8px;
-  max-width: none;
-  margin-left: 0;
-  margin-right: 0;
+  gap: 1rem;
+  max-width: 45%;
+  margin: 0.5rem 0;
 }
 
-.message:last-child {
-  margin-bottom: 0;
+.message.own-message {
+  margin-right: auto;
+  flex-direction: row;
 }
 
-.message-avatar img {
-  width: 32px; /* Reduced from 36px */
-  height: 32px; /* Reduced from 36px */
-  border-radius: 50%;
-  border: 2px solid white;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+.message.other-message {
+  margin-left: auto;
+  flex-direction: row-reverse;
 }
 
 .message-content {
+  padding: 1rem;
+  border-radius: 8px;
   flex: 1;
-  min-width: 0;
+  border: 1px solid #e2e8f0;
+  background-color: white;
+}
+
+.own-message .message-content {
+  background-color: #e5e7eb;
+}
+
+.other-message .message-content {
+  background-color: white;
 }
 
 .message-header {
   display: flex;
   justify-content: space-between;
-  align-items: center;
   margin-bottom: 0.5rem;
-}
-
-.message-author {
-  font-weight: 600;
-  color: var(--chakra-colors-gray-900);
   font-size: 0.875rem;
 }
 
+.other-message .message-header {
+  flex-direction: row-reverse;
+}
+
+.message-author {
+  font-weight: 500;
+  color: #2d3748;
+}
+
 .message-time {
-  color: var(--chakra-colors-gray-500);
+  color: #718096;
   font-size: 0.75rem;
 }
 
 .message-body {
-  color: var(--chakra-colors-gray-800);
-  line-height: 1.6;
-  font-size: 0.875rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.profile-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
 }
 
 .reply-section {
@@ -871,4 +877,163 @@ select option {
   height: 24px !important;
   min-width: 0 !important;
   padding: 0 8px !important;
+}
+
+.customer-ticket-view {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 2rem); /* Account for margins */
+  background-color: white;
+  margin: 0.5rem;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+}
+
+.customer-ticket-header {
+  padding: 0.75rem 1rem;
+  border-bottom: 1px solid #e2e8f0;
+  flex-shrink: 0;
+}
+
+.customer-ticket-header h1 {
+  font-size: 1.25rem;
+  font-weight: 600;
+  color: #2d3748;
+  margin-bottom: 0.25rem;
+}
+
+.customer-ticket-view .ticket-conversation {
+  flex: 1;
+  overflow-y: auto;
+  margin: 0.5rem;
+  padding: 0.75rem;
+  background-color: #f8fafc;
+  border: 2px solid #cbd5e0;
+  border-radius: 6px;
+  max-height: calc(100vh - 300px); /* Reduced height by making the subtraction larger */
+  min-height: 300px; /* Add minimum height to prevent it from getting too small */
+}
+
+.customer-ticket-view .reply-box {
+  margin: 0.5rem;
+  padding: 0;
+  display: flex;
+  flex-direction: row;
+  gap: 0.75rem;
+  align-items: flex-start;
+  flex-shrink: 0;
+  min-height: 60px; /* Ensure consistent height for reply box */
+}
+
+.customer-ticket-view .reply-textarea {
+  border: 2px solid #cbd5e0;
+  border-radius: 6px;
+  padding: 8px 12px;
+  flex: 1;
+  height: 42px;
+  min-height: 42px;
+  max-height: 42px;
+  background-color: #f3f4f6;
+  resize: none;
+  font-size: 0.875rem;
+  line-height: 24px;
+  transition: border-color 0.2s;
+  overflow-y: auto;
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.customer-ticket-view .reply-textarea::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+.customer-ticket-view .reply-textarea:focus {
+  outline: none;
+  border-color: #3182ce;
+  border-width: 2px;
+  box-shadow: 0 0 0 1px #3182ce;
+}
+
+.customer-ticket-view .submit-reply-button {
+  background-color: #3182ce;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  padding: 0 1rem;
+  height: 42px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.customer-ticket-view .submit-reply-button:hover {
+  background-color: #2b6cb0;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.customer-ticket-view .submit-reply-button:active {
+  background-color: #2c5282;
+  transform: translateY(0);
+  box-shadow: none;
+}
+
+.ticket-meta {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  color: #4a5568;
+  font-size: 0.875rem;
+}
+
+.ticket-owner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4a5568;
+}
+
+.ticket-owner::before {
+  content: '•';
+  color: #cbd5e0;
+}
+
+.customer-ticket-view .message {
+  border: none;
+  background-color: transparent;
+  margin-bottom: 1rem;
+  border-radius: 6px;
+}
+
+.customer-ticket-view .message-content {
+  background-color: white;
+  border: 2px solid #cbd5e0;
+  padding: 1rem;
+  border-radius: 6px;
+}
+
+.customer-ticket-view .own-message .message-content {
+  background-color: #e5e7eb;
+  border: 2px solid #cbd5e0;
+}
+
+.customer-ticket-view .other-message .message-content {
+  background-color: white;
+  border: 2px solid #cbd5e0;
+}
+
+.customer-ticket-view .message.own-message {
+  margin-right: auto;
+  flex-direction: row;
+}
+
+.customer-ticket-view .message.other-message {
+  margin-left: auto;
+  flex-direction: row-reverse;
+}
+
+.customer-ticket-view .other-message .message-header {
+  flex-direction: row-reverse;
 } 

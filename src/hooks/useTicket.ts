@@ -1,18 +1,22 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 
-export interface Reply {
+export type Reply = {
   id: number;
   ticket_id: number;
   content: string;
   created_at: string;
-  updated_at: string;
   user_id: string;
-  is_public: boolean;
   user_email: string | { email: string };
-}
+  user_profile?: {
+    full_name: string | null;
+    email: string;
+    avatar_url: string | null;
+  };
+  is_internal: boolean;
+};
 
 export interface Ticket {
   id: number;
@@ -32,12 +36,23 @@ export interface Ticket {
   profiles?: { 
     email: string;
     full_name?: string | null;
+    avatar_url?: string | null;
   };
   agents?: { 
     email: string;
     full_name?: string | null;
+    avatar_url?: string | null;
   };
 }
+
+// Add these types at the top of the file after the existing types
+type RealtimePayload = {
+  type: 'NEW_REPLY';
+  replyId: number;
+  ticketId: number;
+};
+
+type SubscriptionStatus = 'SUBSCRIBED' | 'CLOSED' | 'CHANNEL_ERROR' | 'TIMED_OUT';
 
 export const useTicket = () => {
   const { ticketId } = useParams<{ ticketId: string }>();
@@ -46,10 +61,107 @@ export const useTicket = () => {
   const [replies, setReplies] = useState<Reply[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const channelRef = useRef<any>(null);
 
   useEffect(() => {
     if (ticketId) {
       fetchTicket();
+
+      console.log('Setting up real-time subscription for ticket:', ticketId);
+
+      // Create a channel for Postgres changes
+      const channelName = `realtime:${ticketId}`;
+      channelRef.current = supabase.channel(channelName);
+
+      // Subscribe to changes on the replies table
+      channelRef.current
+        .on(
+          'postgres_changes',
+          {
+            event: 'INSERT',
+            schema: 'public',
+            table: 'replies',
+            filter: `ticket_id=eq.${ticketId}`
+          },
+          async (payload: { new: Reply }) => {
+            console.log('Received new reply from Postgres:', payload.new);
+            
+            try {
+              // Fetch the complete reply with user profile
+              const { data: newReply, error: replyError } = await supabase
+                .from('replies')
+                .select(`
+                  *,
+                  user_profile:profiles!replies_user_id_fkey (
+                    email,
+                    full_name,
+                    avatar_url
+                  )
+                `)
+                .eq('id', payload.new.id)
+                .single();
+
+              if (replyError) {
+                console.error('Error fetching new reply:', replyError);
+                return;
+              }
+
+              if (newReply) {
+                console.log('New reply data structure:', newReply);
+                
+                // Format the reply to match our Reply type
+                const formattedReply: Reply = {
+                  id: newReply.id,
+                  ticket_id: newReply.ticket_id,
+                  content: newReply.content,
+                  created_at: newReply.created_at,
+                  user_id: newReply.user_id,
+                  user_email: newReply.user_profile?.email || '',
+                  is_internal: !newReply.is_public,
+                  user_profile: {
+                    full_name: newReply.user_profile?.full_name || null,
+                    email: newReply.user_profile?.email || '',
+                    avatar_url: newReply.user_profile?.avatar_url || null
+                  }
+                };
+
+                console.log('Formatted reply:', formattedReply);
+
+                setReplies(current => {
+                  // Check if reply already exists
+                  const exists = current.some(reply => reply.id === formattedReply.id);
+                  console.log('Reply exists in state:', exists);
+                  
+                  if (exists) {
+                    console.log('Reply already exists in state, skipping');
+                    return current;
+                  }
+                  
+                  console.log('Adding new reply to state. Current length:', current.length);
+                  const newReplies = [...current, formattedReply];
+                  console.log('New replies length:', newReplies.length);
+                  return newReplies;
+                });
+              }
+            } catch (error) {
+              console.error('Error processing new reply:', error);
+            }
+          }
+        )
+        .subscribe((status: SubscriptionStatus) => {
+          console.log(`Subscription status for ${channelName}:`, status);
+          if (status === 'SUBSCRIBED') {
+            console.log('Successfully subscribed to Postgres changes for ticket:', ticketId);
+          }
+        });
+
+      return () => {
+        console.log('Cleaning up subscription for channel:', channelName);
+        if (channelRef.current) {
+          channelRef.current.unsubscribe();
+          channelRef.current = null;
+        }
+      };
     }
   }, [ticketId]);
 
@@ -62,8 +174,8 @@ export const useTicket = () => {
         .from('tickets')
         .select(`
           *,
-          profiles:user_id(email, full_name),
-          agents:assigned_to(email, full_name)
+          profiles:user_id(email, full_name, avatar_url),
+          agents:assigned_to(email, full_name, avatar_url)
         `)
         .eq('id', ticketId)
         .single();
@@ -78,7 +190,14 @@ export const useTicket = () => {
 
       const { data: repliesData, error: repliesError } = await supabase
         .from('replies')
-        .select('*, user_email:profiles(email)')
+        .select(`
+          *,
+          user_profile:profiles!replies_user_id_fkey (
+            email,
+            full_name,
+            avatar_url
+          )
+        `)
         .eq('ticket_id', ticketId)
         .order('created_at', { ascending: true });
 
@@ -97,7 +216,9 @@ export const useTicket = () => {
     if (!user) throw new Error('User not authenticated');
     if (!ticket) throw new Error('No ticket loaded');
 
-    const { data, error } = await supabase
+    console.log('Adding new reply:', { content, isPublic, ticketId: ticket.id });
+
+    const { data: newReply, error } = await supabase
       .from('replies')
       .insert({
         ticket_id: ticket.id,
@@ -105,13 +226,43 @@ export const useTicket = () => {
         user_id: user.id,
         is_public: isPublic
       })
-      .select('*, user_email:profiles(email)')
+      .select(`
+        *,
+        user_profile:profiles!replies_user_id_fkey (
+          email,
+          full_name,
+          avatar_url
+        )
+      `)
       .single();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Error adding reply:', error);
+      throw error;
+    }
 
-    setReplies(prev => [...prev, data]);
-    return data;
+    console.log('Successfully added reply:', newReply);
+
+    // Format the reply consistently with the real-time updates
+    const formattedReply: Reply = {
+      id: newReply.id,
+      ticket_id: newReply.ticket_id,
+      content: newReply.content,
+      created_at: newReply.created_at,
+      user_id: newReply.user_id,
+      user_email: newReply.user_profile?.email || '',
+      is_internal: !newReply.is_public,
+      user_profile: {
+        full_name: newReply.user_profile?.full_name || null,
+        email: newReply.user_profile?.email || '',
+        avatar_url: newReply.user_profile?.avatar_url || null
+      }
+    };
+
+    // Add formatted reply to local state immediately for instant feedback
+    setReplies(current => [...current, formattedReply]);
+    
+    return formattedReply;
   };
 
   const updateTicket = async (updates: Partial<Ticket>) => {

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useTicket, type Reply, type Ticket } from 'hooks/useTicket';
 import { useAuth } from 'contexts/AuthContext';
@@ -7,6 +7,7 @@ import TicketDetailPanel from 'components/TicketDetailPanel';
 import { Box, Flex, Text } from '@chakra-ui/react';
 import { supabase } from '../lib/supabaseClient';
 import 'styles/TicketDetail.css';
+import { getInitials, getProfileColor } from '../utils/profileUtils';
 
 // Notification interface for ticket interactions
 interface Notification {
@@ -37,6 +38,140 @@ function getNotificationDisplayName(notification: Notification): string {
   return notification.user?.full_name || notification.user?.email || "Unknown User";
 }
 
+const CustomerTicketView: React.FC<{ ticket: any, replies: Reply[], replyContent: string, setReplyContent: (content: string) => void, handleSubmitReply: () => void }> = ({
+  ticket,
+  replies,
+  replyContent,
+  setReplyContent,
+  handleSubmitReply
+}) => {
+  const { user } = useAuth();
+  const conversationRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom when new replies are added
+  useEffect(() => {
+    if (conversationRef.current) {
+      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
+    }
+  }, [replies]);
+
+  return (
+    <div className="customer-ticket-view">
+      <div className="customer-ticket-header">
+        <h1>{ticket.subject}</h1>
+        <div className="ticket-meta">
+          <span className={`status-badge ${ticket.status.toLowerCase()}`}>
+            {ticket.status.charAt(0).toUpperCase() + ticket.status.slice(1)}
+          </span>
+          {ticket.agents && (
+            <span className="ticket-owner">
+              Assigned to: {ticket.agents.full_name || ticket.agents.email || 'Support Team'}
+            </span>
+          )}
+        </div>
+      </div>
+
+      <div className="ticket-conversation" ref={conversationRef} style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
+        {/* Original ticket message */}
+        <div className={`message ${ticket.user_id === user?.id ? 'own-message' : 'other-message'}`}>
+          <div className="message-avatar">
+            <div 
+              className="profile-icon" 
+              style={{ 
+                backgroundColor: getProfileColor(ticket.profiles?.email || ''),
+                color: 'white',
+                fontSize: '14px',
+                fontWeight: 'bold',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                width: '32px',
+                height: '32px',
+                borderRadius: '50%'
+              }}
+            >
+              {getInitials(ticket.profiles?.full_name || '')}
+            </div>
+          </div>
+          <div className="message-content">
+            <div className="message-header">
+              <span className="message-author">{ticket.profiles?.full_name || ticket.profiles?.email}</span>
+              <span className="message-time">{new Date(ticket.created_at).toLocaleString()}</span>
+            </div>
+            <div className="message-body">
+              {ticket.description}
+            </div>
+          </div>
+        </div>
+
+        {/* Replies */}
+        {replies.map((reply: Reply) => {
+          const isOwnMessage = reply.user_id === user?.id;
+          return (
+            <div key={reply.id} className={`message ${isOwnMessage ? 'own-message' : 'other-message'}`}>
+              <div className="message-avatar">
+                <div 
+                  className="profile-icon" 
+                  style={{ 
+                    backgroundColor: getProfileColor(reply.user_profile?.email || ''),
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%'
+                  }}
+                >
+                  {getInitials(reply.user_profile?.full_name || '')}
+                </div>
+              </div>
+              <div className="message-content">
+                <div className="message-header">
+                  <span className="message-author">
+                    {reply.user_profile?.full_name || (typeof reply.user_email === 'object' && reply.user_email !== null 
+                      ? reply.user_email.email 
+                      : reply.user_email)}
+                  </span>
+                  <span className="message-time">{new Date(reply.created_at).toLocaleString()}</span>
+                </div>
+                <div className="message-body">
+                  {reply.content}
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* Reply box */}
+      <div className="reply-box">
+        <textarea
+          className="reply-textarea"
+          value={replyContent}
+          onChange={(e) => setReplyContent(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+              e.preventDefault();
+              handleSubmitReply();
+            }
+          }}
+          placeholder="Write your reply... (Press Enter to submit)"
+        />
+        <button 
+          className="submit-reply-button"
+          onClick={handleSubmitReply}
+          disabled={!replyContent.trim()}
+        >
+          Submit Reply
+        </button>
+      </div>
+    </div>
+  );
+};
+
 const TicketContent: React.FC = () => {
   const navigate = useNavigate();
   const { ticket, replies, loading, error, addReply, updateTicket, setTicket } = useTicket();
@@ -44,6 +179,15 @@ const TicketContent: React.FC = () => {
   const [pendingChanges, setPendingChanges] = useState<Partial<Ticket>>({});
   const [notifications, setNotifications] = useState<Notification[]>([]);
   const { user } = useAuth();
+  const isAgentOrAdmin = user?.user_metadata?.role === 'agent' || user?.user_metadata?.role === 'admin';
+  const conversationRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom when new replies are added
+  useEffect(() => {
+    if (conversationRef.current) {
+      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
+    }
+  }, [replies]);
 
   useEffect(() => {
     if (ticket) {
@@ -167,6 +311,10 @@ const TicketContent: React.FC = () => {
     if (!replyContent.trim()) return;
     await addReply(replyContent, true);
     setReplyContent('');
+    // Scroll to bottom after submitting
+    if (conversationRef.current) {
+      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
+    }
   };
 
   const handleUpdateTicket = async (field: string, value: unknown) => {
@@ -207,6 +355,20 @@ const TicketContent: React.FC = () => {
     }
   };
 
+  // If user is not an agent or admin, show the customer view
+  if (!isAgentOrAdmin) {
+    return (
+      <CustomerTicketView
+        ticket={ticket}
+        replies={replies}
+        replyContent={replyContent}
+        setReplyContent={setReplyContent}
+        handleSubmitReply={handleSubmitReply}
+      />
+    );
+  }
+
+  // Return the original agent/admin view
   return (
     <Flex 
       width="100%" 
@@ -257,29 +419,47 @@ const TicketContent: React.FC = () => {
             <h1>{ticket.subject}</h1>
           </div>
           <div className="ticket-actions">
-            <button 
-              className="suspend-button"
-              onClick={() => {
-                console.log('Suspend customer clicked');
-              }}
-              style={{
-                padding: '0.5rem 1rem',
-                backgroundColor: '#dc3545',
-                color: 'white',
-                border: 'none',
-                borderRadius: '4px',
-                cursor: 'pointer'
-              }}
-            >
-              Suspend Customer
-            </button>
+            {isAgentOrAdmin && (
+              <button 
+                className="suspend-button"
+                onClick={() => {
+                  console.log('Suspend customer clicked');
+                }}
+                style={{
+                  padding: '0.5rem 1rem',
+                  backgroundColor: '#dc3545',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Suspend Customer
+              </button>
+            )}
           </div>
         </header>
 
-        <div className="ticket-conversation" style={{ flex: 1, overflowY: 'auto' }}>
-          <div className="message">
+        <div className="ticket-conversation" ref={conversationRef} style={{ flex: 1, overflowY: 'auto' }}>
+          <div className="message other-message">
             <div className="message-avatar">
-              <img src={`https://www.gravatar.com/avatar/${ticket.user_id}?d=mp`} alt="User avatar" />
+              <div 
+                className="profile-icon" 
+                style={{ 
+                  backgroundColor: getProfileColor(ticket.profiles?.email || ''),
+                  color: 'white',
+                  fontSize: '14px',
+                  fontWeight: 'bold',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '32px',
+                  height: '32px',
+                  borderRadius: '50%'
+                }}
+              >
+                {getInitials(ticket.profiles?.full_name || '')}
+              </div>
             </div>
             <div className="message-content">
               <div className="message-header">
@@ -292,22 +472,45 @@ const TicketContent: React.FC = () => {
             </div>
           </div>
 
-          {replies.map((reply: Reply) => (
-            <div key={reply.id} className="message">
-              <div className="message-avatar">
-                <img src={`https://www.gravatar.com/avatar/${reply.user_id}?d=mp`} alt="User avatar" />
-              </div>
-              <div className="message-content">
-                <div className="message-header">
-                  <span className="message-author">{typeof reply.user_email === 'object' && reply.user_email !== null ? reply.user_email.email : reply.user_email}</span>
-                  <span className="message-time">{new Date(reply.created_at).toLocaleString()}</span>
+          {replies.map((reply: Reply) => {
+            const isOwnMessage = reply.user_id === user?.id;
+            return (
+              <div key={reply.id} className={`message ${isOwnMessage ? 'own-message' : 'other-message'}`}>
+                <div className="message-avatar">
+                  <div 
+                    className="profile-icon" 
+                    style={{ 
+                      backgroundColor: getProfileColor(reply.user_profile?.email || ''),
+                      color: 'white',
+                      fontSize: '14px',
+                      fontWeight: 'bold',
+                      display: 'flex',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      width: '32px',
+                      height: '32px',
+                      borderRadius: '50%'
+                    }}
+                  >
+                    {getInitials(reply.user_profile?.full_name || '')}
+                  </div>
                 </div>
-                <div className="message-body">
-                  {reply.content}
+                <div className="message-content">
+                  <div className="message-header">
+                    <span className="message-author">
+                      {reply.user_profile?.full_name || (typeof reply.user_email === 'object' && reply.user_email !== null 
+                        ? reply.user_email.email 
+                        : reply.user_email)}
+                    </span>
+                    <span className="message-time">{new Date(reply.created_at).toLocaleString()}</span>
+                  </div>
+                  <div className="message-body">
+                    {reply.content}
+                  </div>
                 </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
 
         <div className="reply-box" style={{ marginTop: 'auto' }}>
@@ -351,11 +554,24 @@ const TicketContent: React.FC = () => {
           <div className="sidebar-section">
             <div className="customer-info">
               <div className="customer-header">
-                <img 
-                  src={`https://www.gravatar.com/avatar/${ticket.user_id}?d=mp`}
-                  alt="Customer avatar"
-                  className="customer-avatar"
-                />
+                <div 
+                  className="profile-icon" 
+                  style={{ 
+                    backgroundColor: getProfileColor(ticket.profiles?.email || ''),
+                    color: 'white',
+                    fontSize: '14px',
+                    fontWeight: 'bold',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    width: '32px',
+                    height: '32px',
+                    borderRadius: '50%',
+                    marginRight: '12px'
+                  }}
+                >
+                  {getInitials(ticket.profiles?.full_name || '')}
+                </div>
                 <div className="customer-details">
                   <span className="customer-name">{ticket.profiles?.full_name || ticket.profiles?.email}</span>
                   <span className="customer-type">The Customer</span>
