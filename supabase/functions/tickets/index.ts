@@ -262,8 +262,7 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       .select(`
         *,
         creator:profiles!tickets_user_id_fkey (email, full_name),
-        assignee:profiles!tickets_assigned_to_fkey (email, full_name, group_name),
-        groups!tickets_group_id_fkey (name)
+        assignee:profiles!tickets_assigned_to_fkey (email, full_name, role)
       `)
 
     // Log query parameters before applying filters
@@ -271,7 +270,7 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       base_query: 'tickets with creator and assignee profiles',
       status_filter: status || 'none',
       user_filter: !isAgentOrAdmin ? user.id : 'none',
-      user_group: userProfile?.group_name,
+      user_role: userProfile?.role,
       pagination: { offset, limit },
       ordering: 'created_at DESC'
     })
@@ -284,8 +283,8 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       // Regular users can only see their own tickets
       query.eq('user_id', user.id)
     } else if (effectiveRole === 'agent') {
-      // Agents can only see tickets from their group or assigned to them
-      query.or(`groups.name.eq.${userProfile.group_name},assigned_to.eq.${user.id}`)
+      // Agents can see all Support group tickets
+      query.eq('group_name', 'Support')
     }
     // Admins can see all tickets
 
@@ -310,7 +309,6 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
         subject: tickets[0].subject,
         user_id: tickets[0].user_id,
         status: tickets[0].status,
-        group_name: tickets[0].groups?.name,
         assigned_to: tickets[0].assigned_to
       } : null
     })
@@ -325,8 +323,7 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       creator_email: ticket.creator?.email,
       creator_name: ticket.creator?.full_name,
       agent_email: ticket.assignee?.email,
-      agent_name: ticket.assignee?.full_name,
-      group_name: ticket.groups?.name
+      agent_name: ticket.assignee?.full_name
     }))
 
     return new Response(
@@ -366,7 +363,7 @@ async function getUserProfile(supabaseClient: any, user: any) {
     console.log('Fetching user profile with service role client');
     const { data: profile, error: profileError } = await serviceRoleClient
       .from('profiles')
-      .select('*, groups!profiles_group_id_fkey(name)')
+      .select('*')
       .eq('id', user.id)
       .single();
 
@@ -388,10 +385,9 @@ async function getUserProfile(supabaseClient: any, user: any) {
           id: user.id,
           email: user.email,
           role: user.user_metadata?.role || 'user',
-          full_name: user.user_metadata?.full_name || user.email,
-          group_id: null // New profiles start without a group
+          full_name: user.user_metadata?.full_name || user.email
         })
-        .select('*, groups!profiles_group_id_fkey(name)')
+        .select()
         .single();
 
       if (insertError) {
@@ -403,20 +399,11 @@ async function getUserProfile(supabaseClient: any, user: any) {
       }
 
       console.log('New profile created:', newProfile);
-      return {
-        ...newProfile,
-        group_name: newProfile.groups?.name
-      };
+      return newProfile;
     }
 
-    console.log('Existing profile found:', {
-      ...profile,
-      group_name: profile.groups?.name
-    });
-    return {
-      ...profile,
-      group_name: profile.groups?.name
-    };
+    console.log('Existing profile found:', profile);
+    return profile;
   } catch (error) {
     console.error('Error in getUserProfile:', error);
     throw error;
