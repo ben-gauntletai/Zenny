@@ -112,7 +112,7 @@ const KnowledgeBase: React.FC = () => {
             {filteredArticles.map((article) => (
               <Link
                 key={article.id}
-                to={`/knowledge-base/${article.id}`}
+                to={`/knowledge-base/article/${article.id}`}
                 className="article-card"
               >
                 <div className="article-meta">

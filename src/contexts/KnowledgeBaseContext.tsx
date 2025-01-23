@@ -34,6 +34,7 @@ interface KnowledgeBaseContextType {
   refreshArticles: () => Promise<void>;
   createArticle: (article: Partial<Article>) => Promise<void>;
   updateArticle: (id: string, updates: Partial<Article>) => Promise<void>;
+  deleteArticle: (articleId: string) => Promise<void>;
 }
 
 const KnowledgeBaseContext = createContext<KnowledgeBaseContextType | undefined>(undefined);
@@ -134,6 +135,32 @@ export const KnowledgeBaseProvider: React.FC<{ children: React.ReactNode }> = ({
     }
   };
 
+  const deleteArticle = async (articleId: string): Promise<void> => {
+    try {
+      // First delete the tag connections
+      const { error: tagError } = await supabase
+        .from('knowledge_base_article_tags')
+        .delete()
+        .eq('article_id', articleId);
+
+      if (tagError) throw tagError;
+
+      // Then delete the article
+      const { error: articleError } = await supabase
+        .from('knowledge_base_articles')
+        .delete()
+        .eq('id', articleId);
+
+      if (articleError) throw articleError;
+
+      // Update local state
+      setArticles(prevArticles => prevArticles.filter(article => article.id !== articleId));
+    } catch (err) {
+      console.error('Error deleting article:', err);
+      throw err;
+    }
+  };
+
   useEffect(() => {
     fetchArticles();
   }, []);
@@ -146,6 +173,7 @@ export const KnowledgeBaseProvider: React.FC<{ children: React.ReactNode }> = ({
     refreshArticles: fetchArticles,
     createArticle,
     updateArticle,
+    deleteArticle,
   };
 
   return (

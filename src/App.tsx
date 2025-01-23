@@ -104,8 +104,12 @@ const router = createBrowserRouter(
           element: <CreateArticle />
         },
         {
-          path: ':articleId',
+          path: 'article/:id',
           element: <ArticleDetail />
+        },
+        {
+          path: 'article/:id/edit',
+          element: <CreateArticle />
         },
         {
           path: 'analytics',

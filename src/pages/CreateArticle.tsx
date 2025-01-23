@@ -1,205 +1,267 @@
 import React, { useState, useEffect } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useKnowledgeBase } from '../contexts/KnowledgeBaseContext';
 import { supabase } from '../lib/supabaseClient';
 import '../styles/CreateArticle.css';
 
-interface Category {
-  id: string;
-  name: string;
-}
-
-interface Tag {
-  id: string;
-  name: string;
-}
-
 const CreateArticle: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { createArticle } = useKnowledgeBase();
+  const { refreshArticles } = useKnowledgeBase();
+  const { id } = useParams(); // Get article ID if editing
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [categoryId, setCategoryId] = useState('');
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [tags, setTags] = useState<Tag[]>([]);
-  const [isLoading, setIsLoading] = useState(false);
+  const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
+  const [tags, setTags] = useState<Array<{ id: string; name: string }>>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  // Fetch article data if editing
   useEffect(() => {
-    const fetchCategories = async () => {
-      const { data, error } = await supabase
-        .from('knowledge_base_categories')
-        .select('*')
-        .order('name');
-
-      if (error) {
-        console.error('Error fetching categories:', error);
+    const fetchArticle = async () => {
+      if (!id) {
+        setIsLoading(false);
         return;
       }
 
-      setCategories(data || []);
-    };
+      try {
+        const { data: article, error } = await supabase
+          .from('knowledge_base_articles')
+          .select(`
+            *,
+            category:knowledge_base_categories(id, name),
+            tags:knowledge_base_article_tags(
+              knowledge_base_tags(id, name)
+            )
+          `)
+          .eq('id', id)
+          .single();
 
-    const fetchTags = async () => {
-      const { data, error } = await supabase
-        .from('knowledge_base_tags')
-        .select('*')
-        .order('name');
+        if (error) throw error;
 
-      if (error) {
-        console.error('Error fetching tags:', error);
-        return;
+        setTitle(article.title);
+        setContent(article.content);
+        setCategoryId(article.category_id);
+        setSelectedTags(article.tags.map((tag: { knowledge_base_tags: { id: string } }) => 
+          tag.knowledge_base_tags.id
+        ));
+      } catch (err) {
+        console.error('Error fetching article:', err);
+        setError('Failed to load article');
+      } finally {
+        setIsLoading(false);
       }
-
-      setTags(data || []);
     };
 
-    fetchCategories();
-    fetchTags();
+    fetchArticle();
+  }, [id]);
+
+  // Fetch categories and tags
+  useEffect(() => {
+    const fetchData = async () => {
+      try {
+        // Fetch categories
+        const { data: categoriesData, error: categoriesError } = await supabase
+          .from('knowledge_base_categories')
+          .select('*');
+
+        if (categoriesError) throw categoriesError;
+        setCategories(categoriesData);
+
+        // Fetch tags
+        const { data: tagsData, error: tagsError } = await supabase
+          .from('knowledge_base_tags')
+          .select('*');
+
+        if (tagsError) throw tagsError;
+        setTags(tagsData);
+      } catch (err) {
+        console.error('Error fetching data:', err);
+        setError('Failed to load categories and tags');
+      }
+    };
+
+    fetchData();
   }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user) return;
 
-    setIsLoading(true);
-    setError(null);
-
     try {
-      // First, create the article
-      const { data: article, error: articleError } = await supabase
-        .from('knowledge_base_articles')
-        .insert([
-          {
+      let articleId = id;
+
+      if (id) {
+        // Update existing article
+        const { error: updateError } = await supabase
+          .from('knowledge_base_articles')
+          .update({
+            title,
+            content,
+            category_id: categoryId,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', id);
+
+        if (updateError) throw updateError;
+
+        // Delete existing tags only if the selection has changed
+        const { data: existingTags } = await supabase
+          .from('knowledge_base_article_tags')
+          .select('tag_id')
+          .eq('article_id', id);
+
+        const existingTagIds = existingTags?.map(t => t.tag_id) || [];
+        const hasTagsChanged = JSON.stringify(existingTagIds.sort()) !== JSON.stringify(selectedTags.sort());
+
+        if (hasTagsChanged) {
+          // Delete existing tags
+          const { error: deleteTagsError } = await supabase
+            .from('knowledge_base_article_tags')
+            .delete()
+            .eq('article_id', id);
+
+          if (deleteTagsError) throw deleteTagsError;
+
+          // Add new tags
+          if (selectedTags.length > 0) {
+            const tagConnections = selectedTags.map(tagId => ({
+              article_id: id,
+              tag_id: tagId
+            }));
+
+            const { error: tagError } = await supabase
+              .from('knowledge_base_article_tags')
+              .insert(tagConnections);
+
+            if (tagError) throw tagError;
+          }
+        }
+      } else {
+        // Create new article
+        const { data: article, error: createError } = await supabase
+          .from('knowledge_base_articles')
+          .insert({
             title,
             content,
             category_id: categoryId,
             author_id: user.id,
+            views_count: 0,
+            helpful_count: 0,
+            not_helpful_count: 0,
             status: 'published'
-          }
-        ])
-        .select()
-        .single();
+          })
+          .select()
+          .single();
 
-      if (articleError) throw articleError;
+        if (createError) throw createError;
+        articleId = article.id;
 
-      // Then, add the tags
-      if (selectedTags.length > 0 && article) {
-        const tagConnections = selectedTags.map(tagId => ({
-          article_id: article.id,
-          tag_id: tagId
-        }));
+        // Add tags for the new article
+        if (selectedTags.length > 0) {
+          const tagConnections = selectedTags.map(tagId => ({
+            article_id: articleId,
+            tag_id: tagId
+          }));
 
-        const { error: tagError } = await supabase
-          .from('knowledge_base_article_tags')
-          .insert(tagConnections);
+          const { error: tagError } = await supabase
+            .from('knowledge_base_article_tags')
+            .insert(tagConnections);
 
-        if (tagError) throw tagError;
+          if (tagError) throw tagError;
+        }
       }
 
-      navigate('/knowledge-base');
-    } catch (err: any) {
-      console.error('Error creating article:', err);
-      setError(err.message);
-    } finally {
-      setIsLoading(false);
+      await refreshArticles(); // Refresh the articles list
+      navigate(`/knowledge-base/article/${articleId}`);
+    } catch (err) {
+      console.error('Error creating/updating article:', err);
+      setError('Failed to save article');
     }
   };
 
+  if (isLoading) {
+    return <div className="loading">Loading...</div>;
+  }
+
+  if (error) {
+    return <div className="error">{error}</div>;
+  }
+
   return (
-    <div className="create-article">
-      <div className="create-article-header">
-        <h2>Create New Article</h2>
+    <form onSubmit={handleSubmit} className="article-form">
+      <div className="form-group">
+        <label htmlFor="title">Title</label>
+        <input
+          type="text"
+          id="title"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+          required
+        />
       </div>
 
-      {error && <div className="error-message">{error}</div>}
+      <div className="form-group">
+        <label htmlFor="category">Category</label>
+        <select
+          id="category"
+          value={categoryId}
+          onChange={(e) => setCategoryId(e.target.value)}
+          required
+        >
+          <option value="">Select a category</option>
+          {categories.map((category) => (
+            <option key={category.id} value={category.id}>
+              {category.name}
+            </option>
+          ))}
+        </select>
+      </div>
 
-      <form onSubmit={handleSubmit} className="article-form">
-        <div className="form-group">
-          <label htmlFor="title">Title</label>
-          <input
-            id="title"
-            type="text"
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            required
-            placeholder="Enter article title"
-          />
-        </div>
+      <div className="form-group">
+        <label htmlFor="content">Content</label>
+        <textarea
+          id="content"
+          value={content}
+          onChange={(e) => setContent(e.target.value)}
+          required
+        />
+      </div>
 
-        <div className="form-group">
-          <label htmlFor="category">Category</label>
-          <select
-            id="category"
-            value={categoryId}
-            onChange={(e) => setCategoryId(e.target.value)}
-            required
-          >
-            <option value="">Select a category</option>
-            {categories.map((category) => (
-              <option key={category.id} value={category.id}>
-                {category.name}
-              </option>
-            ))}
-          </select>
+      <div className="form-group">
+        <label>Tags</label>
+        <div className="tags-container">
+          {tags.map((tag) => (
+            <label key={tag.id} className="tag-checkbox">
+              <input
+                type="checkbox"
+                checked={selectedTags.includes(tag.id)}
+                onChange={(e) => {
+                  if (e.target.checked) {
+                    setSelectedTags([...selectedTags, tag.id]);
+                  } else {
+                    setSelectedTags(selectedTags.filter(id => id !== tag.id));
+                  }
+                }}
+              />
+              {tag.name}
+            </label>
+          ))}
         </div>
+      </div>
 
-        <div className="form-group">
-          <label htmlFor="content">Content</label>
-          <textarea
-            id="content"
-            value={content}
-            onChange={(e) => setContent(e.target.value)}
-            required
-            placeholder="Write your article content here..."
-            rows={10}
-          />
-          <p className="help-text">You can use markdown formatting</p>
-        </div>
-
-        <div className="form-group">
-          <label>Tags</label>
-          <div className="tags-container">
-            {tags.map((tag) => (
-              <label key={tag.id} className="tag-checkbox">
-                <input
-                  type="checkbox"
-                  checked={selectedTags.includes(tag.id)}
-                  onChange={(e) => {
-                    if (e.target.checked) {
-                      setSelectedTags([...selectedTags, tag.id]);
-                    } else {
-                      setSelectedTags(selectedTags.filter(id => id !== tag.id));
-                    }
-                  }}
-                />
-                {tag.name}
-              </label>
-            ))}
-          </div>
-        </div>
-
-        <div className="form-actions">
-          <button
-            type="button"
-            onClick={() => navigate('/knowledge-base')}
-            className="cancel-button"
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            disabled={isLoading}
-            className="submit-button"
-          >
-            {isLoading ? 'Creating...' : 'Create Article'}
-          </button>
-        </div>
-      </form>
-    </div>
+      <div className="form-actions">
+        <button type="button" className="cancel-button" onClick={() => navigate(-1)}>
+          Cancel
+        </button>
+        <button type="submit" className="submit-button">
+          {id ? 'Update' : 'Create'}
+        </button>
+      </div>
+    </form>
   );
 };
 
