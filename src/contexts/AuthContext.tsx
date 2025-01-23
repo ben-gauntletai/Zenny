@@ -61,11 +61,28 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const signIn = async (email: string, password: string) => {
-    const { error } = await supabase.auth.signInWithPassword({
+    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
       email,
       password
     });
-    if (error) throw error;
+    if (signInError) throw signInError;
+
+    // Fetch user's role from profiles table
+    const { data: profileData, error: profileError } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', signInData.user?.id)
+      .single();
+    
+    if (profileError) throw profileError;
+
+    // Update user metadata with role
+    if (profileData?.role) {
+      const { error: updateError } = await supabase.auth.updateUser({
+        data: { role: profileData.role }
+      });
+      if (updateError) throw updateError;
+    }
   };
 
   const signOut = async () => {

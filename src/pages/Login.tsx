@@ -95,7 +95,10 @@ const Login: React.FC = () => {
       }
 
       // Navigate to the intended page
-      navigate(from, { replace: true });
+      navigate(from, { 
+        replace: true,
+        state: { from: '/login' }
+      });
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Failed to sign in. Please check your credentials.');
@@ -114,7 +117,10 @@ const Login: React.FC = () => {
         throw new Error('Quick access password not configured');
       }
       await signIn(email, password);
-      navigate(from, { replace: true });
+      navigate(from, { 
+        replace: true,
+        state: { from: '/login' }
+      });
     } catch (err: any) {
       console.error('Login error:', err);
       setError(err.message || 'Failed to sign in. Please check your credentials.');

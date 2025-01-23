@@ -21,6 +21,13 @@ const Navigation: React.FC = () => {
   const [profile, setProfile] = useState<{ full_name: string } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const location = useLocation();
+  const isAgentOrAdmin = user?.user_metadata?.role === 'agent' || user?.user_metadata?.role === 'admin';
+  
+  console.log('Navigation Debug:', {
+    user_metadata: user?.user_metadata,
+    role: user?.user_metadata?.role,
+    isAgentOrAdmin
+  });
 
   useEffect(() => {
     const fetchProfile = async () => {
@@ -67,17 +74,21 @@ const Navigation: React.FC = () => {
     <nav className="navigation">
       <div className="nav-content">
         <div className="nav-brand">
-          <Link to="/">Zenny</Link>
+          <Link to={isAgentOrAdmin ? "/" : "/tickets"}>Zenny</Link>
         </div>
         <div className="nav-links">
-          <Link to="/" className={location.pathname === '/' ? 'active' : ''}>
-            Dashboard
-          </Link>
+          {isAgentOrAdmin && (
+            <>
+              <Link to="/" className={location.pathname === '/' ? 'active' : ''}>
+                Dashboard
+              </Link>
+              <Link to="/customers" className={location.pathname.startsWith('/customers') ? 'active' : ''}>
+                Customers
+              </Link>
+            </>
+          )}
           <Link to="/tickets" className={location.pathname.startsWith('/tickets') ? 'active' : ''}>
             Tickets
-          </Link>
-          <Link to="/customers" className={location.pathname.startsWith('/customers') ? 'active' : ''}>
-            Customers
           </Link>
           <Link to="/knowledge-base" className={location.pathname.startsWith('/knowledge-base') ? 'active' : ''}>
             Knowledge Base

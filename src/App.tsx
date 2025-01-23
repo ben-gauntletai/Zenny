@@ -36,7 +36,7 @@ const router = createBrowserRouter(
     {
       path: '/',
       element: (
-        <ProtectedRoute>
+        <ProtectedRoute requireAgent>
           <DashboardLayout />
         </ProtectedRoute>
       ),
@@ -50,7 +50,7 @@ const router = createBrowserRouter(
     {
       path: '/customers',
       element: (
-        <ProtectedRoute>
+        <ProtectedRoute requireAgent>
           <CustomerLayout />
         </ProtectedRoute>
       ),
