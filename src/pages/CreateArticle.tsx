@@ -1,128 +1,132 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-import { useNotifications } from '../contexts/NotificationContext';
+import { useKnowledgeBase } from '../contexts/KnowledgeBaseContext';
+import { supabase } from '../lib/supabaseClient';
 import '../styles/CreateArticle.css';
 
-interface ArticleFormData {
-  title: string;
-  content: string;
-  category: string;
-  tags: string[];
+interface Category {
+  id: string;
+  name: string;
+}
+
+interface Tag {
+  id: string;
+  name: string;
 }
 
 const CreateArticle: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { addNotification } = useNotifications();
-  const [formData, setFormData] = useState<ArticleFormData>({
-    title: '',
-    content: '',
-    category: '',
-    tags: []
-  });
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [tagInput, setTagInput] = useState('');
+  const { createArticle } = useKnowledgeBase();
+  const [title, setTitle] = useState('');
+  const [content, setContent] = useState('');
+  const [categoryId, setCategoryId] = useState('');
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
+  const [tags, setTags] = useState<Tag[]>([]);
+  const [isLoading, setIsLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchCategories = async () => {
+      const { data, error } = await supabase
+        .from('knowledge_base_categories')
+        .select('*')
+        .order('name');
+
+      if (error) {
+        console.error('Error fetching categories:', error);
+        return;
+      }
+
+      setCategories(data || []);
+    };
+
+    const fetchTags = async () => {
+      const { data, error } = await supabase
+        .from('knowledge_base_tags')
+        .select('*')
+        .order('name');
+
+      if (error) {
+        console.error('Error fetching tags:', error);
+        return;
+      }
+
+      setTags(data || []);
+    };
+
+    fetchCategories();
+    fetchTags();
+  }, []);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    if (!user) {
-      setError('You must be logged in to create an article');
-      addNotification({
-        message: 'You must be logged in to create an article',
-        type: 'error'
-      });
-      return;
-    }
+    if (!user) return;
+
+    setIsLoading(true);
+    setError(null);
 
     try {
-      setLoading(true);
-      setError('');
-
-      const { data: article, error: insertError } = await supabase
-        .from('knowledge_base')
+      // First, create the article
+      const { data: article, error: articleError } = await supabase
+        .from('knowledge_base_articles')
         .insert([
           {
-            title: formData.title,
-            content: formData.content,
-            category: formData.category,
-            tags: formData.tags,
-            author_id: user.id
+            title,
+            content,
+            category_id: categoryId,
+            author_id: user.id,
+            status: 'published'
           }
         ])
         .select()
         .single();
 
-      if (insertError) throw insertError;
+      if (articleError) throw articleError;
 
-      addNotification({
-        message: 'Article created successfully',
-        type: 'success'
-      });
-      navigate(`/knowledge-base/${article.id}`);
-    } catch (err) {
-      console.error('Error creating article:', err);
-      setError('Failed to create article. Please try again.');
-      addNotification({
-        message: 'Failed to create article. Please try again.',
-        type: 'error'
-      });
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>
-  ) => {
-    const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
-  };
-
-  const handleTagAdd = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === 'Enter' && tagInput.trim()) {
-      e.preventDefault();
-      if (!formData.tags.includes(tagInput.trim())) {
-        setFormData(prev => ({
-          ...prev,
-          tags: [...prev.tags, tagInput.trim()]
+      // Then, add the tags
+      if (selectedTags.length > 0 && article) {
+        const tagConnections = selectedTags.map(tagId => ({
+          article_id: article.id,
+          tag_id: tagId
         }));
-      }
-      setTagInput('');
-    }
-  };
 
-  const handleTagRemove = (tagToRemove: string) => {
-    setFormData(prev => ({
-      ...prev,
-      tags: prev.tags.filter(tag => tag !== tagToRemove)
-    }));
+        const { error: tagError } = await supabase
+          .from('knowledge_base_article_tags')
+          .insert(tagConnections);
+
+        if (tagError) throw tagError;
+      }
+
+      navigate('/knowledge-base');
+    } catch (err: any) {
+      console.error('Error creating article:', err);
+      setError(err.message);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
     <div className="create-article">
-      <header className="create-article-header">
-        <h1>Create Knowledge Base Article</h1>
-        <p className="subtitle">Share your knowledge with the community</p>
-      </header>
+      <div className="create-article-header">
+        <h2>Create New Article</h2>
+      </div>
 
-      <form className="article-form" onSubmit={handleSubmit}>
-        {error && <div className="error">{error}</div>}
+      {error && <div className="error-message">{error}</div>}
 
+      <form onSubmit={handleSubmit} className="article-form">
         <div className="form-group">
           <label htmlFor="title">Title</label>
           <input
-            type="text"
             id="title"
-            name="title"
-            value={formData.title}
-            onChange={handleChange}
-            placeholder="Article title"
+            type="text"
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
             required
-            className="form-input"
+            placeholder="Enter article title"
           />
         </div>
 
@@ -130,90 +134,68 @@ const CreateArticle: React.FC = () => {
           <label htmlFor="category">Category</label>
           <select
             id="category"
-            name="category"
-            value={formData.category}
-            onChange={handleChange}
+            value={categoryId}
+            onChange={(e) => setCategoryId(e.target.value)}
             required
-            className="form-input"
           >
             <option value="">Select a category</option>
-            <option value="getting-started">Getting Started</option>
-            <option value="features">Features</option>
-            <option value="troubleshooting">Troubleshooting</option>
-            <option value="faq">FAQ</option>
-            <option value="best-practices">Best Practices</option>
+            {categories.map((category) => (
+              <option key={category.id} value={category.id}>
+                {category.name}
+              </option>
+            ))}
           </select>
-        </div>
-
-        <div className="form-group">
-          <label htmlFor="tags">Tags</label>
-          <div className="tags-input-container">
-            <div className="tags-list">
-              {formData.tags.map(tag => (
-                <span key={tag} className="tag">
-                  {tag}
-                  <button
-                    type="button"
-                    onClick={() => handleTagRemove(tag)}
-                    className="tag-remove"
-                  >
-                    ×
-                  </button>
-                </span>
-              ))}
-            </div>
-            <input
-              type="text"
-              id="tags"
-              value={tagInput}
-              onChange={(e) => setTagInput(e.target.value)}
-              onKeyDown={handleTagAdd}
-              placeholder="Add tags (press Enter)"
-              className="form-input tag-input"
-            />
-          </div>
-          <p className="help-text">
-            Press Enter to add a tag. Tags help users find related articles.
-          </p>
         </div>
 
         <div className="form-group">
           <label htmlFor="content">Content</label>
           <textarea
             id="content"
-            name="content"
-            value={formData.content}
-            onChange={handleChange}
-            placeholder="Write your article content here..."
+            value={content}
+            onChange={(e) => setContent(e.target.value)}
             required
-            className="form-input content-editor"
-            rows={15}
+            placeholder="Write your article content here..."
+            rows={10}
           />
-          <p className="help-text">
-            Use clear and concise language. Include examples where appropriate.
-          </p>
+          <p className="help-text">You can use markdown formatting</p>
+        </div>
+
+        <div className="form-group">
+          <label>Tags</label>
+          <div className="tags-container">
+            {tags.map((tag) => (
+              <label key={tag.id} className="tag-checkbox">
+                <input
+                  type="checkbox"
+                  checked={selectedTags.includes(tag.id)}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedTags([...selectedTags, tag.id]);
+                    } else {
+                      setSelectedTags(selectedTags.filter(id => id !== tag.id));
+                    }
+                  }}
+                />
+                {tag.name}
+              </label>
+            ))}
+          </div>
         </div>
 
         <div className="form-actions">
           <button
             type="button"
-            onClick={() => {
-              addNotification({
-                message: 'Article creation cancelled',
-                type: 'info'
-              });
-              navigate('/knowledge-base');
-            }}
+            onClick={() => navigate('/knowledge-base')}
             className="cancel-button"
           >
             Cancel
           </button>
           <button
             type="submit"
+            disabled={isLoading}
             className="submit-button"
-            disabled={loading}
           >
-            {loading ? 'Creating...' : 'Create Article'}
+            {isLoading ? 'Creating...' : 'Create Article'}
           </button>
         </div>
       </form>

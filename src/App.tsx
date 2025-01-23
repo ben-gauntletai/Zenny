@@ -101,11 +101,7 @@ const router = createBrowserRouter(
         },
         {
           path: 'new',
-          element: (
-            <ProtectedRoute requireAgent>
-              <CreateArticle />
-            </ProtectedRoute>
-          )
+          element: <CreateArticle />
         },
         {
           path: ':articleId',

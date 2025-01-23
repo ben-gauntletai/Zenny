@@ -5,202 +5,169 @@ import { supabase } from '../lib/supabaseClient';
 import '../styles/ArticleDetail.css';
 
 interface Article {
-  id: number;
+  id: string;
   title: string;
   content: string;
-  category: {
-    id: number;
-    name: string;
-  };
+  category_id: string;
   author: {
     email: string;
-    name: string;
+    full_name: string;
   };
   created_at: string;
   updated_at: string;
   views_count: number;
+  helpful_count: number;
+  not_helpful_count: number;
+  category: {
+    name: string;
+  };
   tags: {
-    id: number;
+    id: string;
     name: string;
   }[];
-}
-
-interface RelatedArticle {
-  id: number;
-  title: string;
-  views_count: number;
 }
 
 const ArticleDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  
   const [article, setArticle] = useState<Article | null>(null);
-  const [relatedArticles, setRelatedArticles] = useState<RelatedArticle[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [hasVoted, setHasVoted] = useState<'helpful' | 'not_helpful' | null>(null);
 
   useEffect(() => {
-    fetchArticleDetails();
+    const fetchArticle = async () => {
+      try {
+        // Increment view count
+        await supabase.rpc('increment_article_views', { article_id: id });
+
+        // Fetch article details
+        const { data, error } = await supabase
+          .from('knowledge_base_articles')
+          .select(`
+            *,
+            category:category_id(name),
+            author:author_id(email, full_name),
+            tags:knowledge_base_article_tags(
+              tag:knowledge_base_tags(id, name)
+            )
+          `)
+          .eq('id', id)
+          .single();
+
+        if (error) throw error;
+        setArticle(data);
+      } catch (err) {
+        console.error('Error fetching article:', err);
+        setError('Failed to load article');
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    if (id) {
+      fetchArticle();
+    }
   }, [id]);
 
-  const fetchArticleDetails = async () => {
+  const handleVote = async (isHelpful: boolean) => {
+    if (!article || hasVoted) return;
+
     try {
-      setIsLoading(true);
-      setError('');
+      const { error } = await supabase.rpc(
+        isHelpful ? 'increment_helpful_count' : 'increment_not_helpful_count',
+        { article_id: article.id }
+      );
 
-      // Fetch article details
-      const { data: articleData, error: articleError } = await supabase
-        .from('kb_articles')
-        .select(`
-          *,
-          category:category_id(id, name),
-          author:author_id(email, name),
-          tags:kb_article_tags(
-            tag:kb_tags(id, name)
-          )
-        `)
-        .eq('id', id)
-        .eq('published', true)
-        .single();
+      if (error) throw error;
 
-      if (articleError) throw articleError;
-
-      if (articleData) {
-        const formattedArticle = {
-          ...articleData,
-          tags: articleData.tags.map((t: any) => t.tag)
+      setHasVoted(isHelpful ? 'helpful' : 'not_helpful');
+      setArticle(prev => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          helpful_count: prev.helpful_count + (isHelpful ? 1 : 0),
+          not_helpful_count: prev.not_helpful_count + (isHelpful ? 0 : 1)
         };
-        setArticle(formattedArticle);
-
-        // Increment view count
-        const { error: updateError } = await supabase
-          .from('kb_articles')
-          .update({ views_count: (articleData.views_count || 0) + 1 })
-          .eq('id', id);
-
-        if (updateError) console.error('Error updating view count:', updateError);
-
-        // Fetch related articles from the same category
-        const { data: relatedData, error: relatedError } = await supabase
-          .from('kb_articles')
-          .select('id, title, views_count')
-          .eq('category_id', articleData.category_id)
-          .eq('published', true)
-          .neq('id', id)
-          .order('views_count', { ascending: false })
-          .limit(5);
-
-        if (relatedError) throw relatedError;
-
-        if (relatedData) {
-          setRelatedArticles(relatedData);
-        }
-      }
+      });
     } catch (err) {
-      console.error('Error fetching article details:', err);
-      setError('Failed to load article. Please try again later.');
-    } finally {
-      setIsLoading(false);
+      console.error('Error updating article feedback:', err);
     }
   };
 
   if (isLoading) {
-    return (
-      <div className="article-loading">
-        <div className="loading-spinner" />
-        <p>Loading article...</p>
-      </div>
-    );
+    return <div className="loading">Loading article...</div>;
   }
 
-  if (!article) {
-    return (
-      <div className="article-error">
-        <h2>Article not found</h2>
-        <button onClick={() => navigate('/knowledge-base')} className="button-secondary">
-          Back to Knowledge Base
-        </button>
-      </div>
-    );
+  if (error || !article) {
+    return <div className="error">{error || 'Article not found'}</div>;
   }
 
   return (
     <div className="article-detail">
       <div className="article-header">
-        <div className="article-breadcrumb">
-          <Link to="/knowledge-base">Knowledge Base</Link>
-          <span className="separator">/</span>
-          <Link to={`/knowledge-base?category=${article.category.id}`}>
-            {article.category.name}
+        <div className="article-meta">
+          <Link to="/knowledge-base" className="back-link">
+            ← Back to Knowledge Base
           </Link>
-        </div>
-
-        <div className="article-title">
-          <h1>{article.title}</h1>
-          {user?.user_metadata?.role === 'agent' && (
-            <Link to={`/knowledge-base/${id}/edit`} className="edit-article-button">
-              Edit Article
-            </Link>
+          {article.category && (
+            <span className="category-tag">{article.category.name}</span>
           )}
         </div>
-
-        <div className="article-meta">
-          <div className="article-tags">
-            {article.tags.map((tag) => (
-              <span key={tag.id} className="tag">
-                {tag.name}
-              </span>
-            ))}
-          </div>
-          <div className="article-info">
-            <span className="views-count">
-              {article.views_count} views
-            </span>
-            <span className="separator">•</span>
-            <span className="author">
-              By {article.author.name || article.author.email}
-            </span>
-            <span className="separator">•</span>
-            <span className="updated-at">
-              Updated {new Date(article.updated_at).toLocaleDateString()}
-            </span>
-          </div>
+        <h1>{article.title}</h1>
+        <div className="article-info">
+          <span>By {article.author.full_name}</span>
+          <span>•</span>
+          <span>Updated {new Date(article.updated_at).toLocaleDateString()}</span>
+          <span>•</span>
+          <span>{article.views_count} views</span>
         </div>
       </div>
 
-      {error && (
-        <div className="error-message">
-          {error}
+      <div className="article-content">
+        {article.content.split('\n').map((paragraph, index) => (
+          <p key={index}>{paragraph}</p>
+        ))}
+      </div>
+
+      {article.tags && article.tags.length > 0 && (
+        <div className="article-tags">
+          {article.tags.map((tagObj) => (
+            <span key={tagObj.id} className="tag">
+              {tagObj.name}
+            </span>
+          ))}
         </div>
       )}
 
-      <div className="article-content">
-        <div className="article-body">
-          {article.content.split('\n').map((paragraph, index) => (
-            <p key={index}>{paragraph}</p>
-          ))}
+      <div className="article-feedback">
+        <p>Was this article helpful?</p>
+        <div className="feedback-buttons">
+          <button
+            onClick={() => handleVote(true)}
+            disabled={hasVoted !== null}
+            className={`feedback-button ${hasVoted === 'helpful' ? 'voted' : ''}`}
+          >
+            👍 Yes ({article.helpful_count})
+          </button>
+          <button
+            onClick={() => handleVote(false)}
+            disabled={hasVoted !== null}
+            className={`feedback-button ${hasVoted === 'not_helpful' ? 'voted' : ''}`}
+          >
+            👎 No ({article.not_helpful_count})
+          </button>
         </div>
-
-        {relatedArticles.length > 0 && (
-          <div className="related-articles">
-            <h2>Related Articles</h2>
-            <ul>
-              {relatedArticles.map((related) => (
-                <li key={related.id}>
-                  <Link to={`/knowledge-base/${related.id}`}>
-                    {related.title}
-                  </Link>
-                  <span className="views-count">
-                    {related.views_count} views
-                  </span>
-                </li>
-              ))}
-            </ul>
-          </div>
-        )}
       </div>
+
+      {user?.user_metadata?.role === 'agent' && (
+        <div className="article-actions">
+          <Link to={`/knowledge-base/${article.id}/edit`} className="edit-button">
+            Edit Article
+          </Link>
+        </div>
+      )}
     </div>
   );
 };

@@ -79,6 +79,9 @@ const Navigation: React.FC = () => {
           <Link to="/customers" className={location.pathname.startsWith('/customers') ? 'active' : ''}>
             Customers
           </Link>
+          <Link to="/knowledge-base" className={location.pathname.startsWith('/knowledge-base') ? 'active' : ''}>
+            Knowledge Base
+          </Link>
         </div>
         <div className="nav-user" ref={menuRef}>
           <button
