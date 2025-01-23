@@ -262,7 +262,8 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       .select(`
         *,
         creator:profiles!tickets_user_id_fkey (email, full_name),
-        assignee:profiles!tickets_assigned_to_fkey (email, full_name)
+        assignee:profiles!tickets_assigned_to_fkey (email, full_name, group_name),
+        groups!tickets_group_id_fkey (name)
       `)
 
     // Log query parameters before applying filters
@@ -270,6 +271,7 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       base_query: 'tickets with creator and assignee profiles',
       status_filter: status || 'none',
       user_filter: !isAgentOrAdmin ? user.id : 'none',
+      user_group: userProfile?.group_name,
       pagination: { offset, limit },
       ordering: 'created_at DESC'
     })
@@ -279,8 +281,13 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
     }
 
     if (!isAgentOrAdmin) {
+      // Regular users can only see their own tickets
       query.eq('user_id', user.id)
+    } else if (effectiveRole === 'agent') {
+      // Agents can only see tickets from their group or assigned to them
+      query.or(`groups.name.eq.${userProfile.group_name},assigned_to.eq.${user.id}`)
     }
+    // Admins can see all tickets
 
     // Add ordering and pagination
     query
@@ -290,7 +297,7 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
     // Execute query
     const { data: tickets, error: queryError } = await query
     
-    // Log query results
+    // Log query results for debugging
     console.log('DEBUG - Query results:', {
       success: !queryError,
       error: queryError ? {
@@ -302,7 +309,9 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
         id: tickets[0].id,
         subject: tickets[0].subject,
         user_id: tickets[0].user_id,
-        status: tickets[0].status
+        status: tickets[0].status,
+        group_name: tickets[0].groups?.name,
+        assigned_to: tickets[0].assigned_to
       } : null
     })
 
@@ -316,7 +325,8 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       creator_email: ticket.creator?.email,
       creator_name: ticket.creator?.full_name,
       agent_email: ticket.assignee?.email,
-      agent_name: ticket.assignee?.full_name
+      agent_name: ticket.assignee?.full_name,
+      group_name: ticket.groups?.name
     }))
 
     return new Response(
@@ -356,7 +366,7 @@ async function getUserProfile(supabaseClient: any, user: any) {
     console.log('Fetching user profile with service role client');
     const { data: profile, error: profileError } = await serviceRoleClient
       .from('profiles')
-      .select('*')
+      .select('*, groups!profiles_group_id_fkey(name)')
       .eq('id', user.id)
       .single();
 
@@ -378,9 +388,10 @@ async function getUserProfile(supabaseClient: any, user: any) {
           id: user.id,
           email: user.email,
           role: user.user_metadata?.role || 'user',
-          full_name: user.user_metadata?.full_name || user.email
+          full_name: user.user_metadata?.full_name || user.email,
+          group_id: null // New profiles start without a group
         })
-        .select()
+        .select('*, groups!profiles_group_id_fkey(name)')
         .single();
 
       if (insertError) {
@@ -392,18 +403,22 @@ async function getUserProfile(supabaseClient: any, user: any) {
       }
 
       console.log('New profile created:', newProfile);
-      return newProfile;
+      return {
+        ...newProfile,
+        group_name: newProfile.groups?.name
+      };
     }
 
-    console.log('Existing profile found:', profile);
-    return profile;
-  } catch (error) {
-    console.error('Error in getUserProfile:', {
-      name: error.name,
-      message: error.message,
-      stack: error.stack,
-      cause: error.cause
+    console.log('Existing profile found:', {
+      ...profile,
+      group_name: profile.groups?.name
     });
+    return {
+      ...profile,
+      group_name: profile.groups?.name
+    };
+  } catch (error) {
+    console.error('Error in getUserProfile:', error);
     throw error;
   }
 } 
