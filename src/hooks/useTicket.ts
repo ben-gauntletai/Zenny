@@ -28,6 +28,7 @@ export interface Ticket {
   assigned_to?: string;
   tags?: string[];
   isNewTicket?: boolean;
+  group_name?: string;
   profiles?: { 
     email: string;
     full_name?: string | null;
@@ -126,19 +127,28 @@ export const useTicket = () => {
       
       // Track changes for each updated field
       Object.keys(updates).forEach(field => {
-        oldValues[field] = ticket[field as keyof Ticket];
+        // Convert 'group' to 'group_name' in the tracking
+        const dbField = field === 'group' ? 'group_name' : field;
+        oldValues[dbField] = ticket[field as keyof Ticket];
         if (updates[field as keyof Ticket] !== ticket[field as keyof Ticket]) {
           changes.push({
-            field,
+            field: dbField,
             oldValue: ticket[field as keyof Ticket],
             newValue: updates[field as keyof Ticket]
           });
         }
       });
 
-      // Handle special fields
+      // Handle special fields and convert group to group_name
       const formattedUpdates = {
-        ...updates,
+        ...Object.entries(updates).reduce((acc, [key, value]) => {
+          if (key === 'group') {
+            acc['group_name'] = value;
+          } else {
+            acc[key] = value;
+          }
+          return acc;
+        }, {} as Record<string, any>),
         // Convert tags array to JSONB if it exists
         tags: updates.tags ? JSON.stringify(updates.tags) : undefined,
         // Handle assignee update - explicitly set to null if empty string or undefined

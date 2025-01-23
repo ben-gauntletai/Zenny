@@ -46,14 +46,29 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
     try {
       setLoading(true);
       
-      // Fetch customers
-      const { data: customerData, error: customerError } = await supabase
-        .from('customers')
+      // Fetch users with role "user"
+      const { data: userData, error: userError } = await supabase
+        .from('profiles')
         .select('*')
+        .eq('role', 'user')
         .order('updated_at', { ascending: false });
 
-      if (customerError) throw customerError;
-      setCustomers(customerData || []);
+      if (userError) throw userError;
+
+      // Transform user data to match Customer interface
+      const transformedUsers = userData?.map(user => ({
+        id: user.id,
+        name: user.full_name || 'Unknown',
+        email: user.email || '',
+        tags: [],
+        timezone: user.timezone || '',
+        user_type: 'user',
+        access: 'standard',
+        language: user.language || 'en',
+        updated_at: user.updated_at || new Date().toISOString()
+      })) || [];
+
+      setCustomers(transformedUsers);
 
       // Fetch suspended users
       const { data: suspendedData, error: suspendedError } = await supabase
@@ -73,13 +88,28 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const searchCustomers = async (query: string) => {
     try {
       const { data, error } = await supabase
-        .from('customers')
+        .from('profiles')
         .select('*')
-        .or(`name.ilike.%${query}%,email.ilike.%${query}%`)
+        .eq('role', 'user')
+        .or(`full_name.ilike.%${query}%,email.ilike.%${query}%`)
         .order('updated_at', { ascending: false });
 
       if (error) throw error;
-      setCustomers(data || []);
+
+      // Transform user data to match Customer interface
+      const transformedUsers = data?.map(user => ({
+        id: user.id,
+        name: user.full_name || 'Unknown',
+        email: user.email || '',
+        tags: [],
+        timezone: user.timezone || '',
+        user_type: 'user',
+        access: 'standard',
+        language: user.language || 'en',
+        updated_at: user.updated_at || new Date().toISOString()
+      })) || [];
+
+      setCustomers(transformedUsers);
     } catch (error: any) {
       console.error('Error searching customers:', error.message);
     }

@@ -235,7 +235,8 @@ const TicketContent: React.FC = () => {
           type: ticket.ticket_type || 'incident',
           priority: ticket.priority.toLowerCase() as 'low' | 'normal' | 'high' | 'urgent',
           topic: ticket.topic?.toUpperCase() as 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE' | null,
-          status: ticket.status as 'open' | 'pending' | 'solved' | 'closed'
+          status: ticket.status as 'open' | 'pending' | 'solved' | 'closed',
+          group_name: (ticket.group_name || 'Support') as 'Support' | 'Admin'
         }}
         onUpdate={handleUpdateTicket}
         pendingChanges={pendingChanges}
@@ -282,7 +283,7 @@ const TicketContent: React.FC = () => {
             </div>
             <div className="message-content">
               <div className="message-header">
-                <span className="message-author">{ticket.profiles?.email}</span>
+                <span className="message-author">{ticket.profiles?.full_name || ticket.profiles?.email}</span>
                 <span className="message-time">{new Date(ticket.created_at).toLocaleString()}</span>
               </div>
               <div className="message-body">
@@ -356,7 +357,7 @@ const TicketContent: React.FC = () => {
                   className="customer-avatar"
                 />
                 <div className="customer-details">
-                  <span className="customer-name">{ticket.profiles?.email}</span>
+                  <span className="customer-name">{ticket.profiles?.full_name || ticket.profiles?.email}</span>
                   <span className="customer-type">The Customer</span>
                 </div>
               </div>

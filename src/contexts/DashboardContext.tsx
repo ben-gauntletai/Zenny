@@ -15,6 +15,7 @@ export interface Ticket {
   creator_name: string;
   agent_email?: string;
   agent_name?: string;
+  group_name?: string;
   assignee?: {
     email: string;
     name?: string;

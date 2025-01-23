@@ -16,6 +16,8 @@ interface FormattedTicket {
   topic: string;
   creator_email: string;
   agent_email?: string;
+  creator_name?: string;
+  agent_name?: string;
 }
 
 interface FilterState {
@@ -201,17 +203,17 @@ const TicketList: React.FC = () => {
                   </td>
                   <td>
                     <span className={`status-badge ${ticket.status.toLowerCase()}`}>
-                      {ticket.status}
+                      {ticket.status.charAt(0).toUpperCase() + ticket.status.slice(1).toLowerCase()}
                     </span>
                   </td>
                   <td>
                     <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
-                      {ticket.priority}
+                      {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1).toLowerCase()}
                     </span>
                   </td>
                   <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
-                  {isAgentOrAdmin && <td>{ticket.creator_email}</td>}
-                  <td>{ticket.agent_email || 'Unassigned'}</td>
+                  {isAgentOrAdmin && <td>{ticket.creator_name || ticket.creator_email}</td>}
+                  <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
                 </tr>
               ))}
             </tbody>

@@ -132,60 +132,30 @@
   table-layout: fixed;
 }
 
-/* Checkbox column */
-.customers-table th:first-child,
-.customers-table td:first-child {
-  width: 20px; /* Just enough for the checkbox */
-  padding: 0;
-  text-align: center;
+/* Specific column widths */
+.customers-table th:nth-child(1),
+.customers-table td:nth-child(1) {
+  width: 33%;
 }
 
-/* Add styles for the checkbox itself to ensure it fits */
-.customers-table input[type="checkbox"] {
-  margin: 0;
-  width: 16px;
-  height: 16px;
-}
-
-/* Name column with avatar */
 .customers-table th:nth-child(2),
 .customers-table td:nth-child(2) {
-  padding-left: 0.5rem; /* Reduced left padding */
-  width: 18%; /* Slightly wider for name */
+  width: 33%;
 }
 
-/* Other content columns */
 .customers-table th:nth-child(3),
-.customers-table td:nth-child(3),
-.customers-table th:nth-child(4),
-.customers-table td:nth-child(4),
-.customers-table th:nth-child(5),
-.customers-table td:nth-child(5),
-.customers-table th:nth-child(6),
-.customers-table td:nth-child(6),
-.customers-table th:nth-child(7),
-.customers-table td:nth-child(7) {
-  width: 15%; /* Slightly adjusted for better distribution */
-}
-
-/* Actions column */
-.customers-table th:last-child,
-.customers-table td:last-child {
-  width: 40px; /* Reduced from 48px */
-  padding: 0.75rem 0.25rem; /* Reduced side padding */
+.customers-table td:nth-child(3) {
+  width: 33%;
 }
 
 .customers-table th,
 .customers-table td {
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding: 1rem;
+  text-align: center;
 }
 
 .customers-table th {
   background-color: #f8fafc;
-  padding: 0.75rem 1rem;
-  text-align: left;
   font-size: 0.75rem;
   font-weight: 500;
   color: #4a5568;
@@ -195,33 +165,29 @@
 }
 
 .customers-table td {
-  padding: 1rem;
   font-size: 0.875rem;
   color: #4a5568;
   border-bottom: 1px solid #e2e8f0;
 }
 
-.customers-table tr:last-child td {
-  border-bottom: none;
-}
-
 .customer-name {
   display: flex;
   align-items: center;
-  gap: 0.5rem; /* Reduced from 0.75rem */
+  justify-content: center;
+  gap: 0.75rem;
 }
 
 .customer-avatar {
-  width: 2rem;
-  height: 2rem;
-  background-color: #4299e1;
-  color: white;
-  border-radius: 9999px;
+  width: 2.5rem;
+  height: 2.5rem;
+  border-radius: 50%;
+  background-color: #e2e8f0;
+  color: #4a5568;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 0.75rem;
   font-weight: 500;
+  font-size: 0.875rem;
 }
 
 .tags {

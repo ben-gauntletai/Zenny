@@ -29,6 +29,7 @@ interface TicketDetailPanelProps {
     topic: 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE' | null;
     status: 'open' | 'pending' | 'solved' | 'closed';
     assigned_to?: string;
+    group_name?: 'Support' | 'Admin';
   };
   onUpdate: (field: string, value: unknown) => void;
   pendingChanges: Partial<{
@@ -38,6 +39,7 @@ interface TicketDetailPanelProps {
     priority?: string;
     topic?: string | null;
     status?: string;
+    group_name?: string;
   }>;
 }
 
@@ -111,6 +113,18 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
               ))}
             </Select>
           </HStack>
+        </Box>
+
+        <Box className="field-group">
+          <Text className="field-label">Group</Text>
+          <Select
+            value={pendingChanges.group_name ?? ticket.group_name ?? 'Support'}
+            onChange={(e) => onUpdate('group_name', e.target.value)}
+            size="sm"
+          >
+            <option value="Support">Support</option>
+            <option value="Admin">Admin</option>
+          </Select>
         </Box>
 
         <Box className="field-group">

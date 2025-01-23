@@ -73,7 +73,8 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
           creator_email,
           creator_name,
           agent_email,
-          agent_name
+          agent_name,
+          group_name
         `)
         .order('created_at', { ascending: false })
         .limit(5);
@@ -179,7 +180,7 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
                 </span>
               </td>
               <td>{formatDate(ticket.created_at)}</td>
-              {isAgent && <td>{ticket.creator_email}</td>}
+              {isAgent && <td>{ticket.creator_name || ticket.creator_email}</td>}
               <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
             </tr>
           ))}
@@ -287,11 +288,11 @@ const Dashboard: React.FC = () => {
       case 'subject':
         return a.subject.localeCompare(b.subject) * direction;
       case 'requester':
-        return a.creator_email.localeCompare(b.creator_email) * direction;
+        return a.creator_name.localeCompare(b.creator_name) * direction;
       case 'updated':
         return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * direction;
       case 'group':
-        return ('Support').localeCompare('Support') * direction;
+        return (a.group_name || 'Support').localeCompare(b.group_name || 'Support') * direction;
       case 'assignee':
         const aAssignee = a.agent_name || a.agent_email || 'Unassigned';
         const bAssignee = b.agent_name || b.agent_email || 'Unassigned';
@@ -501,9 +502,9 @@ const Dashboard: React.FC = () => {
                     <td className="subject-cell">
                       {ticket.subject}
                     </td>
-                    <td>{ticket.creator_email}</td>
+                    <td>{ticket.creator_name || ticket.creator_email}</td>
                     <td>{formatDate(ticket.updated_at)}</td>
-                    <td>Support</td>
+                    <td>{ticket.group_name || 'Support'}</td>
                     <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
                   </tr>
                 ))}

@@ -31,6 +31,7 @@ export interface Ticket {
   updated_at: string;
   last_requester_update: string;
   last_agent_update: string;
+  group_name?: string;
 }
 
 export interface Profile {

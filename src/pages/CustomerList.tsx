@@ -16,10 +16,9 @@ const CustomerList: React.FC = () => {
     return new Date(date).toLocaleString();
   };
 
-  const handleKeyPress = (e: React.KeyboardEvent<HTMLInputElement>): void => {
-    if (e.key === 'Enter') {
-      searchCustomers(searchQuery);
-    }
+  const handleSearch = (value: string) => {
+    setSearchQuery(value);
+    searchCustomers(value);
   };
 
   if (loading) {
@@ -30,10 +29,6 @@ const CustomerList: React.FC = () => {
     <div className="customers-main">
       <div className="customers-header">
         <h1 className="customers-title">Customers</h1>
-        <div className="customers-header-actions">
-          <button className="secondary-button">Bulk import</button>
-          <button className="primary-button">Add customer</button>
-        </div>
       </div>
 
       <div className="customers-content">
@@ -43,8 +38,7 @@ const CustomerList: React.FC = () => {
             type="text"
             placeholder="Search customers"
             value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onKeyPress={handleKeyPress}
+            onChange={(e) => handleSearch(e.target.value)}
           />
         </div>
 
@@ -52,13 +46,8 @@ const CustomerList: React.FC = () => {
           <table className="customers-table">
             <thead>
               <tr>
-                <th>
-                  <input type="checkbox" />
-                </th>
                 <th>Name</th>
                 <th>Email</th>
-                <th>Tags</th>
-                <th>Timezone</th>
                 <th>Last updated</th>
               </tr>
             </thead>
@@ -66,25 +55,14 @@ const CustomerList: React.FC = () => {
               {customers.map((customer) => (
                 <tr key={customer.id}>
                   <td>
-                    <input type="checkbox" />
-                  </td>
-                  <td>
                     <div className="customer-name">
-                      <div className="customer-avatar">JD</div>
+                      <div className="customer-avatar">
+                        {customer.name.split(' ').map(n => n[0]).join('').toUpperCase()}
+                      </div>
                       <span>{customer.name}</span>
                     </div>
                   </td>
                   <td>{customer.email}</td>
-                  <td>
-                    <div className="tags">
-                      {customer.tags?.map((tag: string, index: number) => (
-                        <span key={index} className="tag">
-                          {tag}
-                        </span>
-                      ))}
-                    </div>
-                  </td>
-                  <td className="timezone">{customer.timezone}</td>
                   <td className="last-updated">{formatDate(customer.updated_at)}</td>
                 </tr>
               ))}
