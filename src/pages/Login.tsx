@@ -103,12 +103,58 @@ const Login: React.FC = () => {
     }
   };
 
+  const handleQuickLogin = async (email: string) => {
+    try {
+      setIsLoading(true);
+      setError('');
+      // Use the correct password for each user
+      console.log('Environment variable check:', process.env.REACT_APP_QUICK_ACCESS_PASSWORD);
+      const password = process.env.REACT_APP_QUICK_ACCESS_PASSWORD;
+      if (!password) {
+        throw new Error('Quick access password not configured');
+      }
+      await signIn(email, password);
+      navigate(from, { replace: true });
+    } catch (err: any) {
+      console.error('Login error:', err);
+      setError(err.message || 'Failed to sign in. Please check your credentials.');
+      setIsLoading(false);
+    }
+  };
+
   const togglePasswordVisibility = () => {
     setShowPassword(!showPassword);
   };
 
   return (
     <div className="login-container">
+      <div className="quick-login-section">
+        <p className="quick-login-title">Quick Access</p>
+        <div className="quick-login-buttons">
+          <button
+            onClick={() => handleQuickLogin('ttttsmurf1@gmail.com')}
+            className="quick-login-button admin"
+            disabled={isLoading}
+          >
+            Sign in as Admin
+          </button>
+          <button
+            onClick={() => handleQuickLogin('ttttsmurf4@gmail.com')}
+            className="quick-login-button agent"
+            disabled={isLoading}
+          >
+            Sign in as Agent
+          </button>
+          <button
+            onClick={() => handleQuickLogin('ttttsmurf2@gmail.com')}
+            className="quick-login-button user"
+            disabled={isLoading}
+          >
+            Sign in as User
+          </button>
+        </div>
+      </div>
+
       <motion.div 
         className="login-box"
         initial={{ opacity: 0, y: 20 }}
