@@ -91,33 +91,50 @@ export const ticketService = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('No active session');
 
+    const isAgentOrAdmin = session.user.user_metadata?.role === 'agent' || session.user.user_metadata?.role === 'admin';
+
     // Debug logging for authentication
     console.log('Auth Debug:', {
       user: session.user,
       role: session.user.user_metadata?.role,
       id: session.user.id,
-      email: session.user.email
+      email: session.user.email,
+      isAgentOrAdmin
     });
 
     let query = supabase
-      .from('tickets')
+      .from('tickets_with_users')
       .select(`
-        *,
-        creator:profiles!tickets_user_id_fkey (
-          id,
-          email,
-          full_name,
-          role,
-          avatar_url
-        ),
-        agent:profiles!tickets_assigned_to_fkey (
-          id,
-          email,
-          full_name,
-          role,
-          avatar_url
-        )
+        id,
+        subject,
+        description,
+        status,
+        priority,
+        ticket_type,
+        topic,
+        created_at,
+        updated_at,
+        user_id,
+        assigned_to,
+        group_name,
+        creator_email,
+        creator_name,
+        agent_email,
+        agent_name
       `);
+
+    // Apply filters based on role
+    if (!isAgentOrAdmin) {
+      // Regular users can only see their own tickets
+      query = query.eq('user_id', session.user.id);
+    } else if (session.user.user_metadata?.role === 'agent') {
+      // Agents can see:
+      // 1. Their own tickets
+      // 2. Tickets assigned to them
+      // 3. Open tickets not in Admin group
+      query = query.or(`user_id.eq.${session.user.id},assigned_to.eq.${session.user.id},and(status.eq.open,group_name.neq.Admin)`);
+    }
+    // Admins can see all tickets (no additional filters needed)
 
     // Apply additional filters
     if (params.status) {
@@ -141,7 +158,8 @@ export const ticketService = {
       params: params,
       hasStatus: !!params.status,
       limit: params.limit,
-      offset: params.offset
+      offset: params.offset,
+      role: session.user.user_metadata?.role
     });
 
     const { data, error } = await query;
@@ -169,20 +187,6 @@ export const ticketService = {
       throw error;
     }
 
-    // Transform the data to match the expected format
-    const transformedTickets = data?.map(ticket => ({
-      ...ticket,
-      creator_email: ticket.creator?.email,
-      creator_name: ticket.creator?.full_name,
-      creator_role: ticket.creator?.role,
-      creator_avatar: ticket.creator?.avatar_url,
-      agent_email: ticket.agent?.email,
-      agent_name: ticket.agent?.full_name,
-      agent_role: ticket.agent?.role,
-      agent_avatar: ticket.agent?.avatar_url
-    })) || [];
-
-    console.log('Transformed tickets:', transformedTickets);
-    return { tickets: transformedTickets };
+    return { tickets: data || [] };
   }
 }; 
