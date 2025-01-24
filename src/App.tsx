@@ -22,6 +22,7 @@ import SuspendedUsers from './pages/SuspendedUsers';
 import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import './styles/App.css';
+import { TicketProvider } from './contexts/TicketProvider';
 
 const router = createBrowserRouter(
   [

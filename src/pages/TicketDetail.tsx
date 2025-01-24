@@ -1,33 +1,41 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
-import { useTicket, type Reply, type Ticket } from 'hooks/useTicket';
-import { useAuth } from 'contexts/AuthContext';
-import { TicketProvider } from 'contexts/TicketContext';
-import TicketDetailPanel from 'components/TicketDetailPanel';
+import { useTicketContext, TicketProvider } from '../contexts/TicketProvider';
+import { type Reply, type Ticket } from '../hooks/useTicket';
+import { useAuth } from '../contexts/AuthContext';
+import TicketDetailPanel from '../components/TicketDetailPanel';
 import { Box, Flex, Text } from '@chakra-ui/react';
 import { supabase } from '../lib/supabaseClient';
-import 'styles/TicketDetail.css';
+import '../styles/TicketDetail.css';
 import { getInitials, getProfileColor } from '../utils/profileUtils';
+import { CustomerTicketView } from '../components/CustomerTicketView';
 
-// Notification interface for ticket interactions
+// Existing Notification type for ticket events
 interface Notification {
   id: string;
   type: 'TICKET_CREATED' | 'TICKET_UPDATED' | 'TICKET_ASSIGNED' | 'COMMENT_ADDED';
   ticket_id: number;
   user_id: string | null;
   title: string;
+  description: string;
+  created_at: string;
+  user?: {
+    full_name: string | null;
+    email: string;
+  };
+  ticket?: {
+    profiles?: {
+      email: string;
+    };
+  };
+}
+
+// New type for UI feedback
+interface UINotification {
+  id: string;
+  type: 'success' | 'error';
   message: string;
   created_at: string;
-  user: {
-    email: string;
-    full_name: string | null;
-  } | null;
-  ticket: {
-    profiles: {
-      email: string;
-      full_name: string | null;
-    } | null;
-  } | null;
 }
 
 // Helper function to get the display name for a notification
@@ -38,156 +46,38 @@ function getNotificationDisplayName(notification: Notification): string {
   return notification.user?.full_name || notification.user?.email || "Unknown User";
 }
 
-const CustomerTicketView: React.FC<{ ticket: any, replies: Reply[], replyContent: string, setReplyContent: (content: string) => void, handleSubmitReply: () => void }> = ({
-  ticket,
-  replies,
-  replyContent,
-  setReplyContent,
-  handleSubmitReply
-}) => {
-  const { user } = useAuth();
-  const conversationRef = useRef<HTMLDivElement>(null);
-
-  // Scroll to bottom when new replies are added
-  useEffect(() => {
-    if (conversationRef.current) {
-      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
-    }
-  }, [replies]);
-
-  return (
-    <div className="customer-ticket-view">
-      <div className="customer-ticket-header">
-        <h1>{ticket.subject}</h1>
-        <div className="ticket-meta">
-          <span className={`status-badge ${ticket.status.toLowerCase()}`}>
-            {ticket.status.charAt(0).toUpperCase() + ticket.status.slice(1)}
-          </span>
-          {ticket.agents && (
-            <span className="ticket-owner">
-              Assigned to: {ticket.agents.full_name || ticket.agents.email || 'Support Team'}
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="ticket-conversation" ref={conversationRef} style={{ flex: 1, overflowY: 'auto', padding: '1rem' }}>
-        {/* Original ticket message */}
-        <div className={`message ${ticket.user_id === user?.id ? 'own-message' : 'other-message'}`}>
-          <div className="message-avatar">
-            <div 
-              className="profile-icon" 
-              style={{ 
-                backgroundColor: getProfileColor(ticket.profiles?.email || ''),
-                color: 'white',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%'
-              }}
-            >
-              {getInitials(ticket.profiles?.full_name || '')}
-            </div>
-          </div>
-          <div className="message-content">
-            <div className="message-header">
-              <span className="message-author">{ticket.profiles?.full_name || ticket.profiles?.email}</span>
-              <span className="message-time">{new Date(ticket.created_at).toLocaleString()}</span>
-            </div>
-            <div className="message-body">
-              {ticket.description}
-            </div>
-          </div>
-        </div>
-
-        {/* Replies */}
-        {replies.map((reply: Reply) => {
-          const isOwnMessage = reply.user_id === user?.id;
-          return (
-            <div key={reply.id} className={`message ${isOwnMessage ? 'own-message' : 'other-message'}`}>
-              <div className="message-avatar">
-                <div 
-                  className="profile-icon" 
-                  style={{ 
-                    backgroundColor: getProfileColor(reply.user_profile?.email || ''),
-                    color: 'white',
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%'
-                  }}
-                >
-                  {getInitials(reply.user_profile?.full_name || '')}
-                </div>
-              </div>
-              <div className="message-content">
-                <div className="message-header">
-                  <span className="message-author">
-                    {reply.user_profile?.full_name || (typeof reply.user_email === 'object' && reply.user_email !== null 
-                      ? reply.user_email.email 
-                      : reply.user_email)}
-                  </span>
-                  <span className="message-time">{new Date(reply.created_at).toLocaleString()}</span>
-                </div>
-                <div className="message-body">
-                  {reply.content}
-                </div>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* Reply box */}
-      <div className="reply-box">
-        <textarea
-          className="reply-textarea"
-          value={replyContent}
-          onChange={(e) => setReplyContent(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey) {
-              e.preventDefault();
-              handleSubmitReply();
-            }
-          }}
-          placeholder="Write your reply... (Press Enter to submit)"
-        />
-        <button 
-          className="submit-reply-button"
-          onClick={handleSubmitReply}
-          disabled={!replyContent.trim()}
-        >
-          Submit Reply
-        </button>
-      </div>
-    </div>
-  );
-};
+interface CustomerTicketViewProps {
+  ticket: any;
+  replies: Reply[];
+  replyContent: string;
+  setReplyContent: (content: string) => void;
+  handleSubmitReply: () => void;
+  onUpdate: (changes: Partial<Ticket>) => Promise<void>;
+  pendingChanges: Partial<Ticket>;
+}
 
 const TicketContent: React.FC = () => {
   const navigate = useNavigate();
-  const { ticket, replies, loading, error, addReply, updateTicket, setTicket } = useTicket();
+  const { ticket, messages, loading, error, addReply, updateTicket } = useTicketContext();
   const [replyContent, setReplyContent] = useState('');
   const [pendingChanges, setPendingChanges] = useState<Partial<Ticket>>({});
-  const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [ticketNotifications, setTicketNotifications] = useState<Notification[]>([]);
+  const [uiNotifications, setUiNotifications] = useState<UINotification[]>([]);
   const { user } = useAuth();
   const isAgentOrAdmin = user?.user_metadata?.role === 'agent' || user?.user_metadata?.role === 'admin';
   const conversationRef = useRef<HTMLDivElement>(null);
 
-  // Scroll to bottom when new replies are added
+  // Scroll to bottom when new messages are added
   useEffect(() => {
     if (conversationRef.current) {
-      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
+      setTimeout(() => {
+        conversationRef.current?.scrollTo({
+          top: conversationRef.current.scrollHeight,
+          behavior: 'smooth'
+        });
+      }, 100); // Small delay to ensure content is rendered
     }
-  }, [replies]);
+  }, [messages]);
 
   useEffect(() => {
     if (ticket) {
@@ -219,7 +109,7 @@ const TicketContent: React.FC = () => {
               .single();
 
             if (!error && data) {
-              setNotifications(prev => {
+              setTicketNotifications(prev => {
                 // Check if we already have a notification of this type at the same time
                 const timeKey = new Date(data.created_at).setMilliseconds(0);
                 const key = `${data.type}_${timeKey}`;
@@ -282,7 +172,7 @@ const TicketContent: React.FC = () => {
       const uniqueNotifications = Object.values(groupedNotifications || {})
         .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
 
-      setNotifications(uniqueNotifications);
+      setTicketNotifications(uniqueNotifications);
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }
@@ -311,47 +201,42 @@ const TicketContent: React.FC = () => {
     if (!replyContent.trim()) return;
     await addReply(replyContent, true);
     setReplyContent('');
+    
     // Scroll to bottom after submitting
-    if (conversationRef.current) {
-      conversationRef.current.scrollTop = conversationRef.current.scrollHeight;
-    }
-  };
-
-  const handleUpdateTicket = async (field: string, value: unknown) => {
-    try {
-      console.log('Handling ticket update:', { field, value });
-      setPendingChanges(prev => {
-        const newChanges = {
-          ...prev,
-          [field]: value
-        };
-        console.log('New pending changes:', newChanges);
-        return newChanges;
+    setTimeout(() => {
+      conversationRef.current?.scrollTo({
+        top: conversationRef.current.scrollHeight,
+        behavior: 'smooth'
       });
-    } catch (err) {
-      console.error('Error in handleUpdateTicket:', err);
-    }
+    }, 100);
   };
 
-  const handleSaveChanges = async () => {
+  const handleTicketUpdate = async () => {
     try {
-      console.log('Saving changes:', pendingChanges);
-      const updatedTicket = await updateTicket(pendingChanges);
-      console.log('Updated ticket:', updatedTicket);
-      
-      if (updatedTicket) {
-        // Update the local ticket state with the new values
-        setTicket(prev => ({
-          ...prev,
-          ...updatedTicket
-        }));
-        
-        // Clear pending changes and navigate to dashboard
+      if (Object.keys(pendingChanges).length > 0) {
+        await updateTicket(pendingChanges);
         setPendingChanges({});
-        navigate('/');
+        setUiNotifications(prev => [
+          ...prev,
+          {
+            id: Date.now().toString(),
+            type: 'success',
+            message: 'Ticket updated successfully',
+            created_at: new Date().toISOString()
+          }
+        ]);
       }
-    } catch (err) {
-      console.error('Error saving changes:', err);
+    } catch (error) {
+      console.error('Failed to update ticket:', error);
+      setUiNotifications(prev => [
+        ...prev,
+        {
+          id: Date.now().toString(),
+          type: 'error',
+          message: 'Failed to update ticket',
+          created_at: new Date().toISOString()
+        }
+      ]);
     }
   };
 
@@ -360,10 +245,12 @@ const TicketContent: React.FC = () => {
     return (
       <CustomerTicketView
         ticket={ticket}
-        replies={replies}
+        messages={messages}
         replyContent={replyContent}
         setReplyContent={setReplyContent}
         handleSubmitReply={handleSubmitReply}
+        onUpdate={handleTicketUpdate}
+        pendingChanges={pendingChanges}
       />
     );
   }
@@ -400,7 +287,7 @@ const TicketContent: React.FC = () => {
           status: ticket.status as 'open' | 'pending' | 'solved' | 'closed',
           group_name: (ticket.group_name || 'Support') as 'Support' | 'Admin'
         }}
-        onUpdate={handleUpdateTicket}
+        onUpdate={handleTicketUpdate}
         pendingChanges={pendingChanges}
       />
 
@@ -472,15 +359,28 @@ const TicketContent: React.FC = () => {
             </div>
           </div>
 
-          {replies.map((reply: Reply) => {
-            const isOwnMessage = reply.user_id === user?.id;
+          {messages.map((message) => {
+            if (message.type === 'system') {
+              return (
+                <div key={message.id} className="system-message">
+                  <div className="system-message-content">
+                    {message.content}
+                  </div>
+                </div>
+              );
+            }
+
+            const isOwnMessage = message.user_id === user?.id;
             return (
-              <div key={reply.id} className={`message ${isOwnMessage ? 'own-message' : 'other-message'}`}>
+              <div
+                key={message.id}
+                className={`message ${isOwnMessage ? 'own-message' : 'other-message'}`}
+              >
                 <div className="message-avatar">
                   <div 
                     className="profile-icon" 
                     style={{ 
-                      backgroundColor: getProfileColor(reply.user_profile?.email || ''),
+                      backgroundColor: getProfileColor(message.user_profile?.email || ''),
                       color: 'white',
                       fontSize: '14px',
                       fontWeight: 'bold',
@@ -492,20 +392,20 @@ const TicketContent: React.FC = () => {
                       borderRadius: '50%'
                     }}
                   >
-                    {getInitials(reply.user_profile?.full_name || '')}
+                    {getInitials(message.user_profile?.full_name || '')}
                   </div>
                 </div>
                 <div className="message-content">
                   <div className="message-header">
                     <span className="message-author">
-                      {reply.user_profile?.full_name || (typeof reply.user_email === 'object' && reply.user_email !== null 
-                        ? reply.user_email.email 
-                        : reply.user_email)}
+                      {message.user_profile?.full_name || (typeof message.user_email === 'object' && message.user_email !== null 
+                        ? message.user_email.email 
+                        : message.user_email)}
                     </span>
-                    <span className="message-time">{new Date(reply.created_at).toLocaleString()}</span>
+                    <span className="message-time">{new Date(message.created_at).toLocaleString()}</span>
                   </div>
                   <div className="message-body">
-                    {reply.content}
+                    {message.content}
                   </div>
                 </div>
               </div>
@@ -611,7 +511,7 @@ const TicketContent: React.FC = () => {
         <div className="save-button-container" style={{ padding: '1rem', marginBottom: '20%' }}>
           <button 
             className="save-button"
-            onClick={handleSaveChanges}
+            onClick={handleTicketUpdate}
           >
             Save Changes
           </button>
@@ -622,7 +522,7 @@ const TicketContent: React.FC = () => {
         <div className="sidebar-section">
           <h3>Interaction history</h3>
           <div className="interaction-list">
-            {notifications.map((notification) => (
+            {ticketNotifications.map((notification) => (
               <div key={notification.id} className="interaction-item">
                 <div className="interaction-icon">
                   <i className={getInteractionIcon(notification.type)}></i>
@@ -636,7 +536,7 @@ const TicketContent: React.FC = () => {
                   </div>
                   <div className="interaction-details">
                     <div className="change-item">
-                      {notification.message}
+                      {notification.description}
                     </div>
                   </div>
                 </div>

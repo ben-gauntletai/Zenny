@@ -91,65 +91,73 @@ export const ticketService = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('No active session');
 
-    const queryParams = new URLSearchParams();
-    if (params.status) queryParams.append('status', params.status);
-    if (params.limit) queryParams.append('limit', params.limit.toString());
-    if (params.offset) queryParams.append('offset', params.offset.toString());
-
-    const url = queryParams.toString() 
-      ? `${EDGE_FUNCTION_URL}?${queryParams.toString()}`
-      : EDGE_FUNCTION_URL;
+    const userRole = session.user.user_metadata?.role;
+    const isAdmin = userRole === 'admin';
+    const isAgent = userRole === 'agent';
 
     console.log('Fetching tickets:', {
-      url,
       params,
       session_user: session.user,
-      auth_header_present: !!session.access_token
+      isAdmin,
+      isAgent
     });
 
-    const response = await fetch(url, {
-      method: 'GET',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json'
-      }
-    });
+    let query = supabase
+      .from('tickets_with_users')
+      .select('*')
+      .order('created_at', { ascending: false });
 
-    if (!response.ok) {
-      let errorMessage = `Failed to fetch tickets: ${response.status}`;
-      try {
-        const errorData = await response.json();
-        console.error('Server error response:', {
-          status: response.status,
-          statusText: response.statusText,
-          error: errorData,
-          url,
-          params,
-          user: {
-            id: session.user.id,
-            email: session.user.email,
-            role: session.user.user_metadata?.role
-          }
-        });
-        errorMessage = errorData.error || errorData.message || errorMessage;
-      } catch (parseError) {
-        console.error('Error parsing error response:', {
-          parseError,
-          status: response.status,
-          statusText: response.statusText,
-          url,
-          params
-        });
-      }
-      throw new Error(errorMessage);
+    if (params.status) {
+      query = query.eq('status', params.status);
     }
 
-    const data = await response.json();
+    // Apply role-based filters
+    if (isAdmin) {
+      // Admin can see all tickets
+    } else if (isAgent) {
+      // Agents can see:
+      // 1. Their own tickets
+      // 2. Tickets assigned to them
+      // 3. Support group tickets
+      query = query.or(
+        `user_id.eq.${session.user.id},` +
+        `assigned_to.eq.${session.user.id},` +
+        `group_name.eq.Support`
+      );
+    } else {
+      // Regular users can only see their own tickets
+      query = query.eq('user_id', session.user.id);
+    }
+
+    if (params.limit) {
+      query = query.limit(params.limit);
+    }
+
+    if (params.offset) {
+      query = query.range(params.offset, params.offset + (params.limit || 10) - 1);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error('Error fetching tickets:', {
+        error,
+        params,
+        user: {
+          id: session.user.id,
+          email: session.user.email,
+          role: session.user.user_metadata?.role
+        }
+      });
+      throw new Error(error.message);
+    }
+
     console.log('Tickets fetched successfully:', {
-      count: data.tickets?.length,
-      first_ticket: data.tickets?.[0],
+      count: data?.length,
+      first_ticket: data?.[0],
       params
     });
-    return data;
+
+    return { tickets: data || [] };
   }
 }; 
