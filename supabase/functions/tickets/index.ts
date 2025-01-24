@@ -14,30 +14,10 @@ interface TicketCreationPayload {
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    console.log('Handling OPTIONS request with headers:', {
-      origin: req.headers.get('origin'),
-      method: req.method,
-      headers: Object.fromEntries(req.headers.entries())
-    })
-    
-    const headers = {
-      'Access-Control-Allow-Origin': '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info, apikey',
-      'Access-Control-Max-Age': '86400'
-    }
-    
-    console.log('Sending OPTIONS response with headers:', headers)
-    
-    return new Response(null, {
-      status: 204,
-      headers
-    })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
-    console.log('Request method:', req.method)
-    console.log('Request headers:', Object.fromEntries(req.headers.entries()))
     // Create Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
@@ -61,11 +41,6 @@ serve(async (req) => {
     // Handle different operations based on the request method
     switch (req.method) {
       case 'POST':
-        // Check if this is a reply creation request
-        const pathParts = new URL(req.url).pathname.split('/')
-        if (pathParts[pathParts.length - 1] === 'replies') {
-          return await handleReplyCreation(req, supabaseClient, user)
-        }
         return await handleTicketCreation(req, supabaseClient, user)
       case 'PUT':
         return await handleTicketUpdate(req, supabaseClient, user)
@@ -286,107 +261,6 @@ async function handleTicketUpdate(req: Request, supabaseClient: any, user: any) 
 async function handleTicketList(req: Request, supabaseClient: any, user: any) {
   try {
     const url = new URL(req.url)
-    const pathParts = url.pathname.split('/')
-    const ticketId = pathParts[pathParts.length - 1]
-    
-    // If ticketId is provided, fetch single ticket with replies
-    if (ticketId && !isNaN(parseInt(ticketId))) {
-      console.log('Fetching single ticket:', ticketId)
-      
-      // First fetch the ticket with user profiles
-      const { data: ticket, error: ticketError } = await supabaseClient
-        .from('tickets')
-        .select(`
-          *,
-          profiles:user_id(
-            id,
-            email,
-            full_name,
-            avatar_url,
-            role
-          ),
-          agents:assigned_to(
-            id,
-            email,
-            full_name,
-            role,
-            avatar_url
-          )
-        `)
-        .eq('id', ticketId)
-        .single()
-
-      if (ticketError) {
-        console.error('Error fetching ticket:', ticketError)
-        throw ticketError
-      }
-
-      // Then fetch replies for this ticket
-      const { data: replies, error: repliesError } = await supabaseClient
-        .from('replies')
-        .select(`
-          *,
-          user_profile:profiles!replies_user_id_fkey (
-            email,
-            full_name,
-            avatar_url,
-            role
-          )
-        `)
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true })
-
-      if (repliesError) {
-        console.error('Error fetching replies:', repliesError)
-        throw repliesError
-      }
-
-      // Filter out the initial reply if it matches the description
-      const filteredReplies = replies.filter(reply => {
-        const isInitialReply = 
-          reply.content === ticket.description &&
-          reply.user_id === ticket.user_id &&
-          Math.abs(new Date(reply.created_at).getTime() - new Date(ticket.created_at).getTime()) < 1000;
-        return !isInitialReply;
-      });
-
-      // Format the response
-      const response = {
-        ticket: {
-          ...ticket,
-          profiles: ticket.profiles,
-          agents: ticket.agents,
-          requester_id: ticket.user_id,
-          requester_email: ticket.profiles?.email,
-          requester_name: ticket.profiles?.full_name,
-          requester_avatar: ticket.profiles?.avatar_url,
-          requester_role: ticket.profiles?.role,
-          agent_email: ticket.agents?.email,
-          agent_name: ticket.agents?.full_name,
-          agent_avatar: ticket.agents?.avatar_url,
-          agent_role: ticket.agents?.role
-        },
-        replies: filteredReplies.map(reply => ({
-          ...reply,
-          user_email: reply.user_profile?.email,
-          user_name: reply.user_profile?.full_name,
-          user_avatar: reply.user_profile?.avatar_url,
-          user_role: reply.user_profile?.role
-        }))
-      }
-
-      return new Response(
-        JSON.stringify(response),
-        { 
-          headers: {
-            ...corsHeaders,
-            'Content-Type': 'application/json'
-          },
-          status: 200 
-        }
-      )
-    }
-
     const status = url.searchParams.get('status')
     const limit = parseInt(url.searchParams.get('limit') ?? '10')
     const offset = parseInt(url.searchParams.get('offset') ?? '0')
@@ -415,13 +289,13 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       .from('tickets')
       .select(`
         *,
-        requester:profiles!tickets_user_id_fkey (email, full_name, avatar_url, role),
+        creator:profiles!tickets_user_id_fkey (email, full_name, avatar_url),
         assignee:profiles!tickets_assigned_to_fkey (email, full_name, role, avatar_url)
       `)
 
     // Log query parameters before applying filters
     console.log('DEBUG - Query parameters:', {
-      base_query: 'tickets with requester and assignee profiles',
+      base_query: 'tickets with creator and assignee profiles',
       status_filter: status || 'none',
       user_filter: !isAgentOrAdmin ? user.id : 'none',
       user_role: userProfile?.role,
@@ -471,13 +345,10 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
     // Transform the data to match the expected format
     const transformedTickets = tickets.map((ticket: any) => ({
       ...ticket,
-      requester_id: ticket.user_id,
-      requester_email: ticket.requester?.email,
-      requester_name: ticket.requester?.full_name,
-      requester_role: ticket.requester?.role,
+      creator_email: ticket.creator?.email,
+      creator_name: ticket.creator?.full_name,
       agent_email: ticket.assignee?.email,
-      agent_name: ticket.assignee?.full_name,
-      agent_role: ticket.assignee?.role
+      agent_name: ticket.assignee?.full_name
     }))
 
     return new Response(
@@ -571,93 +442,16 @@ async function getUserProfile(supabaseClient: any, user: any) {
   }
 }
 
-async function handleReplyCreation(req: Request, supabaseClient: any, user: any) {
-  try {
-    const url = new URL(req.url)
-    const pathParts = url.pathname.split('/')
-    const ticketId = parseInt(pathParts[pathParts.length - 2])
-    
-    if (!ticketId || isNaN(ticketId)) {
-      throw new Error('Invalid ticket ID')
-    }
-
-    const { content, is_public = true } = await req.json()
-    
-    if (!content) {
-      throw new Error('Content is required')
-    }
-
-    console.log('Creating reply:', {
-      ticketId,
-      content,
-      is_public,
-      user_id: user.id
-    })
-
-    // Create service role client
-    const serviceRoleClient = createClient(
-      Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
+// Get replies for the ticket
+const { data: replies, error: repliesError } = await serviceRoleClient
+  .from('replies')
+  .select(`
+    *,
+    user_profile:profiles!replies_user_id_fkey (
+      full_name,
+      email,
+      avatar_url
     )
-
-    // Create the reply
-    const { data: reply, error: replyError } = await serviceRoleClient
-      .from('replies')
-      .insert({
-        ticket_id: ticketId,
-        content,
-        user_id: user.id,
-        is_public
-      })
-      .select(`
-        *,
-        user_profile:profiles!replies_user_id_fkey (
-          email,
-          full_name,
-          avatar_url,
-          role
-        )
-      `)
-      .single()
-
-    if (replyError) {
-      console.error('Error creating reply:', replyError)
-      throw replyError
-    }
-
-    // Format the response
-    const formattedReply = {
-      ...reply,
-      user_email: reply.user_profile?.email,
-      user_name: reply.user_profile?.full_name,
-      user_avatar: reply.user_profile?.avatar_url,
-      user_role: reply.user_profile?.role
-    }
-
-    return new Response(
-      JSON.stringify({ reply: formattedReply }),
-      { 
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        },
-        status: 200 
-      }
-    )
-  } catch (error) {
-    console.error('Error in handleReplyCreation:', error)
-    return new Response(
-      JSON.stringify({ 
-        error: error.message,
-        details: error.details || null
-      }),
-      {
-        status: 400,
-        headers: {
-          ...corsHeaders,
-          'Content-Type': 'application/json'
-        }
-      }
-    )
-  }
-} 
+  `)
+  .eq('ticket_id', ticketId)
+  .order('created_at', { ascending: true }); 
