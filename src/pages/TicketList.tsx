@@ -66,10 +66,13 @@ const TicketList: React.FC = () => {
         filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => ticket.priority === filters.priority);
       }
 
-      if (isAgentOrAdmin && filters.assignee === 'me') {
-        filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => ticket.agent_email === user?.email);
-      } else if (isAgentOrAdmin && filters.assignee === 'unassigned') {
-        filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => !ticket.agent_email);
+      // For agents, filter by assignment if requested
+      if (isAgentOrAdmin && filters.assignee) {
+        if (filters.assignee === 'me') {
+          filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => ticket.agent_email === user?.email);
+        } else if (filters.assignee === 'unassigned') {
+          filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => !ticket.agent_email);
+        }
       }
 
       // Apply sorting
@@ -96,52 +99,35 @@ const TicketList: React.FC = () => {
     setFilters(prev => ({ ...prev, [key]: value }));
   };
 
-  if (loading) {
-    return <div className="loading">Loading tickets...</div>;
-  }
-
-  if (error) {
-    return <div className="error">{error}</div>;
-  }
+  if (loading) return <div>Loading...</div>;
+  if (error) return <div>Error: {error}</div>;
 
   return (
-    <div className="ticket-list">
-      <header className="ticket-list-header">
-        <div className="header-content">
-          <h1>{isAgentOrAdmin ? 'Support Tickets' : 'My Tickets'}</h1>
-          <p className="subtitle">Manage and track support requests</p>
-        </div>
-        <Link to="/tickets/new" className="create-ticket-button">
-          Create Ticket
-        </Link>
-      </header>
-
+    <div className="ticket-list-container">
       <div className="filters">
         <select
           value={filters.status}
           onChange={(e) => handleFilterChange('status', e.target.value)}
           className="filter-select"
         >
-          <option value="">All Status</option>
+          <option value="">All Statuses</option>
           <option value="open">Open</option>
           <option value="pending">Pending</option>
           <option value="solved">Solved</option>
           <option value="closed">Closed</option>
         </select>
 
-        {isAgentOrAdmin && (
-          <select
-            value={filters.priority}
-            onChange={(e) => handleFilterChange('priority', e.target.value)}
-            className="filter-select"
-          >
-            <option value="">All Priority</option>
-            <option value="low">Low</option>
-            <option value="normal">Normal</option>
-            <option value="high">High</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        )}
+        <select
+          value={filters.priority}
+          onChange={(e) => handleFilterChange('priority', e.target.value)}
+          className="filter-select"
+        >
+          <option value="">All Priorities</option>
+          <option value="low">Low</option>
+          <option value="normal">Normal</option>
+          <option value="high">High</option>
+          <option value="urgent">Urgent</option>
+        </select>
 
         {isAgentOrAdmin && (
           <select
@@ -228,4 +214,4 @@ const TicketList: React.FC = () => {
   );
 };
 
-export default TicketList; 
+export default TicketList;

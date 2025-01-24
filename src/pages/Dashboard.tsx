@@ -79,9 +79,11 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
         .order('created_at', { ascending: false })
         .limit(5);
 
+      // For regular users, only show their tickets
       if (!isAgent) {
         query.eq('user_id', userId);
       }
+      // For agents, RLS will handle showing all non-Admin group tickets
 
       const { data: ticketData, error: fetchError } = await query;
 

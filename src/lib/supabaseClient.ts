@@ -10,10 +10,29 @@ if (!supabaseUrl || !supabaseAnonKey) {
 
 // Create a single instance of the Supabase client with real-time enabled
 const supabase = createClient<Database>(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    detectSessionInUrl: true
+  },
+  db: {
+    schema: 'public'
+  },
   realtime: {
     params: {
       eventsPerSecond: 10
     }
+  }
+});
+
+// Initialize real-time client
+supabase.realtime.setAuth(supabaseAnonKey);
+
+// Add real-time connection state logging
+supabase.channel('system').subscribe((status) => {
+  if (status === 'SUBSCRIBED') {
+    console.log('Connected to Supabase Realtime');
+  } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+    console.error('Disconnected from Supabase Realtime:', status);
   }
 });
 
