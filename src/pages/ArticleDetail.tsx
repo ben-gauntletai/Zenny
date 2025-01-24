@@ -39,7 +39,6 @@ const ArticleDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [userFeedback, setUserFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
   const [canDelete, setCanDelete] = useState(false);
-  const isAgentOrAdmin = user?.user_metadata?.role === 'admin' || user?.user_metadata?.role === 'agent';
 
   // Add console logging for debugging
   useEffect(() => {
@@ -223,16 +222,14 @@ const ArticleDetail: React.FC = () => {
         </div>
         <div className="title-row">
           <h1>{article.title}</h1>
-          {isAgentOrAdmin && (
-            <div className="article-actions">
-              <Link to={`/knowledge-base/article/${article.id}/edit`} className="edit-button">
-                Edit Article
-              </Link>
-              <button onClick={handleDelete} className="delete-button">
-                Delete Article
-              </button>
-            </div>
-          )}
+          <div className="article-actions">
+            <Link to={`/knowledge-base/article/${article.id}/edit`} className="edit-button">
+              Edit Article
+            </Link>
+            <button onClick={handleDelete} className="delete-button">
+              Delete Article
+            </button>
+          </div>
         </div>
         <div className="article-info">
           <div className="info-left">
