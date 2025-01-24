@@ -8,10 +8,13 @@ import {
   Input,
   Select,
   Icon,
-  Tooltip
+  Tooltip,
+  VStack,
+  Badge
 } from '@chakra-ui/react';
 import { CloseIcon, InfoIcon } from '@chakra-ui/icons';
 import { supabase } from '../lib/supabaseClient';
+import { type Ticket } from '../hooks/useTicket';
 
 interface Profile {
   id?: string;
@@ -81,6 +84,41 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
     }
   };
 
+  const handleAssigneeChange = async (newAssignee: string) => {
+    console.log('🎯 Setting pending change for assignee:', { newAssignee });
+    onUpdate('assigned_to', newAssignee || null);
+  };
+
+  const handleStatusChange = async (newStatus: TicketDetailPanelProps['ticket']['status']) => {
+    console.log('🎯 Setting pending change for status:', { newStatus });
+    onUpdate('status', newStatus);
+  };
+
+  const handlePriorityChange = async (newPriority: TicketDetailPanelProps['ticket']['priority']) => {
+    console.log('🎯 Setting pending change for priority:', { newPriority });
+    onUpdate('priority', newPriority);
+  };
+
+  const handleTypeChange = async (newType: TicketDetailPanelProps['ticket']['type']) => {
+    console.log('🎯 Setting pending change for type:', { newType });
+    onUpdate('ticket_type', newType);
+  };
+
+  const handleTopicChange = async (newTopic: TicketDetailPanelProps['ticket']['topic']) => {
+    console.log('🎯 Setting pending change for topic:', { newTopic });
+    onUpdate('topic', newTopic);
+  };
+
+  const handleGroupChange = async (newGroup: TicketDetailPanelProps['ticket']['group_name']) => {
+    console.log('🎯 Setting pending change for group:', { newGroup });
+    onUpdate('group_name', newGroup);
+  };
+
+  const handleTagsUpdate = async (newTags: string[]) => {
+    console.log('🎯 Calling updateTicket for tags:', { newTags });
+    onUpdate('tags', newTags);
+  };
+
   return (
     <Box className="ticket-detail-panel">
       <Stack spacing={0}>
@@ -99,7 +137,7 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
                 try {
                   const value = e.target.value;
                   console.log('Updating assignee to:', value);
-                  await onUpdate('assigned_to', value || null);
+                  await handleAssigneeChange(value || '');
                 } catch (err) {
                   console.error('Error updating assignee:', err);
                 }
@@ -119,7 +157,9 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
           <Text className="field-label">Group</Text>
           <Select
             value={pendingChanges.group_name ?? ticket.group_name ?? 'Support'}
-            onChange={(e) => onUpdate('group_name', e.target.value)}
+            onChange={async (e) => {
+              await handleGroupChange(e.target.value as TicketDetailPanelProps['ticket']['group_name']);
+            }}
             size="sm"
           >
             <option value="Support">Support</option>
@@ -135,7 +175,17 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
               placeholder="Add tag and press Enter"
               value={newTag}
               onChange={(e) => setNewTag(e.target.value)}
-              onKeyDown={handleAddTag}
+              onKeyDown={async (e) => {
+                if (e.key === 'Enter' && newTag.trim()) {
+                  const tagToAdd = newTag.trim();
+                  const currentTags = pendingChanges.tags || ticket.tags;
+                  if (!currentTags.includes(tagToAdd)) {
+                    const newTags = [...currentTags, tagToAdd];
+                    await handleTagsUpdate(newTags);
+                  }
+                  setNewTag('');
+                }
+              }}
               mb={2}
             />
             <Box className="tag-container">
@@ -144,10 +194,10 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
                   key={tag} 
                   className="tag"
                   as="button"
-                  onClick={() => {
+                  onClick={async () => {
                     const currentTags = pendingChanges.tags || ticket.tags;
                     const newTags = currentTags.filter(t => t !== tag);
-                    onUpdate('tags', newTags);
+                    await handleTagsUpdate(newTags);
                   }}
                   aria-label={`Remove ${tag} tag`}
                   position="relative"
@@ -174,7 +224,9 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
           <Text className="field-label">Type</Text>
           <Select
             value={pendingChanges.ticket_type ?? ticket.type}
-            onChange={(e) => onUpdate('ticket_type', e.target.value)}
+            onChange={async (e) => {
+              await handleTypeChange(e.target.value as TicketDetailPanelProps['ticket']['type']);
+            }}
             size="sm"
           >
             <option value="question">Question</option>
@@ -188,9 +240,9 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
           <Text className="field-label">Status</Text>
           <Select
             value={pendingChanges.status ?? ticket.status}
-            onChange={(e) => {
+            onChange={async (e) => {
               console.log('Status changed to:', e.target.value);
-              onUpdate('status', e.target.value);
+              await handleStatusChange(e.target.value as TicketDetailPanelProps['ticket']['status']);
             }}
             size="sm"
           >
@@ -205,9 +257,9 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
           <Text className="field-label">Priority</Text>
           <Select
             value={pendingChanges.priority ?? ticket.priority}
-            onChange={(e) => {
+            onChange={async (e) => {
               console.log('Priority changed to:', e.target.value);
-              onUpdate('priority', e.target.value.toLowerCase());
+              await handlePriorityChange(e.target.value.toLowerCase() as TicketDetailPanelProps['ticket']['priority']);
             }}
             size="sm"
           >
@@ -222,7 +274,9 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
           <Text className="field-label">Topic</Text>
           <Select
             value={pendingChanges.topic ?? ticket.topic ?? 'NONE'}
-            onChange={(e) => onUpdate('topic', e.target.value || null)}
+            onChange={async (e) => {
+              await handleTopicChange(e.target.value as 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE');
+            }}
             size="sm"
           >
             <option value="NONE">None</option>

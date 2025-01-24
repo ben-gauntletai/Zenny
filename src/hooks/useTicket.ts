@@ -105,30 +105,18 @@ export const useTicket = (ticketId: string) => {
             table: 'tickets',
             filter: `id=eq.${ticketId}`
           },
-          async (payload: { new: Ticket; old: Ticket }) => {
-            console.log('Ticket updated:', payload);
-            
-            // Check if status changed to closed or solved
-            if (
-              (payload.new.status === 'closed' || payload.new.status === 'solved') &&
-              payload.old.status !== payload.new.status
-            ) {
-              const otherUser = user?.id === ticket?.user_id ? ticket?.agents : ticket?.profiles;
-              const systemMessage: SystemMessage = {
-                id: Date.now(),
-                type: 'system',
-                content: `${otherUser?.full_name || otherUser?.email || 'The other person'} has left the chat`,
-                created_at: new Date().toISOString()
-              };
-              
-              setMessages(current => [...current, systemMessage]);
-            }
-            
-            // Update ticket state
-            setTicket(current => ({
-              ...current,
-              ...payload.new
-            }));
+          (payload: { new: Ticket }) => {
+            console.log('🔄 Realtime update received:', {
+              newTicket: payload.new,
+              currentTicket: ticket
+            });
+            // Parse the tags back from JSONB to array if needed
+            const updatedTicket = {
+              ...payload.new,
+              tags: Array.isArray(payload.new.tags) ? payload.new.tags : JSON.parse(payload.new.tags || '[]')
+            };
+            console.log('🔄 Setting ticket state to:', updatedTicket);
+            setTicket(updatedTicket);
           }
         )
         .subscribe((status: SubscriptionStatus) => {
@@ -338,7 +326,8 @@ export const useTicket = (ticketId: string) => {
     if (!user) throw new Error('User not authenticated');
 
     try {
-      console.log('Updating ticket with:', updates);
+      console.log('📝 Starting ticket update with:', updates);
+      console.log('📝 Current ticket state:', ticket);
       
       // Store the old values for change tracking
       const oldValues: Record<string, any> = {};
@@ -358,80 +347,67 @@ export const useTicket = (ticketId: string) => {
         }
       });
 
-      // Handle special fields and convert group to group_name
-      const formattedUpdates = {
-        ...Object.entries(updates).reduce((acc, [key, value]) => {
-          if (key === 'group') {
-            acc['group_name'] = value;
-          } else {
-            acc[key] = value;
-          }
-          return acc;
-        }, {} as Record<string, any>),
-        // Convert tags array to JSONB if it exists
-        tags: updates.tags ? JSON.stringify(updates.tags) : undefined,
-        // Handle assignee update - explicitly set to null if empty string or undefined
-        assigned_to: 'assigned_to' in updates ? (updates.assigned_to || null) : undefined
-      };
+      console.log('📝 Detected changes:', changes);
 
-      console.log('Formatted updates:', formattedUpdates);
+      // Only include fields that are actually being updated
+      const formattedUpdates = Object.entries(updates).reduce((acc, [key, value]) => {
+        // Skip undefined values
+        if (value === undefined) return acc;
+        
+        // Handle special cases
+        if (key === 'group') {
+          acc['group_name'] = value;
+        } else if (key === 'tags') {
+          acc['tags'] = JSON.stringify(value);
+        } else if (key === 'assigned_to') {
+          acc['assigned_to'] = value || null;
+        } else {
+          acc[key] = value;
+        }
+        return acc;
+      }, {} as Record<string, any>);
 
-      const { data, error } = await supabase
-        .from('tickets')
-        .update(formattedUpdates)
-        .eq('id', ticket.id)
-        .select(`
-          *,
-          profiles:user_id(email, full_name),
-          agents:assigned_to(email, full_name)
-        `)
-        .single();
+      console.log('📝 Sending formatted updates to Supabase:', formattedUpdates);
 
-      if (error) {
-        console.error('Error updating ticket:', error);
-        throw error;
+      // Get the session for authentication
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No active session');
+
+      // Update using the Edge Function
+      const response = await fetch(`${EDGE_FUNCTION_URL}/${ticket.id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(formattedUpdates)
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        console.error('❌ Error updating ticket:', error);
+        throw new Error(error.message || 'Failed to update ticket');
       }
+
+      const { ticket: updatedTicket } = await response.json();
+      console.log('✅ Received response from Edge Function:', updatedTicket);
 
       // Parse the tags back from JSONB to array
       const parsedTicket = {
-        ...data,
-        tags: Array.isArray(data.tags) ? data.tags : JSON.parse(data.tags || '[]')
+        ...updatedTicket,
+        tags: Array.isArray(updatedTicket.tags) ? updatedTicket.tags : JSON.parse(updatedTicket.tags || '[]')
       };
 
-      // If there are changes and it's not a new ticket, call the ticket-interactions function
-      if (changes.length > 0 && !parsedTicket.isNewTicket) {
-        const type = updates.assigned_to !== undefined ? 'TICKET_ASSIGNED' : 'TICKET_UPDATED';
-        
-        const response = await fetch(
-          `${process.env.REACT_APP_SUPABASE_URL}/functions/v1/ticket-interactions`,
-          {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${process.env.REACT_APP_SUPABASE_ANON_KEY}`
-            },
-            body: JSON.stringify({
-              ticketId: ticket.id,
-              userId: user.id,
-              changes,
-              type,
-              isNewTicket: false
-            })
-          }
-        );
-
-        if (!response.ok) {
-          console.error('Failed to record ticket interaction:', await response.json());
-        }
-      }
-
-      console.log('Raw response data:', data);
-      console.log('Parsed ticket:', parsedTicket);
+      console.log('✅ Setting local ticket state to:', parsedTicket);
+      
+      // Update the local state with the new ticket data
       setTicket(parsedTicket);
+
+      // Return the updated ticket data
       return parsedTicket;
-    } catch (err) {
-      console.error('Failed to update ticket:', err);
-      throw err;
+    } catch (error) {
+      console.error('❌ Error in updateTicket:', error);
+      throw error;
     }
   };
 
