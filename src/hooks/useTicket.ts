@@ -3,6 +3,8 @@ import { useParams } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 
+const EDGE_FUNCTION_URL = process.env.REACT_APP_SUPABASE_URL + '/functions/v1/tickets';
+
 export type Reply = {
   id: number;
   type?: 'reply';
@@ -216,44 +218,40 @@ export const useTicket = (ticketId: string) => {
       setLoading(true);
       setError('');
 
-      const { data: ticketData, error: ticketError } = await supabase
-        .from('tickets')
-        .select(`
-          *,
-          profiles:user_id(email, full_name, avatar_url),
-          agents:assigned_to(email, full_name, avatar_url)
-        `)
-        .eq('id', ticketId)
-        .single();
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) throw new Error('No active session');
 
-      if (ticketError) throw ticketError;
+      const response = await fetch(`${EDGE_FUNCTION_URL}/${ticketId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${session.access_token}`,
+          'Content-Type': 'application/json'
+        }
+      });
 
+      if (!response.ok) {
+        throw new Error(`Failed to fetch ticket: ${response.status}`);
+      }
+
+      const data = await response.json();
       const parsedTicket = {
-        ...ticketData,
-        tags: Array.isArray(ticketData.tags) ? ticketData.tags : JSON.parse(ticketData.tags || '[]')
+        ...data.ticket,
+        tags: Array.isArray(data.ticket.tags) ? data.ticket.tags : JSON.parse(data.ticket.tags || '[]')
       };
-
-      const { data: repliesData, error: repliesError } = await supabase
-        .from('replies')
-        .select(`
-          *,
-          user_profile:profiles!replies_user_id_fkey (
-            email,
-            full_name,
-            avatar_url
-          )
-        `)
-        .eq('ticket_id', ticketId)
-        .order('created_at', { ascending: true });
-
-      if (repliesError) throw repliesError;
 
       setTicket(parsedTicket);
       
       // Convert replies to messages
-      const initialMessages: Message[] = [
-        // Add initial ticket description as first message
-        {
+      let initialMessages: Message[] = data.replies.map((reply: any) => ({
+        ...reply,
+        type: 'reply' as const,
+        user_profile: reply.user_profile,
+        user_email: reply.user_email
+      }));
+
+      // If user is the ticket creator (customer), add the initial description as a message
+      if (user?.id === parsedTicket.user_id) {
+        const initialMessage: Message = {
           id: -parseInt(parsedTicket.id), // Use negative ID to ensure uniqueness
           type: 'reply' as const,
           content: parsedTicket.description,
@@ -261,36 +259,31 @@ export const useTicket = (ticketId: string) => {
           user_id: parsedTicket.user_id,
           ticket_id: parsedTicket.id,
           is_internal: false,
-          user_profile: parsedTicket.profiles,
+          user_profile: {
+            email: parsedTicket.profiles?.email,
+            full_name: parsedTicket.profiles?.full_name,
+            avatar_url: parsedTicket.profiles?.avatar_url
+          },
           user_email: parsedTicket.profiles?.email
-        },
-        // Add existing replies, filtering out the initial reply based on timestamp
-        ...repliesData?.filter(reply => {
-          // Convert timestamps to Date objects for comparison
-          const replyDate = new Date(reply.created_at);
-          const ticketDate = new Date(parsedTicket.created_at);
-          // Filter out replies that were created within 1 second of the ticket creation
-          return Math.abs(replyDate.getTime() - ticketDate.getTime()) > 1000;
-        }).map(reply => ({
-          ...reply,
-          type: 'reply' as const
-        })) || []
-      ];
-      
-      // Add system message if ticket is already closed or solved
-      if (parsedTicket.status === 'closed' || parsedTicket.status === 'solved') {
-        const otherUser = user?.id === parsedTicket.user_id ? parsedTicket.agents : parsedTicket.profiles;
-        initialMessages.push({
-          id: Date.now(),
-          type: 'system',
-          content: `${otherUser?.full_name || otherUser?.email || 'The other person'} has left the chat`,
-          created_at: parsedTicket.updated_at
-        });
+        };
+        
+        // Add initial message only if it's not already in the replies
+        const hasInitialReply = initialMessages.some(msg => 
+          'user_id' in msg && // Check if it's a Reply type
+          msg.content === parsedTicket.description && 
+          msg.user_id === parsedTicket.user_id &&
+          Math.abs(new Date(msg.created_at).getTime() - new Date(parsedTicket.created_at).getTime()) < 1000
+        );
+        
+        if (!hasInitialReply) {
+          initialMessages = [initialMessage, ...initialMessages];
+        }
       }
-      
+
       setMessages(initialMessages);
-    } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'An error occurred');
+    } catch (err) {
+      console.error('Error fetching ticket:', err);
+      setError(err instanceof Error ? err.message : 'Failed to load ticket');
     } finally {
       setLoading(false);
     }
@@ -300,46 +293,37 @@ export const useTicket = (ticketId: string) => {
     if (!user) throw new Error('User not authenticated');
     if (!ticket) throw new Error('No ticket loaded');
 
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) throw new Error('No active session');
+
     console.log('Adding new reply:', { content, isPublic, ticketId: ticket.id });
 
-    const { data: newReply, error } = await supabase
-      .from('replies')
-      .insert({
-        ticket_id: ticket.id,
+    const response = await fetch(`${EDGE_FUNCTION_URL}/${ticket.id}/replies`, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${session.access_token}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
         content,
-        user_id: user.id,
         is_public: isPublic
       })
-      .select(`
-        *,
-        user_profile:profiles!replies_user_id_fkey (
-          email,
-          full_name,
-          avatar_url
-        )
-      `)
-      .single();
+    });
 
-    if (error) {
-      console.error('Error adding reply:', error);
-      throw error;
+    if (!response.ok) {
+      const error = await response.json();
+      throw new Error(error.message || 'Failed to add reply');
     }
 
-    console.log('Successfully added reply:', newReply);
+    const { reply } = await response.json();
 
     // Format the reply consistently with the real-time updates
     const formattedReply: Reply = {
-      id: newReply.id,
-      ticket_id: newReply.ticket_id,
-      content: newReply.content,
-      created_at: newReply.created_at,
-      user_id: newReply.user_id,
-      user_email: newReply.user_profile?.email || '',
-      is_internal: !newReply.is_public,
+      ...reply,
       user_profile: {
-        full_name: newReply.user_profile?.full_name || null,
-        email: newReply.user_profile?.email || '',
-        avatar_url: newReply.user_profile?.avatar_url || null
+        full_name: reply.user_name || null,
+        email: reply.user_email || '',
+        avatar_url: reply.user_avatar || null
       }
     };
 

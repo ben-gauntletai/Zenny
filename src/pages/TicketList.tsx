@@ -108,7 +108,7 @@ const TicketList: React.FC = () => {
     <div className="ticket-list">
       <header className="ticket-list-header">
         <div className="header-content">
-          <h1>Support Tickets</h1>
+          <h1>{isAgentOrAdmin ? 'Support Tickets' : 'My Tickets'}</h1>
           <p className="subtitle">Manage and track support requests</p>
         </div>
         <Link to="/tickets/new" className="create-ticket-button">
@@ -129,17 +129,19 @@ const TicketList: React.FC = () => {
           <option value="closed">Closed</option>
         </select>
 
-        <select
-          value={filters.priority}
-          onChange={(e) => handleFilterChange('priority', e.target.value)}
-          className="filter-select"
-        >
-          <option value="">All Priority</option>
-          <option value="low">Low</option>
-          <option value="normal">Normal</option>
-          <option value="high">High</option>
-          <option value="urgent">Urgent</option>
-        </select>
+        {isAgentOrAdmin && (
+          <select
+            value={filters.priority}
+            onChange={(e) => handleFilterChange('priority', e.target.value)}
+            className="filter-select"
+          >
+            <option value="">All Priority</option>
+            <option value="low">Low</option>
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        )}
 
         {isAgentOrAdmin && (
           <select
@@ -187,7 +189,7 @@ const TicketList: React.FC = () => {
               <tr>
                 <th>Title</th>
                 <th>Status</th>
-                <th>Priority</th>
+                {isAgentOrAdmin && <th>Priority</th>}
                 <th>Created</th>
                 {isAgentOrAdmin && <th>Requester</th>}
                 <th>Assigned To</th>
@@ -206,11 +208,13 @@ const TicketList: React.FC = () => {
                       {ticket.status.charAt(0).toUpperCase() + ticket.status.slice(1).toLowerCase()}
                     </span>
                   </td>
-                  <td>
-                    <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
-                      {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1).toLowerCase()}
-                    </span>
-                  </td>
+                  {isAgentOrAdmin && (
+                    <td>
+                      <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
+                        {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1).toLowerCase()}
+                      </span>
+                    </td>
+                  )}
                   <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
                   {isAgentOrAdmin && <td>{ticket.creator_name || ticket.creator_email}</td>}
                   <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
