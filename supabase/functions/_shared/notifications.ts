@@ -97,14 +97,15 @@ export async function notifyTicketUpdated(
   supabaseClient: any,
   ticket: any,
   updater: any,
-  previousAssignee?: string
+  previousTicket: any
 ) {
   try {
     console.log('Starting notifyTicketUpdated with:', {
       ticket_id: ticket.id,
       updater_id: updater.id,
-      previous_assignee: previousAssignee,
-      current_assignee: ticket.assigned_to
+      previous_ticket: previousTicket,
+      current_ticket: ticket,
+      ticket_updates: ticket
     });
 
     // Create individual notifications for each change
@@ -113,90 +114,240 @@ export async function notifyTicketUpdated(
     // Get updater's name for context
     const updaterName = updater.user_metadata?.full_name || updater.email || 'A user';
 
-    if (ticket.status) {
-      notifications.push({
-        user_id: null, // null user_id means visible to all in interaction history
-        title: 'Status Update',
-        message: `${updaterName} changed the status to "${ticket.status}"`,
-        type: 'TICKET_UPDATED',
-        ticket_id: ticket.id
-      });
-    }
-
-    if (ticket.priority) {
-      notifications.push({
-        user_id: null,
-        title: 'Priority Update',
-        message: `${updaterName} set the priority to "${ticket.priority}"`,
-        type: 'TICKET_UPDATED',
-        ticket_id: ticket.id
-      });
-    }
-
-    if (ticket.ticket_type) {
-      notifications.push({
-        user_id: null,
-        title: 'Type Update',
-        message: `${updaterName} changed the type to "${ticket.ticket_type}"`,
-        type: 'TICKET_UPDATED',
-        ticket_id: ticket.id
-      });
-    }
-
-    if (ticket.topic) {
-      notifications.push({
-        user_id: null,
-        title: 'Topic Update',
-        message: `${updaterName} set the topic to "${ticket.topic}"`,
-        type: 'TICKET_UPDATED',
-        ticket_id: ticket.id
-      });
-    }
-
-    if (ticket.tags && ticket.tags.length > 0) {
-      notifications.push({
-        user_id: null,
-        title: 'Tags Update',
-        message: `${updaterName} updated the tags to: ${ticket.tags.join(', ')}`,
-        type: 'TICKET_UPDATED',
-        ticket_id: ticket.id
-      });
-    }
-
-    // Handle assignment changes
-    if (ticket.assigned_to && ticket.assigned_to !== previousAssignee) {
-      // Try to get the new assignee's email
-      const { data: assigneeData } = await supabaseClient
-        .from('auth.users')
-        .select('email, user_metadata->full_name')
-        .eq('id', ticket.assigned_to)
-        .single();
-
-      const assigneeName = assigneeData?.user_metadata?.full_name || assigneeData?.email || 'a new agent';
+    // Helper function to format field values
+    const formatFieldValue = (field: string, value: string) => {
+      if (!value) return value;
       
-      notifications.push({
-        user_id: null,
-        title: 'Assignment Update',
-        message: `${updaterName} assigned the ticket to ${assigneeName}`,
-        type: 'TICKET_ASSIGNED',
-        ticket_id: ticket.id
-      });
+      switch (field) {
+        case 'status':
+          return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+        case 'priority':
+          return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+        case 'ticket_type':
+          return value.charAt(0).toUpperCase() + value.slice(1).toLowerCase();
+        case 'topic':
+          switch (value) {
+            case 'ISSUE': return 'Issue';
+            case 'INQUIRY': return 'Inquiry';
+            case 'PAYMENTS': return 'Payments';
+            case 'OTHER': return 'Other';
+            case 'NONE': return 'None';
+            default: return value;
+          }
+        case 'group_name':
+          return value; // Already in correct format (Support/Admin)
+        default:
+          return value;
+      }
+    };
+
+    // Get the actual changes by comparing fields
+    const changes = Object.keys(ticket).reduce((acc: any[], key) => {
+      // Skip internal fields that shouldn't trigger notifications
+      if (['created_at', 'updated_at', 'last_agent_update', 'last_requester_update'].includes(key)) {
+        return acc;
+      }
+
+      // Special handling for tags
+      if (key === 'tags') {
+        const currentTags = Array.isArray(previousTicket[key]) 
+          ? previousTicket[key] 
+          : JSON.parse(previousTicket[key] || '[]');
+        const newTags = Array.isArray(ticket[key])
+          ? ticket[key]
+          : JSON.parse(ticket[key] || '[]');
+
+        // Normalize arrays for comparison
+        const normalizeTagArray = (tags: any[]) => 
+          tags.filter(tag => tag && tag.trim()).map(tag => tag.trim()).sort();
+
+        const normalizedCurrentTags = normalizeTagArray(currentTags);
+        const normalizedNewTags = normalizeTagArray(newTags);
+
+        // Only add to changes if tags are actually different
+        if (normalizedCurrentTags.length !== normalizedNewTags.length ||
+            normalizedCurrentTags.some((tag, index) => tag !== normalizedNewTags[index])) {
+          acc.push({
+            field: key,
+            oldValue: normalizedCurrentTags,
+            newValue: normalizedNewTags
+          });
+        }
+      } else if (ticket[key] !== previousTicket[key]) {
+        acc.push({
+          field: key,
+          oldValue: previousTicket[key],
+          newValue: ticket[key]
+        });
+      }
+      return acc;
+    }, []);
+
+    console.log('Detected changes:', changes);
+
+    // Create a unique key for each notification to prevent duplicates
+    const notificationKeys = new Set();
+
+    // Create notifications only for fields that have actually changed
+    for (const change of changes) {
+      const formattedNewValue = formatFieldValue(change.field, change.newValue);
+      let notificationKey;
+      let notification;
+      
+      switch (change.field) {
+        case 'status':
+          notificationKey = `status_${change.newValue}_${ticket.id}`;
+          notification = {
+            user_id: null,
+            title: 'Status Update',
+            message: `${updaterName} changed the status to "${formattedNewValue}"`,
+            type: 'TICKET_UPDATED',
+            ticket_id: ticket.id
+          };
+          break;
+
+        case 'priority':
+          notificationKey = `priority_${change.newValue}_${ticket.id}`;
+          notification = {
+            user_id: null,
+            title: 'Priority Update',
+            message: `${updaterName} set the priority to "${formattedNewValue}"`,
+            type: 'TICKET_UPDATED',
+            ticket_id: ticket.id
+          };
+          break;
+
+        case 'ticket_type':
+          notificationKey = `type_${change.newValue}_${ticket.id}`;
+          notification = {
+            user_id: null,
+            title: 'Type Update',
+            message: `${updaterName} set the type to "${formattedNewValue}"`,
+            type: 'TICKET_UPDATED',
+            ticket_id: ticket.id
+          };
+          break;
+
+        case 'topic':
+          notificationKey = `topic_${change.newValue}_${ticket.id}`;
+          notification = {
+            user_id: null,
+            title: 'Topic Update',
+            message: `${updaterName} set the topic to "${formattedNewValue}"`,
+            type: 'TICKET_UPDATED',
+            ticket_id: ticket.id
+          };
+          break;
+
+        case 'group_name':
+          notificationKey = `group_${change.newValue}_${ticket.id}`;
+          notification = {
+            user_id: null,
+            title: 'Group Update',
+            message: `${updaterName} set the group to "${formattedNewValue}"`,
+            type: 'TICKET_UPDATED',
+            ticket_id: ticket.id
+          };
+          break;
+
+        case 'subject':
+          notificationKey = `subject_${ticket.id}`;
+          notification = {
+            user_id: null,
+            title: 'Subject Update',
+            message: `${updaterName} updated the subject to "${change.newValue}"`,
+            type: 'TICKET_UPDATED',
+            ticket_id: ticket.id
+          };
+          break;
+
+        case 'tags':
+          notificationKey = `tags_${JSON.stringify(change.newValue)}_${ticket.id}`;
+          const tagsMessage = change.newValue?.length > 0
+            ? `${updaterName} updated the tags to: ${change.newValue.join(', ')}`
+            : `${updaterName} removed all tags`;
+          
+          notification = {
+            user_id: null,
+            title: 'Tags Update',
+            message: tagsMessage,
+            type: 'TICKET_UPDATED',
+            ticket_id: ticket.id
+          };
+          break;
+
+        case 'assigned_to':
+          notificationKey = `assigned_${change.newValue || 'unassigned'}_${ticket.id}`;
+          let message;
+          if (!change.newValue) {
+            message = `${updaterName} unassigned the ticket`;
+          } else {
+            // Get the new assignee's name
+            const { data: assignee } = await supabaseClient
+              .from('profiles')
+              .select('full_name, email')
+              .eq('id', change.newValue)
+              .single();
+
+            const assigneeName = assignee?.full_name || assignee?.email || 'Unknown user';
+            message = `${updaterName} assigned the ticket to ${assigneeName}`;
+          }
+
+          notification = {
+            user_id: null,
+            title: 'Assignment Update',
+            message,
+            type: 'TICKET_UPDATED',
+            ticket_id: ticket.id
+          };
+
+          // Add notification to the list if it's unique
+          if (!notificationKeys.has(notificationKey)) {
+            notificationKeys.add(notificationKey);
+            notifications.push(notification);
+          }
+
+          // Also notify the new assignee
+          if (change.newValue) {
+            const assigneeNotificationKey = `assigned_to_me_${change.newValue}_${ticket.id}`;
+            if (!notificationKeys.has(assigneeNotificationKey)) {
+              notificationKeys.add(assigneeNotificationKey);
+              notifications.push({
+                user_id: change.newValue,
+                title: 'Ticket Assigned',
+                message: `Ticket "${ticket.subject}" has been assigned to you`,
+                type: 'TICKET_ASSIGNED',
+                ticket_id: ticket.id
+              });
+            }
+          }
+          continue; // Skip the default notification addition since we handled it specially
+      }
+
+      // Add notification to the list if it's unique
+      if (notification && !notificationKeys.has(notificationKey)) {
+        notificationKeys.add(notificationKey);
+        notifications.push(notification);
+      }
     }
 
-    // Create all notifications
-    for (const notification of notifications) {
-      await createNotification(supabaseClient, notification);
+    // Insert all notifications at once
+    if (notifications.length > 0) {
+      console.log('Creating notifications:', notifications);
+      const { error: notificationError } = await supabaseClient
+        .from('notifications')
+        .insert(notifications);
+
+      if (notificationError) {
+        console.error('Error creating notifications:', notificationError);
+        throw notificationError;
+      }
+
+      console.log(`Successfully created ${notifications.length} notifications`);
     }
 
-    console.log('Successfully created update notifications:', notifications.length);
   } catch (error) {
-    console.error('Error in notifyTicketUpdated:', {
-      error,
-      message: error.message,
-      stack: error.stack,
-      ticket_id: ticket?.id,
-      updater_id: updater?.id
-    });
+    console.error('Error in notifyTicketUpdated:', error);
     throw error;
   }
 } 

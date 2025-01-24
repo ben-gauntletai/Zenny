@@ -98,7 +98,8 @@ async function handleTicketCreation(req, supabaseClient, user) {
     const { data: ticket, error: ticketError } = await serviceRoleClient.from('tickets').insert({
       ...payload,
       user_id: user.id,
-      status: 'open'
+      status: 'open',
+      group_name: 'Support'
     }).select(`
         *,
         profiles:user_id(email, full_name),
@@ -240,20 +241,78 @@ async function handleTicketUpdate(req, supabaseClient, user) {
       throw new Error('Unauthorized to update this ticket');
     }
 
-    // Ensure tags is properly formatted as a JSONB array
+    // Only format tags if they were actually included in the updates
     const formattedUpdates = {
-      ...updates,
-      tags: updates.tags ? JSON.parse(updates.tags) : updates.tags
+      ...updates
     };
+    if ('tags' in updates) {
+      formattedUpdates.tags = updates.tags ? JSON.parse(updates.tags) : [];
+    }
 
-    // Update the ticket
+    // Only include fields that have actually changed
+    const changedFields = Object.keys(formattedUpdates).reduce((acc: any, key) => {
+      // Skip undefined or null values
+      if (formattedUpdates[key] === undefined || formattedUpdates[key] === null) {
+        return acc;
+      }
+
+      // Special handling for tags which might be stringified
+      if (key === 'tags' && 'tags' in updates) {
+        const currentTags = Array.isArray(currentTicket.tags) 
+          ? currentTicket.tags 
+          : JSON.parse(currentTicket.tags || '[]');
+        const newTags = formattedUpdates.tags;
+        
+        // Sort both arrays to ensure consistent comparison
+        const sortedCurrentTags = [...currentTags].sort();
+        const sortedNewTags = [...newTags].sort();
+        
+        if (JSON.stringify(sortedCurrentTags) !== JSON.stringify(sortedNewTags)) {
+          acc[key] = newTags;
+          console.log('Tags have changed:', {
+            currentTags: sortedCurrentTags,
+            newTags: sortedNewTags
+          });
+        } else {
+          console.log('Tags have not changed:', {
+            currentTags: sortedCurrentTags,
+            newTags: sortedNewTags
+          });
+        }
+      } else if (formattedUpdates[key] !== currentTicket[key]) {
+        acc[key] = formattedUpdates[key];
+        console.log(`Field ${key} has changed:`, {
+          currentValue: currentTicket[key],
+          newValue: formattedUpdates[key]
+        });
+      }
+      return acc;
+    }, {});
+
+    // Only proceed with update if there are actual changes
+    if (Object.keys(changedFields).length === 0) {
+      console.log('No fields have changed, skipping update');
+      return new Response(JSON.stringify({
+        ticket: currentTicket
+      }), {
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
+        status: 200
+      });
+    }
+
+    // Add the timestamp updates
+    changedFields.last_agent_update = user.user_metadata?.role === 'user' ? currentTicket.last_agent_update : new Date().toISOString();
+    changedFields.last_requester_update = user.user_metadata?.role === 'user' ? new Date().toISOString() : currentTicket.last_requester_update;
+
+    console.log('Updating ticket with changed fields:', changedFields);
+
+    // Update the ticket only if there are changes
     const { data: updatedTicket, error: updateError } = await supabaseClient
       .from('tickets')
-      .update({
-        ...formattedUpdates,
-        last_agent_update: user.user_metadata?.role === 'user' ? currentTicket.last_agent_update : new Date().toISOString(),
-        last_requester_update: user.user_metadata?.role === 'user' ? new Date().toISOString() : currentTicket.last_requester_update
-      })
+      .update(changedFields)
       .eq('id', ticketId)
       .select(`
         *,
@@ -270,6 +329,13 @@ async function handleTicketUpdate(req, supabaseClient, user) {
           full_name,
           role,
           avatar_url
+        ),
+        requester:profiles!tickets_user_id_fkey(
+          id,
+          email,
+          full_name,
+          avatar_url,
+          role
         )
       `)
       .single();
@@ -280,10 +346,24 @@ async function handleTicketUpdate(req, supabaseClient, user) {
     }
 
     // Send notifications
-    await notifyTicketUpdated(supabaseClient, updatedTicket, user, currentTicket.assigned_to);
+    await notifyTicketUpdated(supabaseClient, updatedTicket, user, currentTicket);
+
+    // Transform the ticket data to include requester information
+    const transformedTicket = {
+      ...updatedTicket,
+      requester_id: updatedTicket.user_id,
+      requester_email: updatedTicket.requester?.email || updatedTicket.profiles?.email,
+      requester_name: updatedTicket.requester?.full_name || updatedTicket.profiles?.full_name,
+      requester_avatar: updatedTicket.requester?.avatar_url || updatedTicket.profiles?.avatar_url,
+      requester_role: updatedTicket.requester?.role || updatedTicket.profiles?.role,
+      agent_email: updatedTicket.agents?.email,
+      agent_name: updatedTicket.agents?.full_name,
+      agent_avatar: updatedTicket.agents?.avatar_url,
+      agent_role: updatedTicket.agents?.role
+    };
 
     return new Response(JSON.stringify({
-      ticket: updatedTicket
+      ticket: transformedTicket
     }), {
       headers: {
         ...corsHeaders,

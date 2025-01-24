@@ -68,7 +68,7 @@ const Dashboard: React.FC = () => {
                   </td>
                   <td>{ticket.creator_email}</td>
                   <td>{new Date(ticket.updated_at).toLocaleDateString()}</td>
-                  <td>Support</td>
+                  <td>{ticket.group_name}</td>
                   <td>{ticket.agent_email || 'Unassigned'}</td>
                 </tr>
               ))}

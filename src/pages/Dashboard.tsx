@@ -506,7 +506,7 @@ const Dashboard: React.FC = () => {
                     </td>
                     <td>{ticket.creator_name || ticket.creator_email}</td>
                     <td>{formatDate(ticket.updated_at)}</td>
-                    <td>{ticket.group_name || 'Support'}</td>
+                    <td>{ticket.group_name}</td>
                     <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
                   </tr>
                 ))}

@@ -372,11 +372,11 @@ export const useTicket = (ticketId: string) => {
       Object.keys(updates).forEach(field => {
         // Convert 'group' to 'group_name' in the tracking
         const dbField = field === 'group' ? 'group_name' : field;
-        oldValues[dbField] = ticket[field as keyof Ticket];
-        if (updates[field as keyof Ticket] !== ticket[field as keyof Ticket]) {
+        oldValues[dbField] = ticket[dbField as keyof Ticket];
+        if (updates[field as keyof Ticket] !== ticket[dbField as keyof Ticket]) {
           changes.push({
             field: dbField,
-            oldValue: ticket[field as keyof Ticket],
+            oldValue: ticket[dbField as keyof Ticket],
             newValue: updates[field as keyof Ticket]
           });
         }

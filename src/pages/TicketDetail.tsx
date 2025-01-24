@@ -110,19 +110,8 @@ const TicketContent: React.FC = () => {
 
             if (!error && data) {
               setTicketNotifications(prev => {
-                // Check if we already have a notification of this type at the same time
-                const timeKey = new Date(data.created_at).setMilliseconds(0);
-                const key = `${data.type}_${timeKey}`;
-                
-                // Filter out any existing notifications that match this key
-                const filteredPrev = prev.filter(n => {
-                  const nTimeKey = new Date(n.created_at).setMilliseconds(0);
-                  const nKey = `${n.type}_${nTimeKey}`;
-                  return nKey !== key;
-                });
-
-                // Add the new notification (preferring null user_id)
-                return [data as Notification, ...filteredPrev].sort((a, b) => 
+                // Add the new notification and sort by created_at
+                return [data as Notification, ...prev].sort((a, b) => 
                   new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
                 );
               });
@@ -131,7 +120,6 @@ const TicketContent: React.FC = () => {
         )
         .subscribe();
 
-      // Cleanup subscription on unmount
       return () => {
         subscription.unsubscribe();
       };
@@ -154,25 +142,8 @@ const TicketContent: React.FC = () => {
 
       if (error) throw error;
 
-      // Group notifications by type and created_at (rounded to the nearest second)
-      const groupedNotifications = (data as Notification[] | null)?.reduce((acc: { [key: string]: Notification }, notification: Notification) => {
-        // Round to nearest second to group notifications created at almost the same time
-        const timeKey = new Date(notification.created_at).setMilliseconds(0);
-        const key = `${notification.type}_${timeKey}`;
-        
-        // For each group, prefer notifications with null user_id (visible to all)
-        // or keep the first one if no null user_id exists
-        if (!acc[key] || notification.user_id === null) {
-          acc[key] = notification;
-        }
-        return acc;
-      }, {});
-
-      // Convert back to array and sort by created_at
-      const uniqueNotifications = Object.values(groupedNotifications || {})
-        .sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-
-      setTicketNotifications(uniqueNotifications);
+      // Simply set the notifications without grouping
+      setTicketNotifications(data || []);
     } catch (err) {
       console.error('Error fetching notifications:', err);
     }
@@ -219,6 +190,15 @@ const TicketContent: React.FC = () => {
         ...prev,
         [field]: value
       }));
+
+      // If submit action, update the ticket
+      if (field === 'submit') {
+        console.log('🔄 Submitting pending changes:', pendingChanges);
+        await updateTicket(pendingChanges);
+        setPendingChanges({});
+        // Navigate to dashboard after successful update
+        navigate('/');
+      }
     } catch (error) {
       console.error('Failed to update pending changes:', error);
       setUiNotifications(prev => [
@@ -519,6 +499,8 @@ const TicketContent: React.FC = () => {
                       created_at: new Date().toISOString()
                     }
                   ]);
+                  // Navigate to dashboard after successful save
+                  navigate('/');
                 }
               } catch (error) {
                 console.error('Failed to save changes:', error);
