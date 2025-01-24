@@ -17,7 +17,7 @@ interface Notification {
   ticket_id: number;
   user_id: string | null;
   title: string;
-  description: string;
+  message: string;
   created_at: string;
   user?: {
     full_name: string | null;
@@ -211,29 +211,22 @@ const TicketContent: React.FC = () => {
     }, 100);
   };
 
-  const handleTicketUpdate = async () => {
+  const handleFieldUpdate = async (field: string, value: unknown) => {
     try {
-      if (Object.keys(pendingChanges).length > 0) {
-        await updateTicket(pendingChanges);
-        setPendingChanges({});
-        setUiNotifications(prev => [
-          ...prev,
-          {
-            id: Date.now().toString(),
-            type: 'success',
-            message: 'Ticket updated successfully',
-            created_at: new Date().toISOString()
-          }
-        ]);
-      }
+      console.log('🔄 Setting pending change:', field, 'with value:', value);
+      // Update pending changes
+      setPendingChanges(prev => ({
+        ...prev,
+        [field]: value
+      }));
     } catch (error) {
-      console.error('Failed to update ticket:', error);
+      console.error('Failed to update pending changes:', error);
       setUiNotifications(prev => [
         ...prev,
         {
           id: Date.now().toString(),
           type: 'error',
-          message: 'Failed to update ticket',
+          message: 'Failed to update field',
           created_at: new Date().toISOString()
         }
       ]);
@@ -249,7 +242,7 @@ const TicketContent: React.FC = () => {
         replyContent={replyContent}
         setReplyContent={setReplyContent}
         handleSubmitReply={handleSubmitReply}
-        onUpdate={handleTicketUpdate}
+        onUpdate={updateTicket}
         pendingChanges={pendingChanges}
       />
     );
@@ -287,7 +280,7 @@ const TicketContent: React.FC = () => {
           status: ticket.status as 'open' | 'pending' | 'solved' | 'closed',
           group_name: (ticket.group_name || 'Support') as 'Support' | 'Admin'
         }}
-        onUpdate={handleTicketUpdate}
+        onUpdate={handleFieldUpdate}
         pendingChanges={pendingChanges}
       />
 
@@ -511,7 +504,35 @@ const TicketContent: React.FC = () => {
         <div className="save-button-container" style={{ padding: '1rem', marginBottom: '20%' }}>
           <button 
             className="save-button"
-            onClick={handleTicketUpdate}
+            onClick={async () => {
+              try {
+                if (Object.keys(pendingChanges).length > 0) {
+                  console.log('💾 Saving pending changes:', pendingChanges);
+                  await updateTicket(pendingChanges);
+                  setPendingChanges({});
+                  setUiNotifications(prev => [
+                    ...prev,
+                    {
+                      id: Date.now().toString(),
+                      type: 'success',
+                      message: 'All changes saved successfully',
+                      created_at: new Date().toISOString()
+                    }
+                  ]);
+                }
+              } catch (error) {
+                console.error('Failed to save changes:', error);
+                setUiNotifications(prev => [
+                  ...prev,
+                  {
+                    id: Date.now().toString(),
+                    type: 'error',
+                    message: 'Failed to save changes',
+                    created_at: new Date().toISOString()
+                  }
+                ]);
+              }
+            }}
           >
             Save Changes
           </button>
@@ -536,7 +557,7 @@ const TicketContent: React.FC = () => {
                   </div>
                   <div className="interaction-details">
                     <div className="change-item">
-                      {notification.description}
+                      {notification.message}
                     </div>
                   </div>
                 </div>
