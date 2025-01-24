@@ -1,11 +1,25 @@
-import React, { useEffect, useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
-import { TicketWithUsers } from '../types/supabase';
-import TicketCard from '../components/TicketCard';
+import { ticketService } from '../services/ticketService';
 import '../styles/TicketList.css';
-import '../styles/TicketCard.css';
+
+interface TicketWithUsers {
+  id: number;
+  subject: string;
+  status: 'open' | 'pending' | 'solved' | 'closed';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  created_at: string;
+  updated_at: string;
+  user_id: string;
+  assigned_to?: string;
+  group_id?: string;
+  creator_email: string;
+  creator_name?: string;
+  agent_email?: string;
+  agent_name?: string;
+  group_name?: string;
+}
 
 interface FilterState {
   status: string;
@@ -33,30 +47,28 @@ const TicketList: React.FC = () => {
   const fetchTickets = async () => {
     try {
       setLoading(true);
-      let query = supabase
-        .from('tickets_with_users')
-        .select('*')
-        .order('created_at', { ascending: false });
+      const response = await ticketService.listTickets({
+        status: filters.status || undefined,
+        limit: 100,
+        offset: 0
+      });
 
-      // Apply filters
-      if (filters.status) {
-        query = query.eq('status', filters.status);
-      }
+      let filteredTickets = response.tickets;
+
+      // Apply client-side filters
       if (filters.priority) {
-        query = query.eq('priority', filters.priority);
-      }
-      if (!isAgent) {
-        query = query.eq('user_id', user?.id);
-      } else if (filters.assignee === 'me') {
-        query = query.eq('assigned_to', user?.id);
-      } else if (filters.assignee === 'unassigned') {
-        query = query.is('assigned_to', null);
+        filteredTickets = filteredTickets.filter(ticket => ticket.priority === filters.priority);
       }
 
-      const { data, error: fetchError } = await query;
-      
-      if (fetchError) throw fetchError;
-      setTickets(data || []);
+      if (isAgent) {
+        if (filters.assignee === 'me') {
+          filteredTickets = filteredTickets.filter(ticket => ticket.assigned_to === user?.id);
+        } else if (filters.assignee === 'unassigned') {
+          filteredTickets = filteredTickets.filter(ticket => !ticket.assigned_to);
+        }
+      }
+
+      setTickets(filteredTickets);
     } catch (err) {
       console.error('Error fetching tickets:', err);
       setError('Failed to load tickets');
@@ -93,7 +105,25 @@ const TicketList: React.FC = () => {
         ) : (
           <div className="ticket-list">
             {tickets.map((ticket) => (
-              <TicketCard key={ticket.id} ticket={ticket} />
+              <Link to={`/tickets/${ticket.id}`} key={ticket.id} className="ticket-card">
+                <div className="ticket-header">
+                  <span className={`status-badge ${ticket.status}`}>
+                    {ticket.status.charAt(0).toUpperCase() + ticket.status.slice(1)}
+                  </span>
+                  <span className={`priority-badge ${ticket.priority}`}>
+                    {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1)}
+                  </span>
+                </div>
+                <h3 className="ticket-subject">{ticket.subject}</h3>
+                <div className="ticket-meta">
+                  <span>Created by: {ticket.creator_name || ticket.creator_email}</span>
+                  <span>Assigned to: {ticket.agent_name || ticket.agent_email || 'Unassigned'}</span>
+                  <span>Group: {ticket.group_name || 'None'}</span>
+                </div>
+                <div className="ticket-date">
+                  {new Date(ticket.created_at).toLocaleDateString()}
+                </div>
+              </Link>
             ))}
           </div>
         )}

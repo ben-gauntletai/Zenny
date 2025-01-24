@@ -91,44 +91,43 @@ export const ticketService = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('No active session');
 
-    const userRole = session.user.user_metadata?.role;
-    const isAdmin = userRole === 'admin';
-    const isAgent = userRole === 'agent';
-
-    console.log('Fetching tickets:', {
-      params,
-      session_user: session.user,
-      isAdmin,
-      isAgent
+    // Debug logging for authentication
+    console.log('Auth Debug:', {
+      user: session.user,
+      role: session.user.user_metadata?.role,
+      id: session.user.id,
+      email: session.user.email
     });
 
     let query = supabase
-      .from('tickets_with_users')
-      .select('*')
-      .order('created_at', { ascending: false });
+      .from('tickets')
+      .select(`
+        *,
+        creator:profiles!tickets_user_id_fkey (
+          id,
+          email,
+          full_name,
+          role,
+          avatar_url
+        ),
+        agent:profiles!tickets_assigned_to_fkey (
+          id,
+          email,
+          full_name,
+          role,
+          avatar_url
+        )
+      `);
 
+    // Apply additional filters
     if (params.status) {
       query = query.eq('status', params.status);
     }
 
-    // Apply role-based filters
-    if (isAdmin) {
-      // Admin can see all tickets
-    } else if (isAgent) {
-      // Agents can see:
-      // 1. Their own tickets
-      // 2. Tickets assigned to them
-      // 3. Support group tickets
-      query = query.or(
-        `user_id.eq.${session.user.id},` +
-        `assigned_to.eq.${session.user.id},` +
-        `group_name.eq.Support`
-      );
-    } else {
-      // Regular users can only see their own tickets
-      query = query.eq('user_id', session.user.id);
-    }
+    // Add ordering
+    query = query.order('created_at', { ascending: false });
 
+    // Add pagination
     if (params.limit) {
       query = query.limit(params.limit);
     }
@@ -137,27 +136,53 @@ export const ticketService = {
       query = query.range(params.offset, params.offset + (params.limit || 10) - 1);
     }
 
-    const { data, error } = await query;
-
-    if (error) {
-      console.error('Error fetching tickets:', {
-        error,
-        params,
-        user: {
-          id: session.user.id,
-          email: session.user.email,
-          role: session.user.user_metadata?.role
-        }
-      });
-      throw new Error(error.message);
-    }
-
-    console.log('Tickets fetched successfully:', {
-      count: data?.length,
-      first_ticket: data?.[0],
-      params
+    // Debug logging for query
+    console.log('Query Debug:', {
+      params: params,
+      hasStatus: !!params.status,
+      limit: params.limit,
+      offset: params.offset
     });
 
-    return { tickets: data || [] };
+    const { data, error } = await query;
+
+    // Debug logging for results
+    console.log('Results Debug:', {
+      success: !error,
+      error: error ? {
+        message: error.message,
+        code: error.code,
+        details: error.details
+      } : null,
+      ticketCount: data?.length || 0,
+      sampleTicket: data?.[0] ? {
+        id: data[0].id,
+        subject: data[0].subject,
+        status: data[0].status,
+        group_name: data[0].group_name,
+        assigned_to: data[0].assigned_to
+      } : null
+    });
+
+    if (error) {
+      console.error('Error fetching tickets:', error);
+      throw error;
+    }
+
+    // Transform the data to match the expected format
+    const transformedTickets = data?.map(ticket => ({
+      ...ticket,
+      creator_email: ticket.creator?.email,
+      creator_name: ticket.creator?.full_name,
+      creator_role: ticket.creator?.role,
+      creator_avatar: ticket.creator?.avatar_url,
+      agent_email: ticket.agent?.email,
+      agent_name: ticket.agent?.full_name,
+      agent_role: ticket.agent?.role,
+      agent_avatar: ticket.agent?.avatar_url
+    })) || [];
+
+    console.log('Transformed tickets:', transformedTickets);
+    return { tickets: transformedTickets };
   }
 }; 

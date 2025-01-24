@@ -82,64 +82,91 @@ export const useTicket = (ticketId: string) => {
 
       console.log('Setting up real-time subscription for ticket:', ticketId);
 
-      const channelName = `realtime:${ticketId}`;
-      channelRef.current = supabase.channel(channelName);
-
-      // Subscribe to both replies and ticket changes
-      channelRef.current
-        .on(
-          'postgres_changes',
-          {
-            event: 'INSERT',
-            schema: 'public',
-            table: 'replies',
-            filter: `ticket_id=eq.${ticketId}`
-          },
-          handleNewReply
-        )
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'tickets',
-            filter: `id=eq.${ticketId}`
-          },
-          (payload: { new: Ticket }) => {
-            console.log('🔄 Realtime update received:', {
-              newTicket: payload.new,
-              currentTicket: ticket
-            });
-            // Parse the tags back from JSONB to array if needed
+      // Create a channel with the correct format
+      const channel = supabase.channel('any').on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'replies',
+          filter: `ticket_id=eq.${ticketId}`
+        },
+        handleNewReply
+      ).on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'tickets',
+          filter: `id=eq.${ticketId}`
+        },
+        (payload: { new: Ticket }) => {
+          console.log('🔄 Realtime update received:', payload.new);
+          // Parse the tags back from JSONB to array if needed
+          setTicket(current => {
             const updatedTicket = {
               ...payload.new,
               tags: Array.isArray(payload.new.tags) ? payload.new.tags : JSON.parse(payload.new.tags || '[]')
             };
             console.log('🔄 Setting ticket state to:', updatedTicket);
-            setTicket(updatedTicket);
-          }
-        )
-        .subscribe((status: SubscriptionStatus) => {
-          console.log(`Subscription status for ${channelName}:`, status);
-          if (status === 'SUBSCRIBED') {
-            console.log('Successfully subscribed to changes for ticket:', ticketId);
-          }
-        });
+            return updatedTicket;
+          });
+        }
+      );
+
+      // Store channel in ref for cleanup
+      channelRef.current = channel;
+
+      // Subscribe and handle connection status
+      channel.subscribe((status) => {
+        console.log(`Subscription status:`, status);
+        if (status === 'SUBSCRIBED') {
+          console.log('Successfully subscribed to changes for ticket:', ticketId);
+        } else if (status === 'CHANNEL_ERROR') {
+          console.error('Channel error for ticket:', ticketId);
+          // Try to resubscribe after a delay
+          setTimeout(() => {
+            console.log('Attempting to resubscribe...');
+            if (channelRef.current) {
+              channelRef.current.subscribe();
+            }
+          }, 2000);
+        } else if (status === 'TIMED_OUT') {
+          console.error('Subscription timed out for ticket:', ticketId);
+          // Try to resubscribe after a delay
+          setTimeout(() => {
+            console.log('Attempting to resubscribe after timeout...');
+            if (channelRef.current) {
+              channelRef.current.subscribe();
+            }
+          }, 2000);
+        }
+      });
 
       return () => {
-        console.log('Cleaning up subscription for channel:', channelName);
+        console.log('Cleaning up subscription');
         if (channelRef.current) {
           channelRef.current.unsubscribe();
           channelRef.current = null;
         }
       };
     }
-  }, [ticketId, user?.id]);
+  }, [ticketId]); // Remove ticket from dependencies to prevent subscription loop
 
   const handleNewReply = async (payload: { new: Reply }) => {
     console.log('Received new reply from Postgres:', payload.new);
     
     try {
+      // Prevent duplicate processing
+      const isDuplicate = messages.some(msg => 
+        'id' in msg && msg.id === payload.new.id
+      );
+      
+      if (isDuplicate) {
+        console.log('Skipping duplicate reply:', payload.new.id);
+        return;
+      }
+
       // Fetch the complete reply with user profile
       const { data: newReply, error: replyError } = await supabase
         .from('replies')
@@ -165,6 +192,7 @@ export const useTicket = (ticketId: string) => {
         // Format the reply to match our Reply type
         const formattedReply: Reply = {
           id: newReply.id,
+          type: 'reply',
           ticket_id: newReply.ticket_id,
           content: newReply.content,
           created_at: newReply.created_at,
@@ -181,18 +209,22 @@ export const useTicket = (ticketId: string) => {
         console.log('Formatted reply:', formattedReply);
 
         setMessages(current => {
-          // Check if reply already exists
-          const exists = current.some(reply => reply.id === formattedReply.id);
-          console.log('Reply exists in state:', exists);
-          
-          if (exists) {
-            console.log('Reply already exists in state, skipping');
+          // Double check for duplicates (race condition protection)
+          if (current.some(msg => 'id' in msg && msg.id === formattedReply.id)) {
+            console.log('Reply already exists in state (race condition), skipping');
             return current;
           }
           
-          console.log('Adding new reply to state. Current length:', current.length);
-          const newMessages = [...current, formattedReply];
-          console.log('New messages length:', newMessages.length);
+          // Sort messages by creation date to maintain order
+          const newMessages = [...current, formattedReply].sort((a, b) => 
+            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+          );
+          
+          console.log('Updated messages:', {
+            previousCount: current.length,
+            newCount: newMessages.length
+          });
+          
           return newMessages;
         });
       }
@@ -305,20 +337,9 @@ export const useTicket = (ticketId: string) => {
 
     const { reply } = await response.json();
 
-    // Format the reply consistently with the real-time updates
-    const formattedReply: Reply = {
-      ...reply,
-      user_profile: {
-        full_name: reply.user_name || null,
-        email: reply.user_email || '',
-        avatar_url: reply.user_avatar || null
-      }
-    };
-
-    // Add formatted reply to local state immediately for instant feedback
-    setMessages(current => [...current, formattedReply]);
-    
-    return formattedReply;
+    // Don't add to local state - wait for real-time update
+    // This prevents duplicate messages
+    return reply;
   };
 
   const updateTicket = async (updates: Partial<Ticket>) => {
