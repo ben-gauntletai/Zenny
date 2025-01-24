@@ -99,104 +99,25 @@ export async function notifyTicketUpdated(
   updater: any,
   previousAssignee?: string
 ) {
-  try {
-    console.log('Starting notifyTicketUpdated with:', {
-      ticket_id: ticket.id,
-      updater_id: updater.id,
-      previous_assignee: previousAssignee,
-      current_assignee: ticket.assigned_to
+  // Notify ticket owner if updater is different
+  if (ticket.user_id !== updater.id) {
+    await createNotification(supabaseClient, {
+      user_id: ticket.user_id,
+      title: 'Ticket Updated',
+      message: `Your ticket "${ticket.subject}" has been updated`,
+      type: 'TICKET_UPDATED',
+      ticket_id: ticket.id
     });
+  }
 
-    // Create individual notifications for each change
-    const notifications = [];
-
-    // Get updater's name for context
-    const updaterName = updater.user_metadata?.full_name || updater.email || 'A user';
-
-    if (ticket.status) {
-      notifications.push({
-        user_id: null, // null user_id means visible to all in interaction history
-        title: 'Status Update',
-        message: `${updaterName} changed the status to "${ticket.status}"`,
-        type: 'TICKET_UPDATED',
-        ticket_id: ticket.id
-      });
-    }
-
-    if (ticket.priority) {
-      notifications.push({
-        user_id: null,
-        title: 'Priority Update',
-        message: `${updaterName} set the priority to "${ticket.priority}"`,
-        type: 'TICKET_UPDATED',
-        ticket_id: ticket.id
-      });
-    }
-
-    if (ticket.ticket_type) {
-      notifications.push({
-        user_id: null,
-        title: 'Type Update',
-        message: `${updaterName} changed the type to "${ticket.ticket_type}"`,
-        type: 'TICKET_UPDATED',
-        ticket_id: ticket.id
-      });
-    }
-
-    if (ticket.topic) {
-      notifications.push({
-        user_id: null,
-        title: 'Topic Update',
-        message: `${updaterName} set the topic to "${ticket.topic}"`,
-        type: 'TICKET_UPDATED',
-        ticket_id: ticket.id
-      });
-    }
-
-    if (ticket.tags && ticket.tags.length > 0) {
-      notifications.push({
-        user_id: null,
-        title: 'Tags Update',
-        message: `${updaterName} updated the tags to: ${ticket.tags.join(', ')}`,
-        type: 'TICKET_UPDATED',
-        ticket_id: ticket.id
-      });
-    }
-
-    // Handle assignment changes
-    if (ticket.assigned_to && ticket.assigned_to !== previousAssignee) {
-      // Try to get the new assignee's email
-      const { data: assigneeData } = await supabaseClient
-        .from('auth.users')
-        .select('email, user_metadata->full_name')
-        .eq('id', ticket.assigned_to)
-        .single();
-
-      const assigneeName = assigneeData?.user_metadata?.full_name || assigneeData?.email || 'a new agent';
-      
-      notifications.push({
-        user_id: null,
-        title: 'Assignment Update',
-        message: `${updaterName} assigned the ticket to ${assigneeName}`,
-        type: 'TICKET_ASSIGNED',
-        ticket_id: ticket.id
-      });
-    }
-
-    // Create all notifications
-    for (const notification of notifications) {
-      await createNotification(supabaseClient, notification);
-    }
-
-    console.log('Successfully created update notifications:', notifications.length);
-  } catch (error) {
-    console.error('Error in notifyTicketUpdated:', {
-      error,
-      message: error.message,
-      stack: error.stack,
-      ticket_id: ticket?.id,
-      updater_id: updater?.id
+  // Notify new assignee if assignment changed
+  if (ticket.assigned_to && ticket.assigned_to !== previousAssignee) {
+    await createNotification(supabaseClient, {
+      user_id: ticket.assigned_to,
+      title: 'Ticket Assigned',
+      message: `Ticket "${ticket.subject}" has been assigned to you`,
+      type: 'TICKET_ASSIGNED',
+      ticket_id: ticket.id
     });
-    throw error;
   }
 } 

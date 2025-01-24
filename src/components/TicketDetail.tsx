@@ -6,27 +6,7 @@ type Message = Reply | {
   type: 'system';
   content: string;
   created_at: string;
-  title: string;
 };
-
-interface Notification {
-  id: string;
-  type: 'TICKET_CREATED' | 'TICKET_UPDATED' | 'TICKET_ASSIGNED' | 'COMMENT_ADDED';
-  ticket_id: number;
-  user_id: string | null;
-  title: string;
-  message: string;
-  created_at: string;
-  user?: {
-    full_name: string | null;
-    email: string;
-  };
-  ticket?: {
-    profiles?: {
-      email: string;
-    };
-  };
-}
 
 interface TicketContentProps {
   ticket: Ticket;
@@ -44,12 +24,6 @@ const TicketContent = ({ ticket, messages, addReply, updateTicket }: TicketConte
         if (message.type === 'system') {
           return (
             <div key={message.id} className="system-message">
-              <div className="system-message-header">
-                {message.title}
-                <span className="system-message-date">
-                  • {new Date(message.created_at).toLocaleString()}
-                </span>
-              </div>
               <div className="system-message-content">
                 {message.content}
               </div>
