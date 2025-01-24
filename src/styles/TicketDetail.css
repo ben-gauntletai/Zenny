@@ -85,8 +85,9 @@
 .message {
   display: flex;
   gap: 1rem;
-  max-width: 45%;
+  width: 400px;
   margin: 0.5rem 0;
+  align-items: center;
 }
 
 .message.own-message {
@@ -96,14 +97,14 @@
 
 .message.other-message {
   margin-left: auto;
-  flex-direction: row-reverse;
+  flex-direction: row;
 }
 
 .message-content {
   padding: 1rem;
   border-radius: 8px;
   flex: 1;
-  border: 1px solid #e2e8f0;
+  border: 2px solid #cbd5e0;
   background-color: white;
 }
 
@@ -118,22 +119,23 @@
 .message-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 0.5rem;
-  font-size: 0.875rem;
-}
-
-.other-message .message-header {
-  flex-direction: row-reverse;
+  gap: 1rem;
 }
 
 .message-author {
-  font-weight: 500;
+  font-weight: 600;
   color: #2d3748;
+  flex-shrink: 0;
+  order: 1;
 }
 
 .message-time {
   color: #718096;
-  font-size: 0.75rem;
+  font-size: 0.875rem;
+  white-space: nowrap;
+  order: 2;
 }
 
 .message-body {
@@ -675,16 +677,23 @@
 .message-header {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   margin-bottom: 0.5rem;
+  gap: 1rem;
 }
 
 .message-author {
-  font-weight: 500;
+  font-weight: 600;
+  color: #2d3748;
+  flex-shrink: 0;
+  order: 1;
 }
 
 .message-time {
-  color: var(--chakra-colors-gray-500);
+  color: #718096;
   font-size: 0.875rem;
+  white-space: nowrap;
+  order: 2;
 }
 
 .message-body {
@@ -890,16 +899,54 @@ select option {
 }
 
 .customer-ticket-header {
-  padding: 0.75rem 1rem;
-  border-bottom: 1px solid #e2e8f0;
+  padding: 1.5rem 2rem;
   flex-shrink: 0;
+  background-color: #f8fafc;
+  border-top-left-radius: 8px;
+  border-top-right-radius: 8px;
 }
 
 .customer-ticket-header h1 {
-  font-size: 1.25rem;
+  font-size: 1.75rem;
   font-weight: 600;
   color: #2d3748;
-  margin-bottom: 0.25rem;
+  margin-bottom: 1rem;
+}
+
+.ticket-meta {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  color: #4a5568;
+  font-size: 0.875rem;
+}
+
+.ticket-meta > div {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.ticket-meta > div:first-child {
+  font-weight: 500;
+}
+
+.ticket-meta > div:first-child::first-letter {
+  text-transform: uppercase;
+}
+
+.ticket-owner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  color: #4a5568;
+  font-weight: 500;
+}
+
+/* Remove the dot separator */
+.ticket-owner::before {
+  display: none;
 }
 
 .customer-ticket-view .ticket-conversation {
@@ -980,34 +1027,36 @@ select option {
   box-shadow: none;
 }
 
-.ticket-meta {
-  display: flex;
-  align-items: center;
-  gap: 1rem;
-  color: #4a5568;
-  font-size: 0.875rem;
-}
-
-.ticket-owner {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  color: #4a5568;
-}
-
-.ticket-owner::before {
-  content: '•';
-  color: #cbd5e0;
-}
-
 .customer-ticket-view .message {
+  width: 400px;
   border: none;
   background-color: transparent;
   margin-bottom: 1rem;
   border-radius: 6px;
+  display: flex;
+  gap: 1rem;
+  align-items: center;
+}
+
+.customer-ticket-view .profile-icon {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.customer-ticket-view .message.own-message {
+  margin-right: auto;
+  flex-direction: row;
+}
+
+.customer-ticket-view .message.other-message {
+  margin-left: auto;
+  flex-direction: row;
 }
 
 .customer-ticket-view .message-content {
+  flex: 1;
   background-color: white;
   border: 2px solid #cbd5e0;
   padding: 1rem;
@@ -1031,9 +1080,31 @@ select option {
 
 .customer-ticket-view .message.other-message {
   margin-left: auto;
-  flex-direction: row-reverse;
+  flex-direction: row;
 }
 
 .customer-ticket-view .other-message .message-header {
-  flex-direction: row-reverse;
+  flex-direction: row;
+}
+
+.system-message {
+  display: flex;
+  justify-content: center;
+  margin: 1rem 0;
+}
+
+.system-message-content {
+  background-color: #f3f4f6;
+  padding: 0.5rem 1rem;
+  border-radius: 1rem;
+  font-size: 0.875rem;
+  color: #6b7280;
+  text-align: center;
+  max-width: 80%;
+}
+
+.message-avatar {
+  display: flex;
+  align-items: center;
+  height: 100%;
 } 

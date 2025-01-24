@@ -1,7 +1,7 @@
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts'
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { corsHeaders } from '../_shared/cors.ts'
 import { notifyTicketCreated, notifyTicketUpdated } from '../_shared/notifications.ts'
+import { corsHeaders } from '../_shared/cors.ts'
 
 interface TicketCreationPayload {
   subject: string
@@ -12,16 +12,16 @@ interface TicketCreationPayload {
 }
 
 serve(async (req) => {
-  // Handle CORS
+  // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
-    return new Response('ok', { headers: corsHeaders })
+    return new Response(null, { headers: corsHeaders })
   }
 
   try {
     // Create Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_ANON_KEY') ?? ''
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
     )
 
     // Get auth user
@@ -58,8 +58,11 @@ serve(async (req) => {
         details: error.details || null
       }),
       {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: error.message === 'No authorization header' ? 401 : 400,
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
       }
     )
   }
@@ -135,6 +138,22 @@ async function handleTicketCreation(req: Request, supabaseClient: any, user: any
 
     console.log('Ticket created successfully:', ticket)
 
+    // Create initial reply with ticket description
+    const { error: replyError } = await serviceRoleClient
+      .from('replies')
+      .insert({
+        ticket_id: ticket.id,
+        content: payload.description,
+        user_id: user.id,
+        is_public: true,
+        created_at: ticket.created_at // Use same timestamp as ticket creation
+      })
+
+    if (replyError) {
+      console.error('Error creating initial reply:', replyError)
+      // Don't throw the error - we still want to return the ticket
+    }
+
     // Create notification using the same service role client
     try {
       console.log('Creating notification for ticket:', ticket.id)
@@ -155,7 +174,10 @@ async function handleTicketCreation(req: Request, supabaseClient: any, user: any
     return new Response(
       JSON.stringify({ ticket, isNewTicket: true }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
         status: 200 
       }
     )
@@ -176,7 +198,10 @@ async function handleTicketCreation(req: Request, supabaseClient: any, user: any
       }),
       {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
       }
     )
   }
@@ -224,7 +249,10 @@ async function handleTicketUpdate(req: Request, supabaseClient: any, user: any) 
   return new Response(
     JSON.stringify({ ticket: updatedTicket }),
     { 
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      headers: {
+        ...corsHeaders,
+        'Content-Type': 'application/json'
+      },
       status: 200 
     }
   )
@@ -282,11 +310,8 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
     if (!isAgentOrAdmin) {
       // Regular users can only see their own tickets
       query.eq('user_id', user.id)
-    } else if (effectiveRole === 'agent') {
-      // Agents can see all Support group tickets
-      query.eq('group_name', 'Support')
     }
-    // Admins can see all tickets
+    // Agents and admins can see all tickets
 
     // Add ordering and pagination
     query
@@ -329,7 +354,10 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
     return new Response(
       JSON.stringify({ tickets: transformedTickets }),
       { 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        },
         status: 200 
       }
     )
@@ -346,7 +374,10 @@ async function handleTicketList(req: Request, supabaseClient: any, user: any) {
       }),
       {
         status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        headers: {
+          ...corsHeaders,
+          'Content-Type': 'application/json'
+        }
       }
     )
   }

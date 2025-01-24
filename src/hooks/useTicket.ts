@@ -5,6 +5,7 @@ import { useAuth } from '../contexts/AuthContext';
 
 export type Reply = {
   id: number;
+  type?: 'reply';
   ticket_id: number;
   content: string;
   created_at: string;
@@ -54,11 +55,21 @@ type RealtimePayload = {
 
 type SubscriptionStatus = 'SUBSCRIBED' | 'CLOSED' | 'CHANNEL_ERROR' | 'TIMED_OUT';
 
-export const useTicket = () => {
-  const { ticketId } = useParams<{ ticketId: string }>();
+// Add new type for system messages
+type SystemMessage = {
+  id: number;
+  type: 'system';
+  content: string;
+  created_at: string;
+};
+
+// Combined message type
+type Message = Reply | SystemMessage;
+
+export const useTicket = (ticketId: string) => {
   const { user } = useAuth();
   const [ticket, setTicket] = useState<Ticket | null>(null);
-  const [replies, setReplies] = useState<Reply[]>([]);
+  const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const channelRef = useRef<any>(null);
@@ -69,11 +80,10 @@ export const useTicket = () => {
 
       console.log('Setting up real-time subscription for ticket:', ticketId);
 
-      // Create a channel for Postgres changes
       const channelName = `realtime:${ticketId}`;
       channelRef.current = supabase.channel(channelName);
 
-      // Subscribe to changes on the replies table
+      // Subscribe to both replies and ticket changes
       channelRef.current
         .on(
           'postgres_changes',
@@ -83,75 +93,46 @@ export const useTicket = () => {
             table: 'replies',
             filter: `ticket_id=eq.${ticketId}`
           },
-          async (payload: { new: Reply }) => {
-            console.log('Received new reply from Postgres:', payload.new);
+          handleNewReply
+        )
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'tickets',
+            filter: `id=eq.${ticketId}`
+          },
+          async (payload: { new: Ticket; old: Ticket }) => {
+            console.log('Ticket updated:', payload);
             
-            try {
-              // Fetch the complete reply with user profile
-              const { data: newReply, error: replyError } = await supabase
-                .from('replies')
-                .select(`
-                  *,
-                  user_profile:profiles!replies_user_id_fkey (
-                    email,
-                    full_name,
-                    avatar_url
-                  )
-                `)
-                .eq('id', payload.new.id)
-                .single();
-
-              if (replyError) {
-                console.error('Error fetching new reply:', replyError);
-                return;
-              }
-
-              if (newReply) {
-                console.log('New reply data structure:', newReply);
-                
-                // Format the reply to match our Reply type
-                const formattedReply: Reply = {
-                  id: newReply.id,
-                  ticket_id: newReply.ticket_id,
-                  content: newReply.content,
-                  created_at: newReply.created_at,
-                  user_id: newReply.user_id,
-                  user_email: newReply.user_profile?.email || '',
-                  is_internal: !newReply.is_public,
-                  user_profile: {
-                    full_name: newReply.user_profile?.full_name || null,
-                    email: newReply.user_profile?.email || '',
-                    avatar_url: newReply.user_profile?.avatar_url || null
-                  }
-                };
-
-                console.log('Formatted reply:', formattedReply);
-
-                setReplies(current => {
-                  // Check if reply already exists
-                  const exists = current.some(reply => reply.id === formattedReply.id);
-                  console.log('Reply exists in state:', exists);
-                  
-                  if (exists) {
-                    console.log('Reply already exists in state, skipping');
-                    return current;
-                  }
-                  
-                  console.log('Adding new reply to state. Current length:', current.length);
-                  const newReplies = [...current, formattedReply];
-                  console.log('New replies length:', newReplies.length);
-                  return newReplies;
-                });
-              }
-            } catch (error) {
-              console.error('Error processing new reply:', error);
+            // Check if status changed to closed or solved
+            if (
+              (payload.new.status === 'closed' || payload.new.status === 'solved') &&
+              payload.old.status !== payload.new.status
+            ) {
+              const otherUser = user?.id === ticket?.user_id ? ticket?.agents : ticket?.profiles;
+              const systemMessage: SystemMessage = {
+                id: Date.now(),
+                type: 'system',
+                content: `${otherUser?.full_name || otherUser?.email || 'The other person'} has left the chat`,
+                created_at: new Date().toISOString()
+              };
+              
+              setMessages(current => [...current, systemMessage]);
             }
+            
+            // Update ticket state
+            setTicket(current => ({
+              ...current,
+              ...payload.new
+            }));
           }
         )
         .subscribe((status: SubscriptionStatus) => {
           console.log(`Subscription status for ${channelName}:`, status);
           if (status === 'SUBSCRIBED') {
-            console.log('Successfully subscribed to Postgres changes for ticket:', ticketId);
+            console.log('Successfully subscribed to changes for ticket:', ticketId);
           }
         });
 
@@ -163,7 +144,72 @@ export const useTicket = () => {
         }
       };
     }
-  }, [ticketId]);
+  }, [ticketId, user?.id]);
+
+  const handleNewReply = async (payload: { new: Reply }) => {
+    console.log('Received new reply from Postgres:', payload.new);
+    
+    try {
+      // Fetch the complete reply with user profile
+      const { data: newReply, error: replyError } = await supabase
+        .from('replies')
+        .select(`
+          *,
+          user_profile:profiles!replies_user_id_fkey (
+            email,
+            full_name,
+            avatar_url
+          )
+        `)
+        .eq('id', payload.new.id)
+        .single();
+
+      if (replyError) {
+        console.error('Error fetching new reply:', replyError);
+        return;
+      }
+
+      if (newReply) {
+        console.log('New reply data structure:', newReply);
+        
+        // Format the reply to match our Reply type
+        const formattedReply: Reply = {
+          id: newReply.id,
+          ticket_id: newReply.ticket_id,
+          content: newReply.content,
+          created_at: newReply.created_at,
+          user_id: newReply.user_id,
+          user_email: newReply.user_profile?.email || '',
+          is_internal: !newReply.is_public,
+          user_profile: {
+            full_name: newReply.user_profile?.full_name || null,
+            email: newReply.user_profile?.email || '',
+            avatar_url: newReply.user_profile?.avatar_url || null
+          }
+        };
+
+        console.log('Formatted reply:', formattedReply);
+
+        setMessages(current => {
+          // Check if reply already exists
+          const exists = current.some(reply => reply.id === formattedReply.id);
+          console.log('Reply exists in state:', exists);
+          
+          if (exists) {
+            console.log('Reply already exists in state, skipping');
+            return current;
+          }
+          
+          console.log('Adding new reply to state. Current length:', current.length);
+          const newMessages = [...current, formattedReply];
+          console.log('New messages length:', newMessages.length);
+          return newMessages;
+        });
+      }
+    } catch (error) {
+      console.error('Error processing new reply:', error);
+    }
+  };
 
   const fetchTicket = async () => {
     try {
@@ -182,7 +228,6 @@ export const useTicket = () => {
 
       if (ticketError) throw ticketError;
 
-      // Parse the tags from JSONB to array
       const parsedTicket = {
         ...ticketData,
         tags: Array.isArray(ticketData.tags) ? ticketData.tags : JSON.parse(ticketData.tags || '[]')
@@ -204,7 +249,46 @@ export const useTicket = () => {
       if (repliesError) throw repliesError;
 
       setTicket(parsedTicket);
-      setReplies(repliesData || []);
+      
+      // Convert replies to messages
+      const initialMessages: Message[] = [
+        // Add initial ticket description as first message
+        {
+          id: -parseInt(parsedTicket.id), // Use negative ID to ensure uniqueness
+          type: 'reply' as const,
+          content: parsedTicket.description,
+          created_at: parsedTicket.created_at,
+          user_id: parsedTicket.user_id,
+          ticket_id: parsedTicket.id,
+          is_internal: false,
+          user_profile: parsedTicket.profiles,
+          user_email: parsedTicket.profiles?.email
+        },
+        // Add existing replies, filtering out the initial reply based on timestamp
+        ...repliesData?.filter(reply => {
+          // Convert timestamps to Date objects for comparison
+          const replyDate = new Date(reply.created_at);
+          const ticketDate = new Date(parsedTicket.created_at);
+          // Filter out replies that were created within 1 second of the ticket creation
+          return Math.abs(replyDate.getTime() - ticketDate.getTime()) > 1000;
+        }).map(reply => ({
+          ...reply,
+          type: 'reply' as const
+        })) || []
+      ];
+      
+      // Add system message if ticket is already closed or solved
+      if (parsedTicket.status === 'closed' || parsedTicket.status === 'solved') {
+        const otherUser = user?.id === parsedTicket.user_id ? parsedTicket.agents : parsedTicket.profiles;
+        initialMessages.push({
+          id: Date.now(),
+          type: 'system',
+          content: `${otherUser?.full_name || otherUser?.email || 'The other person'} has left the chat`,
+          created_at: parsedTicket.updated_at
+        });
+      }
+      
+      setMessages(initialMessages);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
@@ -260,7 +344,7 @@ export const useTicket = () => {
     };
 
     // Add formatted reply to local state immediately for instant feedback
-    setReplies(current => [...current, formattedReply]);
+    setMessages(current => [...current, formattedReply]);
     
     return formattedReply;
   };
@@ -369,11 +453,11 @@ export const useTicket = () => {
 
   return {
     ticket,
-    replies,
+    messages,
     loading,
     error,
     addReply,
     updateTicket,
-    setTicket
+    fetchTicket
   };
 };
