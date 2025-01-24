@@ -104,6 +104,20 @@ const TicketList: React.FC = () => {
 
   return (
     <div className="ticket-list-container">
+      <div className="tickets-header">
+        <div className="header-content">
+          <h1>{isAgentOrAdmin ? 'Support Tickets' : 'My Tickets'}</h1>
+          <p className="subtitle">
+            {isAgentOrAdmin 
+              ? 'View and manage support tickets' 
+              : 'View and track your support requests'}
+          </p>
+        </div>
+        <Link to="/tickets/new" className="create-ticket-button">
+          Create New Ticket
+        </Link>
+      </div>
+
       <div className="filters">
         <select
           value={filters.status}
@@ -117,17 +131,19 @@ const TicketList: React.FC = () => {
           <option value="closed">Closed</option>
         </select>
 
-        <select
-          value={filters.priority}
-          onChange={(e) => handleFilterChange('priority', e.target.value)}
-          className="filter-select"
-        >
-          <option value="">All Priorities</option>
-          <option value="low">Low</option>
-          <option value="normal">Normal</option>
-          <option value="high">High</option>
-          <option value="urgent">Urgent</option>
-        </select>
+        {isAgentOrAdmin && (
+          <select
+            value={filters.priority}
+            onChange={(e) => handleFilterChange('priority', e.target.value)}
+            className="filter-select"
+          >
+            <option value="">All Priorities</option>
+            <option value="low">Low</option>
+            <option value="normal">Normal</option>
+            <option value="high">High</option>
+            <option value="urgent">Urgent</option>
+          </select>
+        )}
 
         {isAgentOrAdmin && (
           <select

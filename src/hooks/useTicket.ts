@@ -153,7 +153,7 @@ export const useTicket = (ticketId: string) => {
     }
   }, [ticketId]); // Remove ticket from dependencies to prevent subscription loop
 
-  const handleNewReply = async (payload: { new: Reply }) => {
+  const handleNewReply = async (payload: any) => {
     console.log('Received new reply from Postgres:', payload.new);
     
     try {
@@ -175,7 +175,8 @@ export const useTicket = (ticketId: string) => {
           user_profile:profiles!replies_user_id_fkey (
             email,
             full_name,
-            avatar_url
+            avatar_url,
+            role
           )
         `)
         .eq('id', payload.new.id)
@@ -189,47 +190,60 @@ export const useTicket = (ticketId: string) => {
       if (newReply) {
         console.log('New reply data structure:', newReply);
         
-        // Format the reply to match our Reply type
-        const formattedReply: Reply = {
-          id: newReply.id,
-          type: 'reply',
-          ticket_id: newReply.ticket_id,
-          content: newReply.content,
-          created_at: newReply.created_at,
-          user_id: newReply.user_id,
-          user_email: newReply.user_profile?.email || '',
-          is_internal: !newReply.is_public,
-          user_profile: {
-            full_name: newReply.user_profile?.full_name || null,
-            email: newReply.user_profile?.email || '',
-            avatar_url: newReply.user_profile?.avatar_url || null
-          }
-        };
+        // Check if the user should see this reply
+        const isAgentOrAdmin = user?.user_metadata?.role === 'agent' || user?.user_metadata?.role === 'admin';
+        const isOwnReply = newReply.user_id === user?.id;
+        const isPublicReply = newReply.is_public;
+        
+        // Only show the reply if:
+        // 1. User is an agent/admin (they see all replies)
+        // 2. It's the user's own reply
+        // 3. It's a public reply
+        if (isAgentOrAdmin || isOwnReply || isPublicReply) {
+          // Format the reply to match our Reply type
+          const formattedReply: Reply = {
+            id: newReply.id,
+            type: 'reply',
+            ticket_id: newReply.ticket_id,
+            content: newReply.content,
+            created_at: newReply.created_at,
+            user_id: newReply.user_id,
+            user_email: newReply.user_profile?.email || '',
+            is_internal: !newReply.is_public,
+            user_profile: {
+              full_name: newReply.user_profile?.full_name || null,
+              email: newReply.user_profile?.email || '',
+              avatar_url: newReply.user_profile?.avatar_url || null
+            }
+          };
 
-        console.log('Formatted reply:', formattedReply);
+          console.log('Formatted reply:', formattedReply);
 
-        setMessages(current => {
-          // Double check for duplicates (race condition protection)
-          if (current.some(msg => 'id' in msg && msg.id === formattedReply.id)) {
-            console.log('Reply already exists in state (race condition), skipping');
-            return current;
-          }
-          
-          // Sort messages by creation date to maintain order
-          const newMessages = [...current, formattedReply].sort((a, b) => 
-            new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
-          );
-          
-          console.log('Updated messages:', {
-            previousCount: current.length,
-            newCount: newMessages.length
+          setMessages(current => {
+            // Double check for duplicates (race condition protection)
+            if (current.some(msg => 'id' in msg && msg.id === formattedReply.id)) {
+              console.log('Reply already exists in state (race condition), skipping');
+              return current;
+            }
+            
+            // Sort messages by creation date to maintain order
+            const newMessages = [...current, formattedReply].sort((a, b) => 
+              new Date(a.created_at).getTime() - new Date(b.created_at).getTime()
+            );
+            
+            console.log('Updated messages:', {
+              previousCount: current.length,
+              newCount: newMessages.length
+            });
+            
+            return newMessages;
           });
-          
-          return newMessages;
-        });
+        } else {
+          console.log('Skipping reply - user does not have permission to view it');
+        }
       }
-    } catch (error) {
-      console.error('Error processing new reply:', error);
+    } catch (err) {
+      console.error('Error processing new reply:', err);
     }
   };
 

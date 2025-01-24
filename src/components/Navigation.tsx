@@ -82,9 +82,6 @@ const Navigation: React.FC = () => {
               <Link to="/" className={location.pathname === '/' ? 'active' : ''}>
                 Dashboard
               </Link>
-              <Link to="/customers" className={location.pathname.startsWith('/customers') ? 'active' : ''}>
-                Customers
-              </Link>
             </>
           )}
           <Link to="/tickets" className={location.pathname.startsWith('/tickets') ? 'active' : ''}>

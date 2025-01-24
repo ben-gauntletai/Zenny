@@ -234,4 +234,15 @@
 .no-tickets p {
   color: #718096;
   margin-bottom: 1.5rem;
+}
+
+.tickets-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
+}
+
+.header-content {
+  flex: 1;
 } 

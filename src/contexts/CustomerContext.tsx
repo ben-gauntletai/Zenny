@@ -43,9 +43,19 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   const [loading, setLoading] = useState(true);
 
   const fetchData = async () => {
+    console.log('Starting fetchData');
     try {
       setLoading(true);
-      
+
+      // Check for active session
+      const { data: { session }, error: sessionError } = await supabase.auth.getSession();
+      console.log('Auth session:', { session, error: sessionError });
+
+      if (!session) {
+        console.error('No active session');
+        return;
+      }
+
       // Fetch users with role "user"
       const { data: userData, error: userError } = await supabase
         .from('profiles')
@@ -53,21 +63,38 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .eq('role', 'user')
         .order('updated_at', { ascending: false });
 
-      if (userError) throw userError;
+      console.log('Raw user data:', userData);
+      console.log('User error:', userError);
+
+      if (userError) {
+        console.error('User data error:', userError);
+        throw userError;
+      }
+
+      if (!userData) {
+        console.log('No user data returned');
+        setCustomers([]);
+        return;
+      }
 
       // Transform user data to match Customer interface
-      const transformedUsers = userData?.map(user => ({
-        id: user.id,
-        name: user.full_name || 'Unknown',
-        email: user.email || '',
-        tags: [],
-        timezone: user.timezone || '',
-        user_type: 'user',
-        access: 'standard',
-        language: user.language || 'en',
-        updated_at: user.updated_at || new Date().toISOString()
-      })) || [];
+      const transformedUsers = userData.map(user => {
+        const transformed = {
+          id: user.id,
+          name: user.full_name || 'Unknown',
+          email: user.email || '',
+          tags: [],
+          timezone: user.timezone || '',
+          user_type: 'user',
+          access: 'standard',
+          language: user.language || 'en',
+          updated_at: user.updated_at || new Date().toISOString()
+        };
+        console.log('Transformed user:', transformed);
+        return transformed;
+      });
 
+      console.log('Setting customers with:', transformedUsers);
       setCustomers(transformedUsers);
 
       // Fetch suspended users
@@ -76,11 +103,18 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
         .select('*')
         .order('suspended_date', { ascending: false });
 
-      if (suspendedError) throw suspendedError;
+      if (suspendedError) {
+        console.error('Suspended users error:', suspendedError);
+        throw suspendedError;
+      }
+
       setSuspendedUsers(suspendedData || []);
     } catch (error: any) {
-      console.error('Error fetching data:', error.message);
+      console.error('Error in fetchData:', error);
+      setCustomers([]);
+      setSuspendedUsers([]);
     } finally {
+      console.log('Fetch completed, setting loading to false');
       setLoading(false);
     }
   };
@@ -131,19 +165,23 @@ export const CustomerProvider: React.FC<{ children: React.ReactNode }> = ({ chil
   };
 
   useEffect(() => {
+    console.log('CustomerProvider mounted, calling fetchData');
     fetchData();
   }, []);
 
+  const contextValue = {
+    customers,
+    suspendedUsers,
+    loading,
+    searchCustomers,
+    searchSuspendedUsers,
+    refreshData: fetchData
+  };
+  console.log('CustomerProvider value:', contextValue);
+
   return (
     <CustomerContext.Provider 
-      value={{ 
-        customers, 
-        suspendedUsers, 
-        loading,
-        searchCustomers,
-        searchSuspendedUsers,
-        refreshData: fetchData
-      }}
+      value={contextValue}
     >
       {children}
     </CustomerContext.Provider>

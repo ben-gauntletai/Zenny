@@ -106,28 +106,28 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       };
 
       // Fetch notifications for the activity feed
+      console.log('Fetching notifications...');
       const { data: notifications, error: notifError } = await supabase
         .from('notifications')
-        .select(`
-          *,
-          user:profiles!notifications_user_id_fkey(email, full_name),
-          ticket:tickets!notifications_ticket_id_fkey(
-            subject,
-            profiles:user_id(email, full_name)
-          )
-        `)
+        .select('*, tickets(subject)')
         .order('created_at', { ascending: false })
         .limit(25);
 
       if (notifError) {
         console.error('Error fetching notifications:', notifError);
+        console.error('Notification error details:', {
+          code: notifError.code,
+          message: notifError.message,
+          details: notifError.details
+        });
       } else {
+        console.log('Fetched notifications:', notifications);
         newStats.activityFeed = notifications.map((notification: any): ActivityFeedItem => ({
           id: notification.id.toString(),
           type: notification.type as ActivityFeedItem['type'],
           ticketId: notification.ticket_id.toString(),
-          ticketSubject: notification.ticket?.subject || 'Unknown',
-          actor: notification.user_id === null ? 'System' : (notification.user?.full_name || notification.user?.email || 'Unknown User'),
+          ticketSubject: notification.tickets?.subject || 'Unknown',
+          actor: notification.user_id === null ? 'System' : 'Support Team',
           timestamp: notification.created_at,
           title: notification.title,
           message: notification.message
