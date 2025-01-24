@@ -402,14 +402,14 @@ async function handleTicketList(req, supabaseClient, user) {
       effective_role: effectiveRole,
       is_agent_or_admin: isAgentOrAdmin
     });
-
-    // Build the query using the regular client to enforce RLS
-    const query = supabaseClient.from('tickets').select(`
+    // Use service role client to bypass RLS
+    const serviceRoleClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
+    // Build the query
+    const query = serviceRoleClient.from('tickets').select(`
         *,
         requester:profiles!tickets_user_id_fkey (email, full_name, avatar_url, role),
         assignee:profiles!tickets_assigned_to_fkey (email, full_name, role, avatar_url)
       `);
-
     // Log query parameters before applying filters
     console.log('DEBUG - Query parameters:', {
       base_query: 'tickets with requester and assignee profiles',
@@ -422,16 +422,18 @@ async function handleTicketList(req, supabaseClient, user) {
       },
       ordering: 'created_at DESC'
     });
-
     if (status) {
       query.eq('status', status);
     }
-
+    if (!isAgentOrAdmin) {
+      // Regular users can only see their own tickets
+      query.eq('user_id', user.id);
+    }
+    // Agents and admins can see all tickets
     // Add ordering and pagination
     query.order('created_at', {
       ascending: false
     }).range(offset, offset + limit - 1);
-
     // Execute query
     const { data: tickets, error: queryError } = await query;
     // Log query results for debugging
