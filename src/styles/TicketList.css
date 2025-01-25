@@ -78,6 +78,7 @@
   border-bottom: 2px solid #e2e8f0;
   border-right: 2px solid #e2e8f0;
   background: white;
+  color: #2d3748;
 }
 
 .tickets-table th:last-child,
@@ -284,4 +285,13 @@
   right: 0.5rem;
   color: #718096;
   font-size: 0.875rem;
+}
+
+.clickable-row {
+  cursor: pointer;
+  transition: background-color 0.1s ease-in-out;
+}
+
+.clickable-row:hover td {
+  background-color: #f7fafc;
 } 

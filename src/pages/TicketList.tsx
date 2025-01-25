@@ -148,6 +148,10 @@ const TicketList: React.FC = () => {
     return filters.sortDirection === 'asc' ? '↑' : '↓';
   };
 
+  const handleRowClick = (ticketId: string) => {
+    window.location.href = `/tickets/${ticketId}`;
+  };
+
   return (
     <div className="ticket-list-container">
       <div className="tickets-header">
@@ -243,11 +247,13 @@ const TicketList: React.FC = () => {
                 );
               }
               return displayedTickets.map(ticket => (
-                <tr key={ticket.id}>
+                <tr 
+                  key={ticket.id} 
+                  onClick={() => handleRowClick(ticket.id)}
+                  className="clickable-row"
+                >
                   <td>
-                    <Link to={`/tickets/${ticket.id}`} className="ticket-subject">
-                      {ticket.subject}
-                    </Link>
+                    {ticket.subject}
                   </td>
                   <td>
                     <span className={`status-badge ${ticket.status.toLowerCase()}`}>

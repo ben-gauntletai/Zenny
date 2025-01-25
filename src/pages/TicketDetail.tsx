@@ -24,8 +24,9 @@ interface Notification {
     email: string;
   };
   ticket?: {
-    profiles?: {
+    profiles: {
       email: string;
+      full_name: string | null;
     };
   };
 }
@@ -41,7 +42,7 @@ interface UINotification {
 // Helper function to get the display name for a notification
 function getNotificationDisplayName(notification: Notification): string {
   if (notification.user_id === null) {
-    return notification.ticket?.profiles?.email || "Support Team";
+    return notification.ticket?.profiles?.full_name || notification.ticket?.profiles?.email || "Support Team";
   }
   return notification.user?.full_name || notification.user?.email || "Unknown User";
 }
@@ -115,6 +116,41 @@ interface SupabaseResponse {
     email: string;
   };
 }
+
+interface FormattedTicket {
+  id: string;
+  subject: string;
+  status: 'open' | 'pending' | 'solved' | 'closed';
+  priority: 'low' | 'normal' | 'high' | 'urgent';
+  created_at: string;
+  description: string;
+  updated_at: string;
+  ticket_type: string;
+  topic: string;
+  creator_email: string;
+  agent_email?: string;
+  creator_name?: string;
+  agent_name?: string;
+  profiles?: {
+    email: string;
+    full_name?: string | null;
+    avatar_url?: string | null;
+    role?: 'user' | 'agent' | 'admin';
+  };
+  agents?: {
+    email: string;
+    full_name?: string | null;
+    avatar_url?: string | null;
+    role?: 'user' | 'agent' | 'admin';
+  };
+}
+
+type Message = Reply | {
+  id: number;
+  type: 'system';
+  content: string;
+  created_at: string;
+};
 
 const TicketContent: React.FC = () => {
   const navigate = useNavigate();
@@ -433,7 +469,16 @@ const TicketContent: React.FC = () => {
 
         <div className="ticket-conversation" ref={conversationRef} style={{ flex: 1, overflowY: 'auto' }}>
           <div className="message other-message">
-            <div className="message-avatar">
+            <div className="message-avatar" style={{
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              gap: '4px',
+              height: '100%',
+              justifyContent: 'center',
+              minWidth: '40px',
+              padding: '8px 0'
+            }}>
               <div 
                 className="profile-icon" 
                 style={{ 
@@ -450,6 +495,15 @@ const TicketContent: React.FC = () => {
                 }}
               >
                 {getInitials(ticket.profiles?.full_name || '')}
+              </div>
+              <div style={{ 
+                textAlign: 'center', 
+                fontSize: '12px', 
+                color: '#718096',
+                fontWeight: 'bold',
+                lineHeight: '1'
+              }}>
+                {ticket.profiles?.role ? ticket.profiles.role.charAt(0).toUpperCase() + ticket.profiles.role.slice(1).toLowerCase() : ''}
               </div>
             </div>
             <div className="message-content">

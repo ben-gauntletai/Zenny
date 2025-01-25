@@ -195,7 +195,6 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
 const Dashboard: React.FC = () => {
   const { user } = useAuth();
   const isAgent = user?.user_metadata?.role === 'agent';
-  const [selectedTickets, setSelectedTickets] = useState<Set<number>>(new Set());
   const [error, setError] = useState('');
   const { stats, tickets, loading: dashboardLoading } = useDashboard();
   const userRole = user?.user_metadata?.role || 'user';
@@ -226,24 +225,6 @@ const Dashboard: React.FC = () => {
       day: 'numeric',
       year: 'numeric'
     });
-  };
-
-  const handleSelectAll = (checked: boolean) => {
-    if (checked) {
-      setSelectedTickets(new Set(tickets.map(ticket => ticket.id)));
-    } else {
-      setSelectedTickets(new Set());
-    }
-  };
-
-  const handleSelectTicket = (ticketId: number, checked: boolean) => {
-    const newSelected = new Set(selectedTickets);
-    if (checked) {
-      newSelected.add(ticketId);
-    } else {
-      newSelected.delete(ticketId);
-    }
-    setSelectedTickets(newSelected);
   };
 
   const handleSort = (field: string) => {
@@ -345,7 +326,7 @@ const Dashboard: React.FC = () => {
                     {activity.title}
                   </div>
                   <div className="interaction-meta">
-                    {activity.actor} • {new Date(activity.timestamp).toLocaleString()}
+                    {activity.actor} • #{activity.ticketId} • {new Date(activity.timestamp).toLocaleString()}
                   </div>
                   <div className="interaction-details">
                     <div className="change-item">
@@ -439,15 +420,6 @@ const Dashboard: React.FC = () => {
             <table className="tickets-table">
               <thead>
                 <tr>
-                  <th className="checkbox-header">
-                    <div className="checkbox-wrapper">
-                      <input 
-                        type="checkbox" 
-                        checked={tickets.length > 0 && selectedTickets.size === tickets.length}
-                        onChange={(e) => handleSelectAll(e.target.checked)}
-                      />
-                    </div>
-                  </th>
                   <th onClick={() => handleSort('id')} className="sortable-header">
                     ID {getSortIndicator('id')}
                   </th>
@@ -481,15 +453,6 @@ const Dashboard: React.FC = () => {
                     onClick={(e) => handleRowClick(ticket.id, e)}
                     className="clickable-row"
                   >
-                    <td className="checkbox-cell">
-                      <div className="checkbox-wrapper">
-                        <input 
-                          type="checkbox"
-                          checked={selectedTickets.has(ticket.id)}
-                          onChange={(e) => handleSelectTicket(ticket.id, e.target.checked)}
-                        />
-                      </div>
-                    </td>
                     <td className="ticket-id">#{ticket.id}</td>
                     <td>
                       <span className={`status-badge ${ticket.status.toLowerCase()}`}>

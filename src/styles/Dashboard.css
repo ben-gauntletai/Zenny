@@ -429,19 +429,17 @@
 }
 
 .tickets-table {
+  table-layout: fixed;
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
 }
 
 .tickets-table th,
 .tickets-table td {
-  padding: 1rem;
+  width: 12.5%; /* Since we have 8 columns (100% / 8) */
+  padding: 0.75rem 12px;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  border-bottom: 2px solid #e2e8f0;
-  border-right: 2px solid #e2e8f0;
 }
 
 .tickets-table thead {
@@ -1122,4 +1120,14 @@
 .priority-badge,
 .checkbox-wrapper input[type="checkbox"] {
   transition: all 0.1s ease-in-out;
+}
+
+/* Ensure content doesn't overflow */
+.tickets-table .ticket-id,
+.tickets-table .subject-cell,
+.tickets-table .status-badge,
+.tickets-table .priority-badge {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
 } 
