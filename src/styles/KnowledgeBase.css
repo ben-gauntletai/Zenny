@@ -146,6 +146,27 @@
   gap: 1.5rem;
   width: 100%;
   align-items: start;
+  max-height: calc(100vh - 200px);
+  overflow-y: auto;
+  padding-right: 1rem;
+}
+
+.articles-grid::-webkit-scrollbar {
+  width: 8px;
+}
+
+.articles-grid::-webkit-scrollbar-track {
+  background: #f1f1f1;
+  border-radius: 4px;
+}
+
+.articles-grid::-webkit-scrollbar-thumb {
+  background: #cbd5e0;
+  border-radius: 4px;
+}
+
+.articles-grid::-webkit-scrollbar-thumb:hover {
+  background: #a0aec0;
 }
 
 .article-card {

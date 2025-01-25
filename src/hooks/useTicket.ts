@@ -5,10 +5,8 @@ import { useAuth } from '../contexts/AuthContext';
 
 const EDGE_FUNCTION_URL = process.env.REACT_APP_SUPABASE_URL + '/functions/v1/tickets';
 
-export type Reply = {
+export interface Reply {
   id: number;
-  type?: 'reply';
-  ticket_id: number;
   content: string;
   created_at: string;
   user_id: string;
@@ -17,9 +15,12 @@ export type Reply = {
     full_name: string | null;
     email: string;
     avatar_url: string | null;
+    role: string;
   };
+  type?: 'reply';
+  ticket_id: number;
   is_internal: boolean;
-};
+}
 
 export interface Ticket {
   id: number;
@@ -203,7 +204,7 @@ export const useTicket = (ticketId: string) => {
           // Format the reply to match our Reply type
           const formattedReply: Reply = {
             id: newReply.id,
-            type: 'reply',
+            type: 'reply' as const,
             ticket_id: newReply.ticket_id,
             content: newReply.content,
             created_at: newReply.created_at,
@@ -213,7 +214,8 @@ export const useTicket = (ticketId: string) => {
             user_profile: {
               full_name: newReply.user_profile?.full_name || null,
               email: newReply.user_profile?.email || '',
-              avatar_url: newReply.user_profile?.avatar_url || null
+              avatar_url: newReply.user_profile?.avatar_url || null,
+              role: newReply.user_profile?.role || ''
             }
           };
 
@@ -296,7 +298,8 @@ export const useTicket = (ticketId: string) => {
           user_profile: {
             email: parsedTicket.profiles?.email,
             full_name: parsedTicket.profiles?.full_name,
-            avatar_url: parsedTicket.profiles?.avatar_url
+            avatar_url: parsedTicket.profiles?.avatar_url,
+            role: ''
           },
           user_email: parsedTicket.profiles?.email
         };

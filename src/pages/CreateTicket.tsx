@@ -107,22 +107,6 @@ const CreateTicket: React.FC = () => {
         </div>
 
         <div className="form-group">
-          <label htmlFor="priority">Priority</label>
-          <select
-            id="priority"
-            name="priority"
-            value={formData.priority}
-            onChange={(e) => handleInputChange('priority', e.target.value as TicketFormData['priority'])}
-            required
-          >
-            <option value="low">Low Priority</option>
-            <option value="normal">Normal Priority</option>
-            <option value="high">High Priority</option>
-            <option value="urgent">Urgent</option>
-          </select>
-        </div>
-
-        <div className="form-group">
           <label htmlFor="ticket_type">Type</label>
           <select
             id="ticket_type"
@@ -168,7 +152,7 @@ const CreateTicket: React.FC = () => {
             className="submit-button"
             disabled={loading}
           >
-            {loading ? 'Creating...' : 'Create Ticket'}
+            {loading ? 'Creating...' : 'Create'}
           </button>
         </div>
       </form>

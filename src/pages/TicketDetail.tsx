@@ -279,24 +279,6 @@ const TicketContent: React.FC = () => {
             <h1>{ticket.subject}</h1>
           </div>
           <div className="ticket-actions">
-            {isAgentOrAdmin && (
-              <button 
-                className="suspend-button"
-                onClick={() => {
-                  console.log('Suspend customer clicked');
-                }}
-                style={{
-                  padding: '0.5rem 1rem',
-                  backgroundColor: '#dc3545',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer'
-                }}
-              >
-                Suspend Customer
-              </button>
-            )}
           </div>
         </header>
 
@@ -349,7 +331,16 @@ const TicketContent: React.FC = () => {
                 key={message.id}
                 className={`message ${isOwnMessage ? 'own-message' : 'other-message'}`}
               >
-                <div className="message-avatar">
+                <div className="message-avatar" style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: '4px',
+                  height: '100%',
+                  justifyContent: 'center',
+                  minWidth: '40px',
+                  padding: '8px 0'
+                }}>
                   <div 
                     className="profile-icon" 
                     style={{ 
@@ -366,6 +357,15 @@ const TicketContent: React.FC = () => {
                     }}
                   >
                     {getInitials(message.user_profile?.full_name || '')}
+                  </div>
+                  <div style={{ 
+                    textAlign: 'center', 
+                    fontSize: '12px', 
+                    color: '#718096',
+                    fontWeight: 'bold',
+                    lineHeight: '1'
+                  }}>
+                    {message.user_profile?.role ? message.user_profile.role.charAt(0).toUpperCase() + message.user_profile.role.slice(1).toLowerCase() : ''}
                   </div>
                 </div>
                 <div className="message-content">
