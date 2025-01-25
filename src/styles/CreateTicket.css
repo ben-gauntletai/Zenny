@@ -133,13 +133,10 @@
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  position: absolute;
-  bottom: 0;
-  left: 1.5rem;
-  right: 0;
-  padding: 1rem 0;
-  background: white;
+  margin-top: 1rem;
+  padding-top: 0.75rem;
   border-top: 2px solid #e2e8f0;
+  grid-column: span 2;
 }
 
 .cancel-button,
