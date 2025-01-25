@@ -70,59 +70,64 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const [error, setError] = useState<string | null>(null);
   const { user } = useAuth();
 
+  const updateTicketStats = (tickets: Ticket[]) => {
+    return {
+      total: tickets.length,
+      open: tickets.filter((t: Ticket) => t.status === 'open').length,
+      inProgress: tickets.filter((t: Ticket) => t.status === 'pending').length,
+      resolved: tickets.filter((t: Ticket) => t.status === 'solved' || t.status === 'closed').length
+    };
+  };
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
       setError(null);
 
-      console.log('Current user:', user);
-      console.log('User metadata:', user?.user_metadata);
-      console.log('User role:', user?.user_metadata?.role);
+      console.log('Starting dashboard data fetch...');
 
-      console.log('Fetching tickets...');
-      const response = await ticketService.listTickets();
-      console.log('Response from listTickets:', response);
+      // Start both fetches in parallel
+      const ticketsPromise = Promise.resolve(ticketService.listTickets());
+      const notificationsPromise = Promise.resolve(
+        supabase
+          .from('notifications')
+          .select('*, tickets(subject)')
+          .order('created_at', { ascending: false })
+          .limit(25)
+      );
 
-      if (!response.tickets || !Array.isArray(response.tickets)) {
-        console.error('Invalid response format:', response);
-        setError('Invalid response format from server');
-        return;
-      }
+      // Handle tickets as soon as they arrive
+      ticketsPromise.then(response => {
+        console.log('Tickets response:', response);
+        if (!response.tickets || !Array.isArray(response.tickets)) {
+          console.error('Invalid response format:', response);
+          return;
+        }
 
-      const { tickets: fetchedTickets } = response;
-      const tickets = fetchedTickets;
-      console.log('Fetched tickets:', tickets);
-      setTickets(tickets);
-      
-      // Calculate ticket stats
-      const newStats: DashboardContextType['stats'] = {
-        ticketStats: {
-          total: tickets.length,
-          open: tickets.filter((t: Ticket) => t.status === 'open').length,
-          inProgress: tickets.filter((t: Ticket) => t.status === 'pending').length,
-          resolved: tickets.filter((t: Ticket) => t.status === 'solved' || t.status === 'closed').length
-        },
-        activityFeed: []
-      };
+        const fetchedTickets = response.tickets;
+        console.log('Fetched tickets:', fetchedTickets);
+        setTickets(fetchedTickets);
+        
+        // Update ticket stats immediately
+        const newStats = updateTicketStats(fetchedTickets);
+        console.log('New ticket stats:', newStats);
+        setStats(prevStats => ({
+          ...prevStats,
+          ticketStats: newStats
+        }));
+      }).catch((err: Error) => {
+        console.error('Error fetching tickets:', err);
+      });
 
-      // Fetch notifications for the activity feed
-      console.log('Fetching notifications...');
-      const { data: notifications, error: notifError } = await supabase
-        .from('notifications')
-        .select('*, tickets(subject)')
-        .order('created_at', { ascending: false })
-        .limit(25);
+      // Handle notifications as soon as they arrive
+      notificationsPromise.then(({ data: notifications, error: notifError }) => {
+        console.log('Notifications response:', { notifications, error: notifError });
+        if (notifError) {
+          console.error('Error fetching notifications:', notifError);
+          return;
+        }
 
-      if (notifError) {
-        console.error('Error fetching notifications:', notifError);
-        console.error('Notification error details:', {
-          code: notifError.code,
-          message: notifError.message,
-          details: notifError.details
-        });
-      } else {
-        console.log('Fetched notifications:', notifications);
-        newStats.activityFeed = notifications.map((notification: any): ActivityFeedItem => ({
+        const activityFeed = notifications.map((notification: any): ActivityFeedItem => ({
           id: notification.id.toString(),
           type: notification.type as ActivityFeedItem['type'],
           ticketId: notification.ticket_id.toString(),
@@ -132,9 +137,19 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
           title: notification.title,
           message: notification.message
         }));
-      }
 
-      setStats(newStats);
+        console.log('Processed activity feed:', activityFeed);
+        setStats(prevStats => ({
+          ...prevStats,
+          activityFeed
+        }));
+      }).catch((err: Error) => {
+        console.error('Error fetching notifications:', err);
+      });
+
+      // Wait for both to complete before removing loading state
+      await Promise.all([ticketsPromise, notificationsPromise]);
+      console.log('All dashboard data fetched successfully');
     } catch (err) {
       console.error('Error fetching dashboard data:', err);
       setError('Failed to load dashboard data');

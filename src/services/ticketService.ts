@@ -94,13 +94,13 @@ export const ticketService = {
     const isAgentOrAdmin = session.user.user_metadata?.role === 'agent' || session.user.user_metadata?.role === 'admin';
 
     // Debug logging for authentication
-    console.log('Auth Debug:', {
-      user: session.user,
-      role: session.user.user_metadata?.role,
-      id: session.user.id,
-      email: session.user.email,
-      isAgentOrAdmin
-    });
+    // console.log('Auth Debug:', {
+    //   user: session.user,
+    //   role: session.user.user_metadata?.role,
+    //   id: session.user.id,
+    //   email: session.user.email,
+    //   isAgentOrAdmin
+    // });
 
     let query = supabase
       .from('tickets_with_users')
@@ -154,33 +154,33 @@ export const ticketService = {
     }
 
     // Debug logging for query
-    console.log('Query Debug:', {
-      params: params,
-      hasStatus: !!params.status,
-      limit: params.limit,
-      offset: params.offset,
-      role: session.user.user_metadata?.role
-    });
+    // console.log('Query Debug:', {
+    //   params: params,
+    //   hasStatus: !!params.status,
+    //   limit: params.limit,
+    //   offset: params.offset,
+    //   role: session.user.user_metadata?.role
+    // });
 
     const { data, error } = await query;
 
     // Debug logging for results
-    console.log('Results Debug:', {
-      success: !error,
-      error: error ? {
-        message: error.message,
-        code: error.code,
-        details: error.details
-      } : null,
-      ticketCount: data?.length || 0,
-      sampleTicket: data?.[0] ? {
-        id: data[0].id,
-        subject: data[0].subject,
-        status: data[0].status,
-        group_name: data[0].group_name,
-        assigned_to: data[0].assigned_to
-      } : null
-    });
+    // console.log('Results Debug:', {
+    //   success: !error,
+    //   error: error ? {
+    //     message: error.message,
+    //     code: error.code,
+    //     details: error.details
+    //   } : null,
+    //   ticketCount: data?.length || 0,
+    //   sampleTicket: data?.[0] ? {
+    //     id: data[0].id,
+    //     subject: data[0].subject,
+    //     status: data[0].status,
+    //     group_name: data[0].group_name,
+    //     assigned_to: data[0].assigned_to
+    //   } : null
+    // });
 
     if (error) {
       console.error('Error fetching tickets:', error);

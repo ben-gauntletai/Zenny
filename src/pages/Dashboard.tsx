@@ -436,7 +436,7 @@ const Dashboard: React.FC = () => {
             </div>
           </div>
           <div className="tickets-table-container">
-            <table className={`tickets-table ${!initialLoadComplete.current ? 'initial-load' : ''}`}>
+            <table className="tickets-table">
               <thead>
                 <tr>
                   <th className="checkbox-header">
@@ -474,7 +474,7 @@ const Dashboard: React.FC = () => {
                   </th>
                 </tr>
               </thead>
-              <tbody>
+              <tbody className={!dashboardLoading ? 'initial-load' : ''}>
                 {sortedAndFilteredTickets.map((ticket, index) => (
                   <tr 
                     key={ticket.id}
