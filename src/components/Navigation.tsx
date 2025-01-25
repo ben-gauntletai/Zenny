@@ -125,27 +125,7 @@ const Navigation: React.FC = () => {
                   <span className="profile-email">{user?.email || ''}</span>
                 </div>
               </div>
-              <div className="profile-menu-items">
-                <button className="status-option online">
-                  <span className="status-dot"></span>
-                  Online
-                </button>
-                <button className="status-option away">
-                  <span className="status-dot"></span>
-                  Away
-                </button>
-                <button className="status-option transfers">
-                  <span className="status-dot"></span>
-                  Transfers only
-                </button>
-                <button className="status-option offline">
-                  <span className="status-dot"></span>
-                  Offline
-                </button>
-              </div>
               <div className="profile-menu-footer">
-                <button className="menu-item">View profile</button>
-                <button className="menu-item">Help</button>
                 <button className="menu-item sign-out" onClick={handleSignOut}>
                   Sign out
                 </button>

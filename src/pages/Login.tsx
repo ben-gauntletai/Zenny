@@ -254,9 +254,6 @@ const Login: React.FC = () => {
               />
               <span>Remember me</span>
             </label>
-            <Link to="/forgot-password" className="forgot-password">
-              Forgot password?
-            </Link>
           </div>
 
           <button
