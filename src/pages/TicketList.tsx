@@ -31,9 +31,11 @@ interface FilterState {
 const TicketList: React.FC = () => {
   const { user } = useAuth();
   const isAgentOrAdmin = user?.user_metadata?.role === 'agent' || user?.user_metadata?.role === 'admin';
-  const [tickets, setTickets] = useState<FormattedTicket[]>([]);
+  const [allTickets, setAllTickets] = useState<FormattedTicket[]>([]);
+  const [displayedTickets, setDisplayedTickets] = useState<FormattedTicket[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [shouldAnimate, setShouldAnimate] = useState(false);
   const [filters, setFilters] = useState<FilterState>({
     status: '',
     priority: '',
@@ -42,41 +44,33 @@ const TicketList: React.FC = () => {
     sortDirection: 'desc'
   });
 
+  // Only fetch tickets when component mounts or user changes
   useEffect(() => {
     fetchTickets();
-  }, [filters, user?.id]);
+  }, [user?.id]);
 
-  const fetchTickets = async () => {
-    try {
-      setLoading(true);
-      const response = await ticketService.listTickets({
-        status: filters.status || undefined,
-        limit: 100,
-        offset: 0
-      });
+  // Apply filters and sorting locally
+  useEffect(() => {
+    if (allTickets.length > 0) {
+      let filteredTickets = [...allTickets];
 
-      if (!response.tickets) {
-        throw new Error('Invalid response format');
+      // Apply filters
+      if (filters.status) {
+        filteredTickets = filteredTickets.filter(ticket => ticket.status === filters.status);
       }
-
-      let filteredTickets = response.tickets;
-
-      // Apply client-side filters
       if (filters.priority) {
-        filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => ticket.priority === filters.priority);
+        filteredTickets = filteredTickets.filter(ticket => ticket.priority === filters.priority);
       }
-
-      // For agents, filter by assignment if requested
       if (isAgentOrAdmin && filters.assignee) {
         if (filters.assignee === 'me') {
-          filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => ticket.agent_email === user?.email);
+          filteredTickets = filteredTickets.filter(ticket => ticket.agent_email === user?.email);
         } else if (filters.assignee === 'unassigned') {
-          filteredTickets = filteredTickets.filter((ticket: FormattedTicket) => !ticket.agent_email);
+          filteredTickets = filteredTickets.filter(ticket => !ticket.agent_email);
         }
       }
 
       // Apply sorting
-      const sortedTickets = [...filteredTickets].sort((a, b) => {
+      filteredTickets.sort((a, b) => {
         const direction = filters.sortDirection === 'asc' ? 1 : -1;
         
         switch (filters.sortField) {
@@ -93,7 +87,37 @@ const TicketList: React.FC = () => {
         }
       });
 
-      setTickets(sortedTickets);
+      // Trigger animation when tickets change
+      setShouldAnimate(true);
+      setDisplayedTickets(filteredTickets);
+      
+      // Reset animation flag after animation duration
+      setTimeout(() => {
+        setShouldAnimate(false);
+      }, 800); // Slightly longer than the animation duration to ensure it completes
+    }
+  }, [filters, allTickets]);
+
+  const fetchTickets = async () => {
+    try {
+      setLoading(true);
+      const response = await ticketService.listTickets({
+        status: filters.status || undefined,
+        limit: 100,
+        offset: 0
+      });
+
+      if (!response.tickets) {
+        throw new Error('Invalid response format');
+      }
+
+      setAllTickets(response.tickets);
+      setShouldAnimate(true);
+      
+      // Reset animation flag after animation duration
+      setTimeout(() => {
+        setShouldAnimate(false);
+      }, 800);
     } catch (err) {
       console.error('Error fetching tickets:', err);
       setError('Failed to load tickets');
@@ -123,9 +147,6 @@ const TicketList: React.FC = () => {
     if (filters.sortField !== field) return '↕';
     return filters.sortDirection === 'asc' ? '↑' : '↓';
   };
-
-  if (loading) return <div>Loading...</div>;
-  if (error) return <div>Error: {error}</div>;
 
   return (
     <div className="ticket-list-container">
@@ -183,38 +204,45 @@ const TicketList: React.FC = () => {
         )}
       </div>
 
-      {tickets.length === 0 ? (
-        <div className="no-tickets">
-          <p>No tickets found</p>
-          <Link to="/tickets/new" className="create-ticket-button">
-            Create Your First Ticket
-          </Link>
-        </div>
-      ) : (
-        <div className="tickets-table-container">
-          <table className="tickets-table">
-            <thead>
-              <tr>
-                <th onClick={() => handleSort('subject')} className="sortable-header">
-                  Title {getSortIndicator('subject')}
+      <div className="tickets-table-container">
+        <table className="tickets-table">
+          <thead>
+            <tr>
+              <th onClick={() => handleSort('subject')} className="sortable-header">
+                Title {getSortIndicator('subject')}
+              </th>
+              <th onClick={() => handleSort('status')} className="sortable-header">
+                Status {getSortIndicator('status')}
+              </th>
+              {isAgentOrAdmin && (
+                <th onClick={() => handleSort('priority')} className="sortable-header">
+                  Priority {getSortIndicator('priority')}
                 </th>
-                <th onClick={() => handleSort('status')} className="sortable-header">
-                  Status {getSortIndicator('status')}
-                </th>
-                {isAgentOrAdmin && (
-                  <th onClick={() => handleSort('priority')} className="sortable-header">
-                    Priority {getSortIndicator('priority')}
-                  </th>
-                )}
-                <th onClick={() => handleSort('created_at')} className="sortable-header">
-                  Created {getSortIndicator('created_at')}
-                </th>
-                {isAgentOrAdmin && <th>Requester</th>}
-                <th>Assigned To</th>
-              </tr>
-            </thead>
-            <tbody>
-              {tickets.map(ticket => (
+              )}
+              <th onClick={() => handleSort('created_at')} className="sortable-header">
+                Created {getSortIndicator('created_at')}
+              </th>
+              {isAgentOrAdmin && <th>Requester</th>}
+              <th>Assigned To</th>
+            </tr>
+          </thead>
+          <tbody className={shouldAnimate ? 'initial-load' : loading ? 'loading' : ''}>
+            {(() => {
+              if (displayedTickets.length === 0 && !loading) {
+                return (
+                  <tr>
+                    <td colSpan={isAgentOrAdmin ? 6 : 4} className="empty-state">
+                      <div className="no-tickets">
+                        <p>No tickets found</p>
+                        <Link to="/tickets/new" className="create-ticket-button">
+                          Create Your First Ticket
+                        </Link>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              }
+              return displayedTickets.map(ticket => (
                 <tr key={ticket.id}>
                   <td>
                     <Link to={`/tickets/${ticket.id}`} className="ticket-subject">
@@ -237,9 +265,14 @@ const TicketList: React.FC = () => {
                   {isAgentOrAdmin && <td>{ticket.creator_name || ticket.creator_email}</td>}
                   <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              ));
+            })()}
+          </tbody>
+        </table>
+      </div>
+      {error && (
+        <div className="error-message">
+          {error}
         </div>
       )}
     </div>

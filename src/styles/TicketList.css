@@ -1,8 +1,7 @@
 .ticket-list-container {
-  padding: 2rem 2rem 8rem 2rem;
-  margin-top: 64px;
+  padding: 1rem 2rem;
   background-color: var(--background-color, #f8fafc);
-  min-height: 100vh;
+  min-height: calc(100vh - 64px);
 }
 
 .ticket-list-header {
@@ -33,6 +32,27 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
+  table-layout: fixed;
+}
+
+.tickets-table th,
+.tickets-table td {
+  width: 16.66%; /* Even width for 6 columns (100% / 6) */
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Adjust title column to be slightly wider */
+.tickets-table th:first-child,
+.tickets-table td:first-child {
+  width: 25%;
+}
+
+/* Adjust other columns to compensate */
+.tickets-table th:not(:first-child),
+.tickets-table td:not(:first-child) {
+  width: 15%;
 }
 
 .tickets-table thead {
