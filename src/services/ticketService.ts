@@ -7,7 +7,7 @@ interface TicketCreationPayload {
   description: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   ticket_type: 'question' | 'incident' | 'problem' | 'task';
-  topic: 'ISSUE' | 'INQUIRY' | 'OTHER' | 'PAYMENTS' | 'NONE';
+  topic: 'Order & Shipping Issues' | 'Billing & Account Concerns' | 'Communication & Customer Experience' | 'Policy' | 'Promotions & Loyalty Programs' | 'Product & Service Usage';
 }
 
 export const ticketService = {

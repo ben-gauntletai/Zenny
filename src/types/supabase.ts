@@ -3,7 +3,12 @@ import { User as SupabaseUser } from '@supabase/supabase-js';
 export type TicketStatus = 'open' | 'pending' | 'solved' | 'closed';
 export type TicketPriority = 'low' | 'normal' | 'high' | 'urgent';
 export type TicketType = 'question' | 'incident' | 'problem' | 'task';
-export type TicketTopic = 'ISSUE' | 'INQUIRY' | 'OTHER' | 'PAYMENTS' | 'NONE';
+export type TicketTopic = 
+  | 'Order & Shipping Issues'
+  | 'Billing & Account Concerns'
+  | 'Communication & Customer Experience'
+  | 'Policy, Promotions & Loyalty Programs'
+  | 'Product & Service Usage';
 export type CustomerType = 'VIP_CUSTOMER' | 'STANDARD_CUSTOMER';
 export type UserRole = 'user' | 'agent' | 'admin';
 

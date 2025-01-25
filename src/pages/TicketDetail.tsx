@@ -152,6 +152,26 @@ type Message = Reply | {
   created_at: string;
 };
 
+type OldTicketTopic = 'POLICY' | 'PROMOTIONS_LOYALTY' | 'ORDER_SHIPPING' | 'BILLING_ACCOUNT' | 'COMMUNICATION_CX' | 'PRODUCT_SERVICE' | 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE';
+
+const mapOldTopicToNew = (oldTopic: OldTicketTopic | null) => {
+  switch (oldTopic) {
+    case 'POLICY':
+    case 'PROMOTIONS_LOYALTY':
+      return 'Policy, Promotions & Loyalty Programs';
+    case 'ORDER_SHIPPING':
+      return 'Order & Shipping Issues';
+    case 'BILLING_ACCOUNT':
+      return 'Billing & Account Concerns';
+    case 'COMMUNICATION_CX':
+      return 'Communication & Customer Experience';
+    case 'PRODUCT_SERVICE':
+      return 'Product & Service Usage';
+    default:
+      return 'Product & Service Usage';
+  }
+};
+
 const TicketContent: React.FC = () => {
   const navigate = useNavigate();
   const { ticket, messages, loading, error, addReply, updateTicket } = useTicketContext();
@@ -441,7 +461,7 @@ const TicketContent: React.FC = () => {
             tags: ticket.tags || [],
             type: ticket.ticket_type || 'incident',
             priority: ticket.priority.toLowerCase() as 'low' | 'normal' | 'high' | 'urgent',
-            topic: ticket.topic?.toUpperCase() as 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE' | null,
+            topic: ticket.topic as 'Order & Shipping Issues' | 'Billing & Account Concerns' | 'Communication & Customer Experience' | 'Policy, Promotions & Loyalty Programs' | 'Product & Service Usage',
             status: ticket.status as 'open' | 'pending' | 'solved' | 'closed',
             group_name: (ticket.group_name || 'Support') as 'Support' | 'Admin'
           }}

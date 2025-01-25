@@ -9,7 +9,7 @@ interface TicketFormData {
   description: string;
   priority: 'low' | 'normal' | 'high' | 'urgent';
   ticket_type: 'question' | 'incident' | 'problem' | 'task';
-  topic: 'ISSUE' | 'INQUIRY' | 'OTHER' | 'PAYMENTS' | 'NONE';
+  topic: 'Order & Shipping Issues' | 'Billing & Account Concerns' | 'Communication & Customer Experience' | 'Policy' | 'Promotions & Loyalty Programs' | 'Product & Service Usage';
 }
 
 const CreateTicket: React.FC = () => {
@@ -20,7 +20,7 @@ const CreateTicket: React.FC = () => {
     description: '',
     priority: 'normal',
     ticket_type: 'question',
-    topic: 'NONE'
+    topic: 'Order & Shipping Issues'
   });
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -134,11 +134,11 @@ const CreateTicket: React.FC = () => {
               onChange={(e) => handleInputChange('topic', e.target.value as TicketFormData['topic'])}
               required
             >
-              <option value="ISSUE">Technical Issue</option>
-              <option value="INQUIRY">General Inquiry</option>
-              <option value="PAYMENTS">Payments</option>
-              <option value="OTHER">Other</option>
-              <option value="NONE">Not Sure</option>
+              <option value="Order & Shipping Issues">Order & Shipping Issues</option>
+              <option value="Billing & Account Concerns">Billing & Account Concerns</option>
+              <option value="Communication & Customer Experience">Communication & Customer Experience</option>
+              <option value="Policy, Promotions & Loyalty Programs">Policy, Promotions & Loyalty Programs</option>
+              <option value="Product & Service Usage">Product & Service Usage</option>
             </select>
           </div>
 

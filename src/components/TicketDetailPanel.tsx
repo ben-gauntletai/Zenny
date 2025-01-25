@@ -29,7 +29,7 @@ interface TicketDetailPanelProps {
     tags: string[];
     type: 'question' | 'incident' | 'problem' | 'task';
     priority: 'low' | 'normal' | 'high' | 'urgent';
-    topic: 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE' | null;
+    topic: 'Order & Shipping Issues' | 'Billing & Account Concerns' | 'Communication & Customer Experience' | 'Policy, Promotions & Loyalty Programs' | 'Product & Service Usage' | null;
     status: 'open' | 'pending' | 'solved' | 'closed';
     assigned_to?: string;
     group_name?: 'Support' | 'Admin';
@@ -273,17 +273,17 @@ const TicketDetailPanel: React.FC<TicketDetailPanelProps> = ({ ticket, onUpdate,
         <Box className="field-group">
           <Text className="field-label">Topic</Text>
           <Select
-            value={pendingChanges.topic ?? ticket.topic ?? 'NONE'}
+            value={pendingChanges.topic ?? ticket.topic ?? 'Order & Shipping Issues'}
             onChange={async (e) => {
-              await handleTopicChange(e.target.value as 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE');
+              await handleTopicChange(e.target.value as typeof ticket.topic);
             }}
             size="sm"
           >
-            <option value="NONE">None</option>
-            <option value="ISSUE">Issue</option>
-            <option value="INQUIRY">Inquiry</option>
-            <option value="PAYMENTS">Payments</option>
-            <option value="OTHER">Other</option>
+            <option value="Order & Shipping Issues">Order & Shipping Issues</option>
+            <option value="Billing & Account Concerns">Billing & Account Concerns</option>
+            <option value="Communication & Customer Experience">Communication & Customer Experience</option>
+            <option value="Policy, Promotions & Loyalty Programs">Policy, Promotions & Loyalty Programs</option>
+            <option value="Product & Service Usage">Product & Service Usage</option>
           </Select>
         </Box>
       </Stack>

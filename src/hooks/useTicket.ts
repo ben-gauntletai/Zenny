@@ -30,7 +30,7 @@ export interface Ticket {
   status: 'open' | 'pending' | 'solved' | 'closed';
   priority: 'low' | 'normal' | 'high' | 'urgent';
   ticket_type: 'question' | 'incident' | 'problem' | 'task';
-  topic: 'ISSUE' | 'INQUIRY' | 'PAYMENTS' | 'OTHER' | 'NONE' | null;
+  topic: 'Order & Shipping Issues' | 'Billing & Account Concerns' | 'Communication & Customer Experience' | 'Policy, Promotions & Loyalty Programs' | 'Product & Service Usage' | null;
   created_at: string;
   updated_at: string;
   assigned_to?: string;
@@ -286,38 +286,6 @@ export const useTicket = (ticketId: string) => {
         user_profile: reply.user_profile,
         user_email: reply.user_email
       }));
-
-      // If user is the ticket creator (customer), add the initial description as a message
-      if (user?.id === parsedTicket.user_id) {
-        const initialMessage: Message = {
-          id: -parseInt(parsedTicket.id), // Use negative ID to ensure uniqueness
-          type: 'reply' as const,
-          content: parsedTicket.description,
-          created_at: parsedTicket.created_at,
-          user_id: parsedTicket.user_id,
-          ticket_id: parsedTicket.id,
-          is_internal: false,
-          user_profile: {
-            email: parsedTicket.profiles?.email,
-            full_name: parsedTicket.profiles?.full_name,
-            avatar_url: parsedTicket.profiles?.avatar_url,
-            role: ''
-          },
-          user_email: parsedTicket.profiles?.email
-        };
-        
-        // Add initial message only if it's not already in the replies
-        const hasInitialReply = initialMessages.some(msg => 
-          'user_id' in msg && // Check if it's a Reply type
-          msg.content === parsedTicket.description && 
-          msg.user_id === parsedTicket.user_id &&
-          Math.abs(new Date(msg.created_at).getTime() - new Date(parsedTicket.created_at).getTime()) < 1000
-        );
-        
-        if (!hasInitialReply) {
-          initialMessages = [initialMessage, ...initialMessages];
-        }
-      }
 
       setMessages(initialMessages);
     } catch (err) {
