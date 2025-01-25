@@ -11,7 +11,7 @@ interface Article {
   content: string;
   category_id: string;
   author_id: string;
-  author: {
+  author?: {
     email: string;
     full_name: string;
   };
@@ -20,10 +20,10 @@ interface Article {
   views_count: number;
   helpful_count: number;
   not_helpful_count: number;
-  category: {
+  category?: {
     name: string;
   };
-  tags: {
+  tags?: {
     id: string;
     name: string;
   }[];
@@ -33,38 +33,23 @@ const ArticleDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { deleteArticle } = useKnowledgeBase();
-  const [article, setArticle] = useState<Article | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
+  const { articles, deleteArticle } = useKnowledgeBase();
+  const [article, setArticle] = useState<Article | null>(() => {
+    // Initialize from context if available
+    return articles.find(a => a.id === id) || null;
+  });
   const [error, setError] = useState<string | null>(null);
   const [userFeedback, setUserFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
   const [canDelete, setCanDelete] = useState(false);
   const isAgentOrAdmin = user?.user_metadata?.role === 'admin' || user?.user_metadata?.role === 'agent';
 
-  // Add console logging for debugging
   useEffect(() => {
     const isAdmin = user?.user_metadata?.role === 'admin';
     const isAuthor = user?.id === article?.author_id;
     const shouldDelete = Boolean(user && article && (isAuthor || isAdmin));
-    
-    console.log('Detailed visibility check:', {
-      isAdmin,
-      isAuthor,
-      shouldDelete,
-      userRole: user?.user_metadata?.role,
-      userId: user?.id,
-      authorId: article?.author_id,
-      userMetadata: user?.user_metadata,
-      articleExists: !!article,
-      userExists: !!user,
-      fullArticle: article,
-      fullUser: user
-    });
-
     setCanDelete(shouldDelete);
   }, [user, article]);
 
-  // Add delete handler
   const handleDelete = async () => {
     if (!article || !window.confirm('Are you sure you want to delete this article?')) {
       return;
@@ -86,20 +71,30 @@ const ArticleDetail: React.FC = () => {
       if (!id || !user) return;
 
       try {
-        // Fetch article details
-        const { data: articleData, error: articleError } = await supabase
-          .from('knowledge_base_articles')
-          .select(`
-            *,
-            category:knowledge_base_categories(name),
-            tags:knowledge_base_article_tags(
-              knowledge_base_tags(id, name)
-            )
-          `)
-          .eq('id', id)
-          .single();
+        // Fetch article details if not already in state
+        if (!article) {
+          const { data: articleData, error: articleError } = await supabase
+            .from('knowledge_base_articles')
+            .select(`
+              *,
+              category:knowledge_base_categories(name),
+              tags:knowledge_base_article_tags(
+                knowledge_base_tags(id, name)
+              )
+            `)
+            .eq('id', id)
+            .single();
 
-        if (articleError) throw articleError;
+          if (articleError) throw articleError;
+
+          // Transform the data
+          const transformedData = {
+            ...articleData,
+            tags: articleData.tags?.map((tag: { knowledge_base_tags: { id: string; name: string } }) => tag.knowledge_base_tags)
+          };
+
+          setArticle(transformedData);
+        }
 
         // Fetch user's feedback
         const { data: feedbackData, error: feedbackError } = await supabase
@@ -113,24 +108,15 @@ const ArticleDetail: React.FC = () => {
           throw feedbackError;
         }
 
-        // Transform the data
-        const transformedData = {
-          ...articleData,
-          tags: articleData.tags?.map((tag: { knowledge_base_tags: { id: string; name: string } }) => tag.knowledge_base_tags)
-        };
-
-        setArticle(transformedData);
         setUserFeedback(feedbackData?.is_helpful ? 'helpful' : feedbackData?.is_helpful === false ? 'not_helpful' : null);
       } catch (err) {
         console.error('Error fetching article:', err);
         setError('Failed to load article');
-      } finally {
-        setIsLoading(false);
       }
     };
 
     fetchArticleAndFeedback();
-  }, [id, user]);
+  }, [id, user, article]);
 
   const handleVote = async (isHelpful: boolean) => {
     if (!article || !user) return;
@@ -202,12 +188,12 @@ const ArticleDetail: React.FC = () => {
     }
   };
 
-  if (isLoading) {
-    return <div className="loading">Loading article...</div>;
+  if (error) {
+    return <div className="error">{error}</div>;
   }
 
-  if (error || !article) {
-    return <div className="error">{error || 'Article not found'}</div>;
+  if (!article) {
+    return null;
   }
 
   return (

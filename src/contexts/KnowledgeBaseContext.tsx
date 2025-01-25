@@ -26,8 +26,15 @@ interface Article {
   }[];
 }
 
+interface Category {
+  id: string;
+  name: string;
+  description: string;
+}
+
 interface KnowledgeBaseContextType {
   articles: Article[];
+  categories: Category[];
   loading: boolean;
   error: string | null;
   searchArticles: (query: string) => Promise<void>;
@@ -41,35 +48,47 @@ const KnowledgeBaseContext = createContext<KnowledgeBaseContextType | undefined>
 
 export const KnowledgeBaseProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [articles, setArticles] = useState<Article[]>([]);
+  const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   const fetchArticles = async () => {
     try {
       setLoading(true);
-      const { data, error } = await supabase
-        .from('knowledge_base_articles')
-        .select(`
-          *,
-          category:knowledge_base_categories(name),
-          tags:knowledge_base_article_tags(
-            knowledge_base_tags(id, name)
-          )
-        `)
-        .eq('status', 'published')
-        .order('created_at', { ascending: false });
+      
+      // Fetch both articles and categories in parallel
+      const [articlesResponse, categoriesResponse] = await Promise.all([
+        supabase
+          .from('knowledge_base_articles')
+          .select(`
+            *,
+            category:knowledge_base_categories(name),
+            tags:knowledge_base_article_tags(
+              knowledge_base_tags(id, name)
+            )
+          `)
+          .eq('status', 'published')
+          .order('created_at', { ascending: false }),
+        
+        supabase
+          .from('knowledge_base_categories')
+          .select('*')
+          .order('name')
+      ]);
 
-      if (error) throw error;
+      if (articlesResponse.error) throw articlesResponse.error;
+      if (categoriesResponse.error) throw categoriesResponse.error;
 
-      // Transform the data to match our Article interface
-      const transformedData = data?.map(article => ({
+      // Transform the articles data
+      const transformedArticles = articlesResponse.data?.map(article => ({
         ...article,
         tags: article.tags?.map((tag: { knowledge_base_tags: { id: string; name: string } }) => tag.knowledge_base_tags)
       }));
 
-      setArticles(transformedData || []);
+      setArticles(transformedArticles || []);
+      setCategories(categoriesResponse.data || []);
     } catch (error: any) {
-      console.error('Error fetching articles:', error.message);
+      console.error('Error fetching knowledge base data:', error.message);
       setError(error.message);
     } finally {
       setLoading(false);
@@ -167,6 +186,7 @@ export const KnowledgeBaseProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const value = {
     articles,
+    categories,
     loading,
     error,
     searchArticles,

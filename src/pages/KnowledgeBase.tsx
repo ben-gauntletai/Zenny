@@ -1,40 +1,14 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { useKnowledgeBase } from '../contexts/KnowledgeBaseContext';
-import { supabase } from '../lib/supabaseClient';
 import '../styles/KnowledgeBase.css';
-
-interface Category {
-  id: string;
-  name: string;
-  description: string;
-}
 
 const KnowledgeBase: React.FC = () => {
   const { user } = useAuth();
-  const { articles, loading, error } = useKnowledgeBase();
+  const { articles, categories, error } = useKnowledgeBase();
   const [searchQuery, setSearchQuery] = useState('');
-  const [categories, setCategories] = useState<Category[]>([]);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-
-  useEffect(() => {
-    const fetchCategories = async () => {
-      const { data, error } = await supabase
-        .from('knowledge_base_categories')
-        .select('*')
-        .order('name');
-
-      if (error) {
-        console.error('Error fetching categories:', error);
-        return;
-      }
-
-      setCategories(data || []);
-    };
-
-    fetchCategories();
-  }, []);
 
   // Filter articles based on selected category and search query
   const filteredArticles = articles.filter(article => {
@@ -44,10 +18,6 @@ const KnowledgeBase: React.FC = () => {
       article.content.toLowerCase().includes(searchQuery.toLowerCase());
     return matchesCategory && matchesSearch;
   });
-
-  if (loading) {
-    return <div className="loading">Loading articles...</div>;
-  }
 
   if (error) {
     return <div className="error">{error}</div>;

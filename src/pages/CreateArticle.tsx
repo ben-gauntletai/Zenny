@@ -8,24 +8,26 @@ import '../styles/CreateArticle.css';
 const CreateArticle: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { refreshArticles } = useKnowledgeBase();
+  const { articles, refreshArticles } = useKnowledgeBase();
   const { id } = useParams(); // Get article ID if editing
-  const [title, setTitle] = useState('');
-  const [content, setContent] = useState('');
-  const [categoryId, setCategoryId] = useState('');
-  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  
+  // Initialize state from context if editing
+  const existingArticle = id ? articles.find(a => a.id === id) : null;
+  const [title, setTitle] = useState(existingArticle?.title || '');
+  const [content, setContent] = useState(existingArticle?.content || '');
+  const [categoryId, setCategoryId] = useState(existingArticle?.category_id || '');
+  const [selectedTags, setSelectedTags] = useState<string[]>(
+    existingArticle?.tags?.map(tag => tag.id) || []
+  );
+  
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [tags, setTags] = useState<Array<{ id: string; name: string }>>([]);
-  const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Fetch article data if editing
+  // Fetch article data if editing and not in context
   useEffect(() => {
     const fetchArticle = async () => {
-      if (!id) {
-        setIsLoading(false);
-        return;
-      }
+      if (!id || existingArticle) return;
 
       try {
         const { data: article, error } = await supabase
@@ -51,33 +53,26 @@ const CreateArticle: React.FC = () => {
       } catch (err) {
         console.error('Error fetching article:', err);
         setError('Failed to load article');
-      } finally {
-        setIsLoading(false);
       }
     };
 
     fetchArticle();
-  }, [id]);
+  }, [id, existingArticle]);
 
   // Fetch categories and tags
   useEffect(() => {
     const fetchData = async () => {
       try {
-        // Fetch categories
-        const { data: categoriesData, error: categoriesError } = await supabase
-          .from('knowledge_base_categories')
-          .select('*');
+        const [categoriesResponse, tagsResponse] = await Promise.all([
+          supabase.from('knowledge_base_categories').select('*'),
+          supabase.from('knowledge_base_tags').select('*')
+        ]);
 
-        if (categoriesError) throw categoriesError;
-        setCategories(categoriesData);
+        if (categoriesResponse.error) throw categoriesResponse.error;
+        if (tagsResponse.error) throw tagsResponse.error;
 
-        // Fetch tags
-        const { data: tagsData, error: tagsError } = await supabase
-          .from('knowledge_base_tags')
-          .select('*');
-
-        if (tagsError) throw tagsError;
-        setTags(tagsData);
+        setCategories(categoriesResponse.data);
+        setTags(tagsResponse.data);
       } catch (err) {
         console.error('Error fetching data:', err);
         setError('Failed to load categories and tags');
@@ -183,10 +178,6 @@ const CreateArticle: React.FC = () => {
     }
   };
 
-  if (isLoading) {
-    return <div className="loading">Loading...</div>;
-  }
-
   if (error) {
     return <div className="error">{error}</div>;
   }
@@ -254,9 +245,11 @@ const CreateArticle: React.FC = () => {
       </div>
 
       <div className="form-actions">
-        <button type="button" className="cancel-button" onClick={() => navigate(-1)}>
-          Cancel
-        </button>
+        {id && (
+          <button type="button" className="cancel-button" onClick={() => navigate(-1)}>
+            Cancel
+          </button>
+        )}
         <button type="submit" className="submit-button">
           {id ? 'Update' : 'Create'}
         </button>
