@@ -2,6 +2,9 @@
   padding: 1rem 2rem;
   background-color: var(--background-color, #f8fafc);
   min-height: calc(100vh - 64px);
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
 }
 
 .ticket-list-header {
@@ -23,9 +26,10 @@
   border: 2px solid #e2e8f0;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  max-height: 500px;
   overflow: auto;
   margin-bottom: 4rem;
+  width: 100%;
+  max-width: 100%;
 }
 
 .tickets-table {
@@ -33,6 +37,7 @@
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
+  min-width: 100%;
 }
 
 .tickets-table th,
@@ -102,6 +107,8 @@
   .ticket-list-container {
     height: calc(100vh - 160px);
     padding: 0.75rem;
+    width: 100%;
+    max-width: 100%;
   }
 
   .ticket-list-header h2 {
@@ -146,6 +153,8 @@
   padding: 1rem;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
+  width: 100%;
+  box-sizing: border-box;
 }
 
 .filter-select {
