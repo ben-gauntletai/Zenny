@@ -66,94 +66,98 @@ const CreateTicket: React.FC = () => {
       {error && <div className="error-message">{error}</div>}
 
       <form onSubmit={handleSubmit} className="ticket-form">
-        <div className="form-group">
-          <label htmlFor="subject">Subject</label>
-          <input
-            type="text"
-            id="subject"
-            name="subject"
-            value={formData.subject}
-            onChange={(e) => handleInputChange('subject', e.target.value)}
-            required
-            maxLength={100}
-            placeholder="Brief summary"
-          />
-          <div className="help-text">
-            <p className={getCharCountClass(formData.subject.length, 100)}>
-              {formData.subject.length}/100
-            </p>
+        <div className="form-left">
+          <div className="form-group">
+            <label htmlFor="subject">Subject</label>
+            <input
+              type="text"
+              id="subject"
+              name="subject"
+              value={formData.subject}
+              onChange={(e) => handleInputChange('subject', e.target.value)}
+              required
+              maxLength={100}
+              placeholder="Brief summary"
+            />
+            <div className="help-text">
+              <p className={getCharCountClass(formData.subject.length, 100)}>
+                {formData.subject.length}/100
+              </p>
+            </div>
+          </div>
+
+          <div className="form-group">
+            <label htmlFor="description">Description</label>
+            <textarea
+              id="description"
+              name="description"
+              value={formData.description}
+              onChange={(e) => handleInputChange('description', e.target.value)}
+              required
+              rows={3}
+              placeholder="What happened? What did you expect?"
+            />
+            <div className="help-text">
+              <ul>
+                <li>Steps to reproduce</li>
+                <li>Actual result</li>
+                <li>Expected result</li>
+                <li>Error messages</li>
+              </ul>
+            </div>
           </div>
         </div>
 
-        <div className="form-group">
-          <label htmlFor="description">Description</label>
-          <textarea
-            id="description"
-            name="description"
-            value={formData.description}
-            onChange={(e) => handleInputChange('description', e.target.value)}
-            required
-            rows={4}
-            placeholder="What happened? What did you expect?"
-          />
-          <div className="help-text">
-            <ul>
-              <li>Steps to reproduce</li>
-              <li>Actual result</li>
-              <li>Expected result</li>
-              <li>Error messages</li>
-            </ul>
+        <div className="form-right">
+          <div className="form-group">
+            <label htmlFor="ticket_type">Type</label>
+            <select
+              id="ticket_type"
+              name="ticket_type"
+              value={formData.ticket_type}
+              onChange={(e) => handleInputChange('ticket_type', e.target.value as TicketFormData['ticket_type'])}
+              required
+            >
+              <option value="question">Question</option>
+              <option value="incident">Incident</option>
+              <option value="problem">Problem</option>
+              <option value="task">Task</option>
+            </select>
           </div>
-        </div>
 
-        <div className="form-group">
-          <label htmlFor="ticket_type">Type</label>
-          <select
-            id="ticket_type"
-            name="ticket_type"
-            value={formData.ticket_type}
-            onChange={(e) => handleInputChange('ticket_type', e.target.value as TicketFormData['ticket_type'])}
-            required
-          >
-            <option value="question">Question</option>
-            <option value="incident">Incident</option>
-            <option value="problem">Problem</option>
-            <option value="task">Task</option>
-          </select>
-        </div>
+          <div className="form-group">
+            <label htmlFor="topic">Topic</label>
+            <select
+              id="topic"
+              name="topic"
+              value={formData.topic}
+              onChange={(e) => handleInputChange('topic', e.target.value as TicketFormData['topic'])}
+              required
+            >
+              <option value="ISSUE">Technical Issue</option>
+              <option value="INQUIRY">General Inquiry</option>
+              <option value="PAYMENTS">Payments</option>
+              <option value="OTHER">Other</option>
+              <option value="NONE">Not Sure</option>
+            </select>
+          </div>
 
-        <div className="form-group">
-          <label htmlFor="topic">Topic</label>
-          <select
-            id="topic"
-            name="topic"
-            value={formData.topic}
-            onChange={(e) => handleInputChange('topic', e.target.value as TicketFormData['topic'])}
-            required
-          >
-            <option value="ISSUE">Technical Issue</option>
-            <option value="INQUIRY">General Inquiry</option>
-            <option value="PAYMENTS">Payments</option>
-            <option value="OTHER">Other</option>
-            <option value="NONE">Not Sure</option>
-          </select>
-        </div>
-
-        <div className="form-actions">
-          <button
-            type="button"
-            className="cancel-button"
-            onClick={() => navigate('/tickets')}
-          >
-            Cancel
-          </button>
-          <button
-            type="submit"
-            className="submit-button"
-            disabled={loading}
-          >
-            {loading ? 'Creating...' : 'Create'}
-          </button>
+          <div className="form-actions">
+            <button
+              type="button"
+              className="cancel-button"
+              onClick={() => navigate('/tickets')}
+            >
+              Cancel
+            </button>
+            <button
+              type="submit"
+              className="submit-button"
+              disabled={loading}
+            >
+              {loading ? 'Creating...' : 'Create'}
+            </button>
+          </div>
         </div>
       </form>
     </div>
