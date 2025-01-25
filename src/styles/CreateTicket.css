@@ -48,7 +48,6 @@
   gap: 1rem;
   border-left: 2px solid #e2e8f0;
   padding-left: 1.5rem;
-  height: 100%;
   position: relative;
   padding-bottom: 5rem;
 }
@@ -133,10 +132,13 @@
   display: flex;
   justify-content: flex-end;
   gap: 1rem;
-  margin-top: 1rem;
-  padding-top: 0.75rem;
+  position: absolute;
+  bottom: 0;
+  left: 1.5rem;
+  right: 0;
+  padding: 1rem 0;
+  background: white;
   border-top: 2px solid #e2e8f0;
-  grid-column: span 2;
 }
 
 .cancel-button,
