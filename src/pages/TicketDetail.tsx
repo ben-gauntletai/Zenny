@@ -692,12 +692,13 @@ const TicketContent: React.FC = () => {
                   width={["95%", "95%", "800px"]}
                   maxWidth="800px"
                   minWidth="320px"
-                  maxHeight="90vh"
+                  maxHeight="85vh"
                   bg="white"
                   boxShadow="0 4px 12px rgba(0, 0, 0, 0.05)"
                   borderRadius="16px"
                   overflow="hidden"
                   mx="auto"
+                  mt="5vh"
                   display="flex"
                   flexDirection="column"
                 >
