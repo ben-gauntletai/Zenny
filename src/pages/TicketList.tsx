@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ticketService } from '../services/ticketService';
 import '../styles/TicketList.css';
@@ -29,6 +29,7 @@ interface FilterState {
 }
 
 const TicketList: React.FC = () => {
+  const navigate = useNavigate();
   const { user } = useAuth();
   const isAgentOrAdmin = user?.user_metadata?.role === 'agent' || user?.user_metadata?.role === 'admin';
   const [allTickets, setAllTickets] = useState<FormattedTicket[]>([]);
@@ -149,7 +150,7 @@ const TicketList: React.FC = () => {
   };
 
   const handleRowClick = (ticketId: string) => {
-    window.location.href = `/tickets/${ticketId}`;
+    navigate(`/tickets/${ticketId}`);
   };
 
   return (
