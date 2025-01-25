@@ -245,4 +245,23 @@
 
 .header-content {
   flex: 1;
+}
+
+.sortable-header {
+  cursor: pointer;
+  user-select: none;
+  position: relative;
+  padding-right: 1.5rem !important;
+}
+
+.sortable-header:hover {
+  background-color: #edf2f7 !important;
+}
+
+.sortable-header::after {
+  content: attr(data-sort-indicator);
+  position: absolute;
+  right: 0.5rem;
+  color: #718096;
+  font-size: 0.875rem;
 } 

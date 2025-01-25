@@ -24,8 +24,8 @@ interface FilterState {
   status: string;
   priority: string;
   assignee: string;
-  sortBy: 'created_at' | 'priority' | 'status';
-  sortOrder: 'asc' | 'desc';
+  sortField: string;
+  sortDirection: 'asc' | 'desc';
 }
 
 const TicketList: React.FC = () => {
@@ -38,8 +38,8 @@ const TicketList: React.FC = () => {
     status: '',
     priority: '',
     assignee: '',
-    sortBy: 'created_at',
-    sortOrder: 'desc'
+    sortField: 'created_at',
+    sortDirection: 'desc'
   });
 
   useEffect(() => {
@@ -76,17 +76,24 @@ const TicketList: React.FC = () => {
       }
 
       // Apply sorting
-      filteredTickets.sort((a: FormattedTicket, b: FormattedTicket) => {
-        const aValue = a[filters.sortBy];
-        const bValue = b[filters.sortBy];
-        const order = filters.sortOrder === 'asc' ? 1 : -1;
+      const sortedTickets = [...filteredTickets].sort((a, b) => {
+        const direction = filters.sortDirection === 'asc' ? 1 : -1;
         
-        if (aValue < bValue) return -1 * order;
-        if (aValue > bValue) return 1 * order;
-        return 0;
+        switch (filters.sortField) {
+          case 'created_at':
+            return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * direction;
+          case 'priority':
+            return getPriorityOrder(a.priority, b.priority) * direction;
+          case 'status':
+            return a.status.localeCompare(b.status) * direction;
+          case 'subject':
+            return (a.subject || '').localeCompare(b.subject || '') * direction;
+          default:
+            return 0;
+        }
       });
 
-      setTickets(filteredTickets);
+      setTickets(sortedTickets);
     } catch (err) {
       console.error('Error fetching tickets:', err);
       setError('Failed to load tickets');
@@ -95,8 +102,26 @@ const TicketList: React.FC = () => {
     }
   };
 
+  const getPriorityOrder = (a: string, b: string): number => {
+    const order: Record<string, number> = { low: 1, normal: 2, high: 3, urgent: 4 };
+    return (order[a.toLowerCase()] || 0) - (order[b.toLowerCase()] || 0);
+  };
+
   const handleFilterChange = (key: keyof FilterState, value: string) => {
     setFilters(prev => ({ ...prev, [key]: value }));
+  };
+
+  const handleSort = (field: string) => {
+    setFilters(prev => ({
+      ...prev,
+      sortField: field,
+      sortDirection: prev.sortField === field && prev.sortDirection === 'asc' ? 'desc' : 'asc'
+    }));
+  };
+
+  const getSortIndicator = (field: string) => {
+    if (filters.sortField !== field) return '↕';
+    return filters.sortDirection === 'asc' ? '↑' : '↓';
   };
 
   if (loading) return <div>Loading...</div>;
@@ -156,25 +181,6 @@ const TicketList: React.FC = () => {
             <option value="unassigned">Unassigned</option>
           </select>
         )}
-
-        <select
-          value={filters.sortBy}
-          onChange={(e) => handleFilterChange('sortBy', e.target.value as any)}
-          className="filter-select"
-        >
-          <option value="created_at">Sort by Date</option>
-          <option value="priority">Sort by Priority</option>
-          <option value="status">Sort by Status</option>
-        </select>
-
-        <select
-          value={filters.sortOrder}
-          onChange={(e) => handleFilterChange('sortOrder', e.target.value as 'asc' | 'desc')}
-          className="filter-select"
-        >
-          <option value="desc">Newest First</option>
-          <option value="asc">Oldest First</option>
-        </select>
       </div>
 
       {tickets.length === 0 ? (
@@ -189,10 +195,20 @@ const TicketList: React.FC = () => {
           <table className="tickets-table">
             <thead>
               <tr>
-                <th>Title</th>
-                <th>Status</th>
-                {isAgentOrAdmin && <th>Priority</th>}
-                <th>Created</th>
+                <th onClick={() => handleSort('subject')} className="sortable-header">
+                  Title {getSortIndicator('subject')}
+                </th>
+                <th onClick={() => handleSort('status')} className="sortable-header">
+                  Status {getSortIndicator('status')}
+                </th>
+                {isAgentOrAdmin && (
+                  <th onClick={() => handleSort('priority')} className="sortable-header">
+                    Priority {getSortIndicator('priority')}
+                  </th>
+                )}
+                <th onClick={() => handleSort('created_at')} className="sortable-header">
+                  Created {getSortIndicator('created_at')}
+                </th>
                 {isAgentOrAdmin && <th>Requester</th>}
                 <th>Assigned To</th>
               </tr>
