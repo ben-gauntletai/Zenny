@@ -68,13 +68,10 @@ serve(async (req)=>{
 });
 async function handleTicketCreation(req, supabaseClient, user) {
   try {
+    console.error("=== DEBUG START ===");
     const payload = await req.json();
-    console.log('Creating ticket with payload:', {
-      payload,
-      user_id: user.id,
-      user_email: user.email,
-      user_role: user.user_metadata?.role
-    });
+    console.error("Ticket creation payload:", JSON.stringify(payload));
+
     // Validate payload
     if (!payload.subject || !payload.description || !payload.priority || !payload.ticket_type || !payload.topic) {
       const error = new Error('Missing required fields');
@@ -91,20 +88,54 @@ async function handleTicketCreation(req, supabaseClient, user) {
       });
       throw error;
     }
+    
     // Create a single service role client to use for all operations
-    const serviceRoleClient = createClient(Deno.env.get('SUPABASE_URL') ?? '', Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '');
-    console.log('Creating ticket using service role client');
-    // Create the ticket
+    const serviceRoleClient = createClient(
+      Deno.env.get('SUPABASE_URL') ?? '',
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+    
+    // Find an available agent with matching specialty
+    console.error("Looking for agent with specialty:", payload.topic);
+    
+    const { data: agents, error: agentError } = await serviceRoleClient
+      .from('profiles')
+      .select('id, email, full_name, specialty')
+      .eq('role', 'agent')
+      .eq('specialty', payload.topic)
+      .not('specialty', 'is', null);
+
+    console.error("Agent search results:", JSON.stringify({ agents, error: agentError }));
+
+    const agent = agents?.[0];
+    
+    if (!agent) {
+      console.error("No agent found with specialty:", payload.topic);
+    } else {
+      console.error("Selected agent:", JSON.stringify(agent));
+    }
+    
+    console.error("=== DEBUG END ===");
+
+    // Create the ticket with assigned agent if found
     const { data: ticket, error: ticketError } = await serviceRoleClient.from('tickets').insert({
       ...payload,
       user_id: user.id,
       status: 'open',
-      group_name: 'Support'
+      group_name: 'Support',
+      assigned_to: agent?.id || null  // Only assign if we found a matching agent
     }).select(`
         *,
         profiles:user_id(email, full_name),
         agents:assigned_to(email, full_name)
       `).single();
+
     if (ticketError) {
       console.error('Database error creating ticket:', {
         error: ticketError,
@@ -152,11 +183,29 @@ async function handleTicketCreation(req, supabaseClient, user) {
     }
     return new Response(JSON.stringify({
       ticket,
-      isNewTicket: true
+      isNewTicket: true,
+      version: 'debug-1.0',
+      debug: {
+        agentSearch: {
+          topic: payload.topic,
+          agentsFound: agents?.length || 0,
+          selectedAgent: agent ? {
+            id: agent.id,
+            email: agent.email,
+            full_name: agent.full_name,
+            specialty: agent.specialty
+          } : null,
+          error: agentError ? {
+            message: agentError.message,
+            code: agentError.code
+          } : null
+        }
+      }
     }), {
       headers: {
         ...corsHeaders,
-        'Content-Type': 'application/json'
+        'Content-Type': 'application/json',
+        'X-Debug-Version': 'debug-1.0'
       },
       status: 200
     });
@@ -172,7 +221,7 @@ async function handleTicketCreation(req, supabaseClient, user) {
     return new Response(JSON.stringify({
       error: error.message,
       details: error.details || null,
-      stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+      stack: error.stack
     }), {
       status: 400,
       headers: {
@@ -352,9 +401,9 @@ async function handleTicketUpdate(req, supabaseClient, user) {
     const transformedTicket = {
       ...updatedTicket,
       requester_id: updatedTicket.user_id,
-      requester_email: updatedTicket.requester?.email || updatedTicket.profiles?.email,
-      requester_name: updatedTicket.requester?.full_name || updatedTicket.profiles?.full_name,
-      requester_avatar: updatedTicket.requester?.avatar_url || updatedTicket.profiles?.avatar_url,
+      requester_email: updatedTicket.requester?.email,
+      requester_name: updatedTicket.requester?.full_name,
+      requester_avatar: updatedTicket.requester?.avatar_url,
       requester_role: updatedTicket.requester?.role || updatedTicket.profiles?.role,
       agent_email: updatedTicket.agents?.email,
       agent_name: updatedTicket.agents?.full_name,
