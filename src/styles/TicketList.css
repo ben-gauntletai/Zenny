@@ -42,22 +42,28 @@
 
 .tickets-table th,
 .tickets-table td {
-  width: 16.66%; /* Even width for 6 columns (100% / 6) */
+  width: 14.28%; /* Even width for 7 columns (100% / 7) */
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
-/* Adjust title column to be slightly wider */
+/* Adjust ID column to be narrower */
 .tickets-table th:first-child,
 .tickets-table td:first-child {
+  width: 8%;
+}
+
+/* Adjust title column to be wider */
+.tickets-table th:nth-child(2),
+.tickets-table td:nth-child(2) {
   width: 25%;
 }
 
 /* Adjust other columns to compensate */
-.tickets-table th:not(:first-child),
-.tickets-table td:not(:first-child) {
-  width: 15%;
+.tickets-table th:not(:first-child):not(:nth-child(2)),
+.tickets-table td:not(:first-child):not(:nth-child(2)) {
+  width: 13.4%;
 }
 
 .tickets-table thead {

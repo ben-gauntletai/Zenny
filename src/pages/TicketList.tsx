@@ -75,6 +75,8 @@ const TicketList: React.FC = () => {
         const direction = filters.sortDirection === 'asc' ? 1 : -1;
         
         switch (filters.sortField) {
+          case 'id':
+            return (parseInt(a.id) - parseInt(b.id)) * direction;
           case 'created_at':
             return (new Date(a.created_at).getTime() - new Date(b.created_at).getTime()) * direction;
           case 'priority':
@@ -213,6 +215,9 @@ const TicketList: React.FC = () => {
         <table className="tickets-table">
           <thead>
             <tr>
+              <th onClick={() => handleSort('id')} className="sortable-header">
+                ID {getSortIndicator('id')}
+              </th>
               <th onClick={() => handleSort('subject')} className="sortable-header">
                 Title {getSortIndicator('subject')}
               </th>
@@ -236,7 +241,7 @@ const TicketList: React.FC = () => {
               if (displayedTickets.length === 0 && !loading) {
                 return (
                   <tr>
-                    <td colSpan={isAgentOrAdmin ? 6 : 4} className="empty-state">
+                    <td colSpan={isAgentOrAdmin ? 7 : 5} className="empty-state">
                       <div className="no-tickets">
                         <p>No tickets found</p>
                         <Link to="/tickets/new" className="create-ticket-button">
@@ -253,6 +258,7 @@ const TicketList: React.FC = () => {
                   onClick={() => handleRowClick(ticket.id)}
                   className="clickable-row"
                 >
+                  <td>#{ticket.id}</td>
                   <td>
                     {ticket.subject}
                   </td>
