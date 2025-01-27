@@ -87,7 +87,7 @@ export const ticketService = {
     return response.json();
   },
 
-  async listTickets(params: { status?: string; limit?: number; offset?: number } = {}) {
+  async listTickets(params: { status?: string; limit?: number; offset?: number; isDashboard?: boolean } = {}) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('No active session');
 
@@ -99,7 +99,8 @@ export const ticketService = {
       role: session.user.user_metadata?.role,
       id: session.user.id,
       email: session.user.email,
-      isAgentOrAdmin
+      isAgentOrAdmin,
+      isDashboard: params.isDashboard
     });
 
     let query = supabase
@@ -128,16 +129,23 @@ export const ticketService = {
       // Regular users can only see their own tickets
       query = query.eq('user_id', session.user.id);
     } else if (session.user.user_metadata?.role === 'agent') {
-      // Agents can see:
-      // 1. Their own tickets
-      // 2. Tickets assigned to them
-      // 3. Open tickets not in Admin group
-      query = query.or(`user_id.eq.${session.user.id},assigned_to.eq.${session.user.id},and(status.eq.open,group_name.neq.Admin)`);
+      if (params.isDashboard) {
+        // For dashboard: only show open tickets that are either unassigned or assigned to the agent
+        query = query.eq('status', 'open').or(
+          `assigned_to.eq.${session.user.id},and(assigned_to.is.null,group_name.neq.Admin)`
+        );
+      } else {
+        // For ticket list: show all tickets assigned to them or unassigned (except Admin group)
+        query = query.or(
+          `assigned_to.eq.${session.user.id},and(assigned_to.is.null,group_name.neq.Admin)`
+        );
+      }
     }
     // Admins can see all tickets (no additional filters needed)
 
     // Apply additional filters
-    if (params.status) {
+    if (params.status && !params.isDashboard) {
+      // Don't apply status filter on dashboard since we always want open tickets there
       query = query.eq('status', params.status);
     }
 
@@ -153,34 +161,7 @@ export const ticketService = {
       query = query.range(params.offset, params.offset + (params.limit || 10) - 1);
     }
 
-    // Debug logging for query
-    // console.log('Query Debug:', {
-    //   params: params,
-    //   hasStatus: !!params.status,
-    //   limit: params.limit,
-    //   offset: params.offset,
-    //   role: session.user.user_metadata?.role
-    // });
-
     const { data, error } = await query;
-
-    // Debug logging for results
-    // console.log('Results Debug:', {
-    //   success: !error,
-    //   error: error ? {
-    //     message: error.message,
-    //     code: error.code,
-    //     details: error.details
-    //   } : null,
-    //   ticketCount: data?.length || 0,
-    //   sampleTicket: data?.[0] ? {
-    //     id: data[0].id,
-    //     subject: data[0].subject,
-    //     status: data[0].status,
-    //     group_name: data[0].group_name,
-    //     assigned_to: data[0].assigned_to
-    //   } : null
-    // });
 
     if (error) {
       console.error('Error fetching tickets:', error);

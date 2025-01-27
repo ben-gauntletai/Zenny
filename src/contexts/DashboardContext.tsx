@@ -79,6 +79,83 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
     };
   };
 
+  // Subscribe to real-time updates
+  useEffect(() => {
+    if (!user) return;
+
+    // Subscribe to ticket changes
+    const ticketSubscription = supabase
+      .channel('tickets-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'tickets'
+        },
+        async (payload) => {
+          console.log('Ticket change received:', payload);
+          // Refresh tickets data to get the latest state
+          const response = await ticketService.listTickets({ isDashboard: true });
+          if (response.tickets && Array.isArray(response.tickets)) {
+            setTickets(response.tickets);
+            const newStats = updateTicketStats(response.tickets);
+            setStats(prevStats => ({
+              ...prevStats,
+              ticketStats: newStats
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    // Subscribe to notification changes
+    const notificationSubscription = supabase
+      .channel('notifications-channel')
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'notifications'
+        },
+        async (payload: any) => {
+          console.log('New notification received:', payload);
+          // Fetch the latest notifications
+          const { data: notifications, error: notifError } = await supabase
+            .from('notifications')
+            .select('*, tickets(subject)')
+            .order('created_at', { ascending: false })
+            .limit(25);
+
+          if (!notifError && notifications) {
+            const activityFeed = notifications.map((notification: any): ActivityFeedItem => ({
+              id: notification.id.toString(),
+              type: notification.type as ActivityFeedItem['type'],
+              ticketId: notification.ticket_id.toString(),
+              ticketSubject: notification.tickets?.subject || 'Unknown',
+              actor: notification.user_id === null ? 'System' : 'Support Team',
+              timestamp: notification.created_at,
+              title: notification.title,
+              message: notification.message
+            }));
+
+            setStats(prevStats => ({
+              ...prevStats,
+              activityFeed
+            }));
+          }
+        }
+      )
+      .subscribe();
+
+    // Cleanup subscriptions
+    return () => {
+      ticketSubscription.unsubscribe();
+      notificationSubscription.unsubscribe();
+    };
+  }, [user]);
+
   const fetchDashboardData = async () => {
     try {
       setLoading(true);
@@ -87,7 +164,7 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
       console.log('Starting dashboard data fetch...');
 
       // Start both fetches in parallel
-      const ticketsPromise = Promise.resolve(ticketService.listTickets());
+      const ticketsPromise = Promise.resolve(ticketService.listTickets({ isDashboard: true }));
       const notificationsPromise = Promise.resolve(
         supabase
           .from('notifications')

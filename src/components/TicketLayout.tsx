@@ -1,6 +1,7 @@
 import React from 'react';
 import { Outlet } from 'react-router-dom';
 import Navigation from './Navigation';
+import { AutoCRMPanel } from './AutoCRMPanel';
 import '../styles/TicketLayout.css';
 
 const TicketLayout: React.FC = () => {
@@ -11,6 +12,7 @@ const TicketLayout: React.FC = () => {
         <div className="tickets-main">
           <Outlet />
         </div>
+        <AutoCRMPanel />
       </div>
     </>
   );
