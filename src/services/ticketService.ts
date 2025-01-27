@@ -94,13 +94,13 @@ export const ticketService = {
     const isAgentOrAdmin = session.user.user_metadata?.role === 'agent' || session.user.user_metadata?.role === 'admin';
 
     // Debug logging for authentication
-    // console.log('Auth Debug:', {
-    //   user: session.user,
-    //   role: session.user.user_metadata?.role,
-    //   id: session.user.id,
-    //   email: session.user.email,
-    //   isAgentOrAdmin
-    // });
+    console.log('Auth Debug:', {
+      user: session.user,
+      role: session.user.user_metadata?.role,
+      id: session.user.id,
+      email: session.user.email,
+      isAgentOrAdmin
+    });
 
     let query = supabase
       .from('tickets_with_users')

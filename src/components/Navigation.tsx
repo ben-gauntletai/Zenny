@@ -23,11 +23,11 @@ const Navigation: React.FC = () => {
   const location = useLocation();
   const isAgentOrAdmin = user?.user_metadata?.role === 'agent' || user?.user_metadata?.role === 'admin';
   
-  // console.log('Navigation Debug:', {
-  //   user_metadata: user?.user_metadata,
-  //   role: user?.user_metadata?.role,
-  //   isAgentOrAdmin
-  // });
+  console.log('Navigation Debug:', {
+    user_metadata: user?.user_metadata,
+    role: user?.user_metadata?.role,
+    isAgentOrAdmin
+  });
 
   useEffect(() => {
     const fetchProfile = async () => {

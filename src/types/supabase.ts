@@ -68,6 +68,49 @@ export interface TicketWithUsers extends Ticket {
 export interface Database {
   public: {
     Tables: {
+      autocrm_conversations: {
+        Row: {
+          id: string;
+          user_id: string;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          user_id: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          user_id?: string;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      autocrm_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender: 'user' | 'system';
+          content: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender: 'user' | 'system';
+          content: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          sender?: 'user' | 'system';
+          content?: string;
+          created_at?: string;
+        };
+      };
       tickets: {
         Row: {
           id: number;
