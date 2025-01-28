@@ -9,7 +9,8 @@ import '../styles/AutoCRMPanel.css';
 interface Message {
   id: string;
   sender: 'user' | 'system';
-  content: string;
+  content: string;      // LLM version with emails
+  displayContent: string; // Display version with names
   timestamp: Date;
 }
 
@@ -50,8 +51,15 @@ const formatResponseContent = (content: string): string => {
     });
 };
 
+// Utility function to format mentions in display content
+const formatDisplayContent = (content: string): string => {
+  // Don't transform the content - keep it as is
+  return content;
+};
+
 export function AutoCRMPanel() {
   const [input, setInput] = React.useState('');
+  const [inputHtml, setInputHtml] = React.useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
   const location = useLocation();
@@ -82,18 +90,55 @@ export function AutoCRMPanel() {
     return null;
   }
 
+  const transformMentionsToEmails = (htmlContent: string): string => {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    
+    // Find all mention spans and transform them
+    const mentions = tempDiv.getElementsByClassName('mention-text');
+    Array.from(mentions).forEach(mention => {
+      const email = (mention as HTMLSpanElement).dataset.email;
+      const name = (mention as HTMLSpanElement).textContent?.replace('@', '');
+      if (email && name) {
+        // Keep the display as @name but send email to backend
+        mention.replaceWith(`@${email}`);
+      }
+    });
+    
+    return tempDiv.textContent?.trim() || '';
+  };
+
+  const transformMentionsForDisplay = (htmlContent: string): string => {
+    const tempDiv = document.createElement('div');
+    tempDiv.innerHTML = htmlContent;
+    
+    // Find all mention spans and transform them
+    const mentions = tempDiv.getElementsByClassName('mention-text');
+    Array.from(mentions).forEach(mention => {
+      const name = mention.textContent;
+      if (name) {
+        mention.replaceWith(name);
+      }
+    });
+    
+    return tempDiv.textContent?.trim() || '';
+  };
+
   const handleSend = async () => {
     if (!input.trim() || isLoading || !user) return;
 
+    // Store both versions of the message
     const newMessage = {
       id: Date.now().toString(),
       sender: 'user' as const,
-      content: input.trim(),
+      content: transformMentionsToEmails(inputHtml),      // LLM version
+      displayContent: transformMentionsForDisplay(inputHtml), // Display version
       timestamp: new Date()
     };
 
     setMessages(prev => [...prev, newMessage]);
     setInput('');
+    setInputHtml('');
     setIsLoading(true);
 
     try {
@@ -105,25 +150,31 @@ export function AutoCRMPanel() {
           'Authorization': `Bearer ${session?.access_token}`
         },
         body: JSON.stringify({ 
-          query: input.trim(),
-          userId: user.id
+          query: newMessage.content, // Send LLM version
+          userId: user.id,
+          displayContent: newMessage.displayContent // Send display version
         })
       });
 
       const data = await response.json();
       
+      // For system messages, use the same content for both since it's already processed
+      const systemResponse = formatResponseContent(data.reply);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         sender: 'system' as const,
-        content: data.error || formatResponseContent(data.reply),
+        content: systemResponse,
+        displayContent: systemResponse,
         timestamp: new Date()
       }]);
     } catch (error) {
       console.error('AutoCRM error:', error);
+      const errorMessage = 'Sorry, I encountered an error. Please try again.';
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
         sender: 'system' as const,
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: errorMessage,
+        displayContent: errorMessage,
         timestamp: new Date()
       }]);
     } finally {
@@ -165,7 +216,7 @@ export function AutoCRMPanel() {
               key={msg.id} 
               className={`message ${msg.sender}`}
             >
-              <div className="message-content">{msg.content}</div>
+              <div className="message-content">{msg.displayContent}</div>
               <div className="message-timestamp">
                 {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
@@ -187,7 +238,10 @@ export function AutoCRMPanel() {
       <div className="autocrm-input">
         <MentionInput
           value={input}
-          onChange={setInput}
+          onChange={(text, html) => {
+            setInput(text);
+            setInputHtml(html || '');
+          }}
           placeholder="Type your request... Use @ to mention agents"
           className="autocrm-mention-input"
           supabase={supabase}

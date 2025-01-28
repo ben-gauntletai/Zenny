@@ -94,7 +94,7 @@ serve(async (req) => {
     let chain;
 
     // Get request data first
-    const { query, userId } = await req.json()
+    const { query, userId, displayContent } = await req.json()
 
     if (!query || !userId) {
       throw new Error('Query and userId are required')
@@ -199,7 +199,7 @@ serve(async (req) => {
         status: open, pending, solved, closed
         priority: low, normal, high, urgent
         ticket_type: question, incident, problem, task
-        assigned_to: @[agent_email] (e.g., assigned_to: @john.doe@example.com)
+        assigned_to: @email (e.g., assigned_to: @john.doe@example.com)
         assigned_to: unassigned (to remove assignment)
 
         Please use these to plug into the format given the user's request.
@@ -374,21 +374,22 @@ Current request: {input}`;
         conversation_id: conversationId,
         sender: 'user',
         content: query,
+        display_content: displayContent || query
       })
 
     // Get conversation history
     const { data: messages, error: messagesError } = await serviceRoleClient
       .from('autocrm_messages')
-      .select('sender, content')
+      .select('sender, content, display_content')
       .eq('conversation_id', conversationId)
       .order('created_at', { ascending: true })
       .limit(10)
 
     if (messagesError) throw messagesError
 
-    // Format history for the prompt
+    // Format history for the prompt using display_content
     const history = messages
-      .map((msg) => `${msg.sender}: ${msg.content}`)
+      .map((msg) => `${msg.sender}: ${msg.display_content}`)
       .join('\n')
 
     // Add logging for chain execution
@@ -625,15 +626,22 @@ Current request: {input}`;
                   if (successfulUpdates.length > 0) {
                     const ticketList = successfulUpdates.map(r => `#${r.ticketId}`).join(', ');
                     updateSummary.push(`Successfully updated tickets ${ticketList} with: ${
-                      Object.entries(updates)
-                        .map(([key, value]) => {
-                          // Special handling for assigned_to field
-                          if (key === 'assigned_to' && value === null) {
+                      await Promise.all(Object.entries(updates).map(async ([key, value]) => {
+                        // Special handling for assigned_to field
+                        if (key === 'assigned_to') {
+                          if (value === null) {
                             return 'Assigned To set to Unassigned';
                           }
-                          return `${key} set to ${String(value).charAt(0).toUpperCase() + String(value).slice(1)}`;
-                        })
-                        .join(', ')
+                          // Get the assignee's name
+                          const { data: assignee } = await serviceRoleClient
+                            .from('profiles')
+                            .select('full_name, email')
+                            .eq('id', value)
+                            .single();
+                          return `Assigned To set to ${assignee?.full_name || assignee?.email || 'Unknown user'}`;
+                        }
+                        return `${key} set to ${String(value).charAt(0).toUpperCase() + String(value).slice(1)}`;
+                      })).then(updates => updates.join(', '))
                     }`);
                   }
                   if (failedUpdates.length > 0) {
@@ -696,6 +704,7 @@ Current request: {input}`;
         conversation_id: conversationId,
         sender: 'system',
         content: aiResponse,
+        display_content: aiResponse
       })
 
     // Update conversation timestamp

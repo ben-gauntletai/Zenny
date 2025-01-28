@@ -5,7 +5,7 @@ import { getProfileColor } from '../utils/profileUtils';
 
 interface MentionInputProps {
   value: string;
-  onChange: (value: string) => void;
+  onChange: (value: string, htmlContent?: string) => void;
   placeholder?: string;
   className?: string;
   supabase: SupabaseClient<Database>;
@@ -107,8 +107,8 @@ export const MentionInput: React.FC<MentionInputProps> = ({
       setMentionSearch('');
     }
     
-    // Update parent with plain text value
-    onChange(contentRef.current.textContent || '');
+    // Update parent with both text and HTML content
+    onChange(contentRef.current.textContent || '', contentRef.current.innerHTML);
   };
 
   // Handle keyboard navigation and deletion
@@ -155,7 +155,7 @@ export const MentionInput: React.FC<MentionInputProps> = ({
       if (contentRef.current?.textContent?.trim()) {
         onSubmit?.(contentRef.current.textContent);
         contentRef.current.textContent = '';
-        onChange('');
+        onChange('', contentRef.current.innerHTML);
       }
       return;
     }
@@ -253,6 +253,7 @@ export const MentionInput: React.FC<MentionInputProps> = ({
     mentionSpan.className = 'mention-text';
     mentionSpan.contentEditable = 'false';
     mentionSpan.textContent = `@${agent.name}`;
+    mentionSpan.dataset.email = agent.email; // Store email in dataset
 
     // Get the text node containing the @
     const textNodes = Array.from(contentRef.current.childNodes);
@@ -298,8 +299,8 @@ export const MentionInput: React.FC<MentionInputProps> = ({
     setShowMentions(false);
     setMentionSearch('');
     
-    // Update parent with new content
-    onChange(contentRef.current.textContent || '');
+    // Update parent with both text and HTML content
+    onChange(contentRef.current.textContent || '', contentRef.current.innerHTML);
   };
 
   // Update content when value prop changes

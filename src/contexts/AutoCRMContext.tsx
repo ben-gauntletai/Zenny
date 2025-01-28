@@ -5,7 +5,8 @@ import { supabase } from '../lib/supabaseClient';
 interface Message {
   id: string;
   sender: 'user' | 'system';
-  content: string;
+  content: string;      // LLM version with emails
+  displayContent: string; // Display version with names
   timestamp: Date;
 }
 
@@ -99,12 +100,15 @@ export function AutoCRMProvider({ children }: { children: React.ReactNode }) {
           if (msgError) throw msgError;
 
           if (messageHistory) {
-            setMessages(messageHistory.map(msg => ({
-              id: msg.id,
-              sender: msg.sender,
-              content: msg.sender === 'system' ? formatResponseContent(msg.content) : msg.content,
-              timestamp: new Date(msg.created_at)
-            })));
+            setMessages(messageHistory.map(msg => {
+              return {
+                id: msg.id,
+                sender: msg.sender,
+                content: msg.content,               // Use stored content (LLM version)
+                displayContent: msg.display_content, // Use stored display_content
+                timestamp: new Date(msg.created_at)
+              };
+            }));
           }
         }
       } catch (error) {
