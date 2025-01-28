@@ -23,6 +23,7 @@ import ProtectedRoute from './components/ProtectedRoute';
 import Navigation from './components/Navigation';
 import './styles/App.css';
 import { TicketProvider } from './contexts/TicketProvider';
+import { AutoCRMProvider } from './contexts/AutoCRMContext';
 
 const router = createBrowserRouter(
   [
@@ -132,16 +133,18 @@ const router = createBrowserRouter(
 
 const App: React.FC = () => {
   return (
-    <div className="app">
-      <AuthProvider>
+    <AuthProvider>
+      <AutoCRMProvider>
         <NotificationProvider>
           <NotificationToast />
-          <div className="app-container">
-            <RouterProvider router={router} />
+          <div className="app">
+            <div className="app-container">
+              <RouterProvider router={router} />
+            </div>
           </div>
         </NotificationProvider>
-      </AuthProvider>
-    </div>
+      </AutoCRMProvider>
+    </AuthProvider>
   );
 };
 

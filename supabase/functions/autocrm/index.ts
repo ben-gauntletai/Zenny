@@ -42,10 +42,17 @@ serve(async (req) => {
   }
 
   try {
-    const supabaseClient = createClient(
+    // Create service role client for admin operations
+    const serviceRoleClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
-    )
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '',
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
 
     // Get user from auth token
     const authHeader = req.headers.get('Authorization')
@@ -53,7 +60,7 @@ serve(async (req) => {
       throw new Error('No authorization header')
     }
 
-    const { data: { user }, error: userError } = await supabaseClient.auth.getUser(
+    const { data: { user }, error: userError } = await serviceRoleClient.auth.getUser(
       authHeader.replace('Bearer ', '')
     )
 
@@ -81,104 +88,144 @@ serve(async (req) => {
       )
     }
 
-    // Configure LangSmith if API key is available
-    let langsmithClient
-    if (langsmithApiKey) {
-      Deno.env.set('LANGCHAIN_TRACING_V2', 'true')
-      Deno.env.set('LANGCHAIN_ENDPOINT', 'https://api.smith.langchain.com')
-      Deno.env.set('LANGCHAIN_API_KEY', langsmithApiKey)
-      Deno.env.set('LANGCHAIN_PROJECT', 'zenny-autocrm')
-      
-      langsmithClient = new Client({
-        apiUrl: "https://api.smith.langchain.com",
-        apiKey: langsmithApiKey,
-      })
+    // Initialize base model and chain
+    let model;
+    let promptTemplate;
+    let chain;
+
+    // Get request data first
+    const { query, userId } = await req.json()
+
+    if (!query || !userId) {
+      throw new Error('Query and userId are required')
     }
 
-    // Initialize ChatOpenAI with temperature and callbacks
-    const model = new ChatOpenAI({
-      openAIApiKey: openaiApiKey,
-      modelName: 'gpt-3.5-turbo',
-      temperature: 0.7,
-      callbacks: [{
+    // Initialize LangSmith client and configure tracing
+    let tracingCallbacks = undefined;
+    if (langsmithApiKey) {
+      const client = new Client({
+        apiUrl: "https://api.smith.langchain.com",
+        apiKey: langsmithApiKey,
+      });
+
+      // Configure manual tracing callbacks
+      tracingCallbacks = [{
         handleLLMStart: async (llm: any, prompts: string[]) => {
-          console.log('[AutoCRM] Starting LLM call:', {
-            timestamp: new Date().toISOString(),
-            prompts: prompts
-          })
-          if (langsmithClient) {
-            await langsmithClient.createRun({
-              name: "autocrm_llm",
+          console.log("LLM Started:", llm.name);
+          try {
+            await client.createRun({
+              name: "AutoCRM LLM",
+              run_type: "llm",
               inputs: { prompts },
-              start_time: new Date(),
-              run_type: "llm"
-            })
+              project_name: "zenny-autocrm",
+              start_time: new Date().toISOString()
+            });
+          } catch (error) {
+            console.error("Error creating LLM run:", error);
           }
         },
         handleLLMEnd: async (output: any) => {
-          console.log('[AutoCRM] LLM call completed:', {
-            timestamp: new Date().toISOString(),
-            output: output
-          })
-          if (langsmithClient) {
-            await langsmithClient.updateRun({
-              outputs: output,
-              end_time: new Date(),
-              status: "completed"
-            })
+          console.log("LLM Finished");
+          try {
+            await client.updateRun({
+              end_time: new Date().toISOString(),
+              outputs: output
+            });
+          } catch (error) {
+            console.error("Error updating LLM run:", error);
           }
         },
-        handleLLMError: async (err: Error) => {
-          console.error('[AutoCRM] LLM error:', {
-            timestamp: new Date().toISOString(),
-            error: err.message,
-            stack: err.stack
-          })
-          if (langsmithClient) {
-            await langsmithClient.updateRun({
-              error: err.message,
-              end_time: new Date(),
-              status: "failed"
-            })
+        handleChainStart: async (chain: any, inputs: Record<string, any>) => {
+          console.log("Chain Started:", chain.name);
+          try {
+            await client.createRun({
+              name: "AutoCRM Chain",
+              run_type: "chain",
+              inputs,
+              project_name: "zenny-autocrm",
+              start_time: new Date().toISOString(),
+              tags: ["production", "autocrm"],
+              metadata: {
+                userId: userId,
+                timestamp: new Date().toISOString()
+              }
+            });
+          } catch (error) {
+            console.error("Error creating chain run:", error);
+          }
+        },
+        handleChainEnd: async (outputs: Record<string, any>) => {
+          console.log("Chain Finished");
+          try {
+            await client.updateRun({
+              end_time: new Date().toISOString(),
+              outputs
+            });
+          } catch (error) {
+            console.error("Error updating chain run:", error);
           }
         }
-      }]
-    })
+      }];
+    }
+
+    // Initialize ChatOpenAI with tracing callbacks
+    model = new ChatOpenAI({
+      openAIApiKey: openaiApiKey,
+      modelName: 'gpt-4o-mini',
+      temperature: 0.7,
+      callbacks: tracingCallbacks
+    });
 
     // Create the prompt template
-    const promptTemplate = ChatPromptTemplate.fromMessages([
-      ["system", `You are an AI assistant helping with CRM tasks. You must respond in a structured format that starts with an ACTION: followed by the action type and any relevant details.
+    const systemPrompt = `You are an AI assistant helping with CRM tasks. You must respond in a structured format that starts with an ACTION: followed by the action type and any relevant details.
 
-        Available actions:
-        1. ACTION: SEARCH - For finding tickets (e.g., "ACTION: SEARCH query: payment issue")
-        2. ACTION: UPDATE - For updating tickets (e.g., "ACTION: UPDATE ticket: 44 priority: low")
-        3. ACTION: CREATE - For creating tickets (e.g., "ACTION: CREATE subject: Customer reported login issue")
-        4. ACTION: INFO - For getting customer info (e.g., "ACTION: INFO customer: 123")
+    Available actions:
+    1. ACTION: SEARCH - For finding tickets (e.g., "ACTION: SEARCH query: payment issue")
+    2. ACTION: UPDATE - For updating tickets (e.g., "ACTION: UPDATE ticket: 44 priority: low")
+    3. ACTION: CREATE - For creating tickets (e.g., "ACTION: CREATE subject: Customer reported login issue")
+    4. ACTION: INFO - For getting customer info (e.g., "ACTION: INFO customer: 123")
 
-        Keep responses concise and professional. Always start with ACTION: followed by the type.
-        Available ticket statuses: open, pending, solved, closed
-        Available priorities: low, normal, high, urgent`],
-      ["human", `Previous conversation:
+    Keep responses concise and professional. Always start with ACTION: followed by the type.
+    Available ticket statuses: open, pending, solved, closed
+    Available priorities: low, normal, high, urgent`;
+
+    const humanPrompt = `Previous conversation:
 {history}
 
-Current request: {input}`, ["history", "input"]]
-    ])
+Current request: {input}`;
 
-    // Create the chain
-    const chain = promptTemplate
+    promptTemplate = ChatPromptTemplate.fromMessages([
+      ["system", systemPrompt],
+      ["human", humanPrompt]
+    ]);
+
+    // Create the chain with proper configuration
+    chain = promptTemplate
       .pipe(model)
-      .pipe(new StringOutputParser())
+      .pipe(new StringOutputParser());
 
-    // Initialize CRM operations
+    // Add tracing configuration if available
+    if (tracingCallbacks) {
+      chain = chain.withConfig({
+        callbacks: tracingCallbacks,
+        tags: ["production", "autocrm"],
+        metadata: {
+          userId: userId,
+          timestamp: new Date().toISOString()
+        }
+      });
+    }
+
+    // Initialize CRM operations with service role client
     const crmOps: CRMOperations = {
       searchTickets: async (query: string, userId: string) => {
-        const { data: userInfo } = await supabaseClient
+        const { data: userInfo } = await serviceRoleClient
           .from('profiles')
           .select('role')
           .eq('id', userId)
           .single();
 
-        let ticketsQuery = supabaseClient
+        let ticketsQuery = serviceRoleClient
           .from('tickets')
           .select(`
             *,
@@ -204,7 +251,7 @@ Current request: {input}`, ["history", "input"]]
       },
 
       updateTicket: async (ticketId: number, updates: any, userId: string) => {
-        const { data: ticket } = await supabaseClient
+        const { data: ticket } = await serviceRoleClient
           .from('tickets')
           .select('*')
           .eq('id', ticketId)
@@ -213,7 +260,7 @@ Current request: {input}`, ["history", "input"]]
         if (!ticket) throw new Error('Ticket not found');
 
         // Verify user has permission to update
-        const { data: userInfo } = await supabaseClient
+        const { data: userInfo } = await serviceRoleClient
           .from('profiles')
           .select('role')
           .eq('id', userId)
@@ -228,7 +275,7 @@ Current request: {input}`, ["history", "input"]]
         // Store previous ticket state for notification
         const previousTicket = { ...ticket };
 
-        const { data: updatedTicket, error } = await supabaseClient
+        const { data: updatedTicket, error } = await serviceRoleClient
           .from('tickets')
           .update(updates)
           .eq('id', ticketId)
@@ -239,7 +286,7 @@ Current request: {input}`, ["history", "input"]]
 
         // Create notification for the update with AutoCRM as the updater name
         await notifyTicketUpdated(
-          supabaseClient,
+          serviceRoleClient,
           updatedTicket,
           { id: userId, user_metadata: { ...userInfo, full_name: 'AutoCRM' } },
           previousTicket
@@ -249,7 +296,7 @@ Current request: {input}`, ["history", "input"]]
       },
 
       createTicket: async (data: any, userId: string) => {
-        const { data: ticket, error } = await supabaseClient
+        const { data: ticket, error } = await serviceRoleClient
           .from('tickets')
           .insert({
             ...data,
@@ -266,7 +313,7 @@ Current request: {input}`, ["history", "input"]]
       },
 
       getCustomerInfo: async (customerId: string) => {
-        const { data, error } = await supabaseClient
+        const { data, error } = await serviceRoleClient
           .from('profiles')
           .select('*')
           .eq('id', customerId)
@@ -277,14 +324,8 @@ Current request: {input}`, ["history", "input"]]
       }
     };
 
-    const { query, userId } = await req.json()
-
-    if (!query || !userId) {
-      throw new Error('Query and userId are required')
-    }
-
     // Get or create a conversation
-    const { data: existingConv, error: convError } = await supabaseClient
+    const { data: existingConv, error: convError } = await serviceRoleClient
       .from('autocrm_conversations')
       .select('id')
       .eq('user_id', userId)
@@ -299,7 +340,7 @@ Current request: {input}`, ["history", "input"]]
     let conversationId = existingConv?.id
 
     if (!conversationId) {
-      const { data: newConv, error: createError } = await supabaseClient
+      const { data: newConv, error: createError } = await serviceRoleClient
         .from('autocrm_conversations')
         .insert({ user_id: userId })
         .select('id')
@@ -310,7 +351,7 @@ Current request: {input}`, ["history", "input"]]
     }
 
     // Store user message
-    await supabaseClient
+    await serviceRoleClient
       .from('autocrm_messages')
       .insert({
         conversation_id: conversationId,
@@ -319,7 +360,7 @@ Current request: {input}`, ["history", "input"]]
       })
 
     // Get conversation history
-    const { data: messages, error: messagesError } = await supabaseClient
+    const { data: messages, error: messagesError } = await serviceRoleClient
       .from('autocrm_messages')
       .select('sender, content')
       .eq('conversation_id', conversationId)
@@ -364,11 +405,41 @@ Current request: {input}`, ["history", "input"]]
             const ticketMatch = details.match(/ticket:\s*(\d+)/)
             const priorityMatch = details.match(/priority:\s*(\w+)/)
             const statusMatch = details.match(/status:\s*(\w+)/)
+            const groupMatch = details.match(/group:\s*(\w+)/)
             
             if (ticketMatch) {
               const updates: any = {}
-              if (priorityMatch) updates.priority = priorityMatch[1]
-              if (statusMatch) updates.status = statusMatch[1]
+              
+              if (priorityMatch) {
+                const priorityInput = priorityMatch[1].toLowerCase()
+                switch (priorityInput) {
+                  case 'low': updates.priority = 'low'; break;
+                  case 'normal': updates.priority = 'normal'; break;
+                  case 'high': updates.priority = 'high'; break;
+                  case 'urgent': updates.priority = 'urgent'; break;
+                  default: throw new Error('Invalid priority. Must be "low", "normal", "high", or "urgent" (case insensitive)');
+                }
+              }
+
+              if (statusMatch) {
+                const statusInput = statusMatch[1].toLowerCase()
+                switch (statusInput) {
+                  case 'open': updates.status = 'open'; break;
+                  case 'pending': updates.status = 'pending'; break;
+                  case 'solved': updates.status = 'solved'; break;
+                  case 'closed': updates.status = 'closed'; break;
+                  default: throw new Error('Invalid status. Must be "open", "pending", "solved", or "closed" (case insensitive)');
+                }
+              }
+
+              if (groupMatch) {
+                const groupInput = groupMatch[1].toLowerCase()
+                switch (groupInput) {
+                  case 'admin': updates.group_name = 'Admin'; break;
+                  case 'support': updates.group_name = 'Support'; break;
+                  default: throw new Error('Invalid group name. Must be "Admin" or "Support" (case insensitive)');
+                }
+              }
               
               const ticketId = parseInt(ticketMatch[1])
               const updatedTicket = await crmOps.updateTicket(ticketId, updates, userId)
@@ -415,7 +486,7 @@ Current request: {input}`, ["history", "input"]]
     }
 
     // Store AI response
-    await supabaseClient
+    await serviceRoleClient
       .from('autocrm_messages')
       .insert({
         conversation_id: conversationId,
@@ -424,7 +495,7 @@ Current request: {input}`, ["history", "input"]]
       })
 
     // Update conversation timestamp
-    await supabaseClient
+    await serviceRoleClient
       .from('autocrm_conversations')
       .update({ updated_at: new Date().toISOString() })
       .eq('id', conversationId)

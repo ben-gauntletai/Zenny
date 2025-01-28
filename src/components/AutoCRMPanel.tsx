@@ -1,6 +1,8 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useRef, useEffect } from 'react';
 import { useAuth } from '../contexts/AuthContext';
+import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
+import { useAutoCRM } from '../contexts/AutoCRMContext';
 import '../styles/AutoCRMPanel.css';
 
 interface Message {
@@ -10,81 +12,81 @@ interface Message {
   timestamp: Date;
 }
 
+// Utility function to format field names
+const formatFieldName = (field: string): string => {
+  return field
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
+// Utility function to format the response content
+const formatResponseContent = (content: string): string => {
+  // Handle various patterns where field names might appear
+  return content
+    // Handle "field_name:" pattern
+    .replace(/(\w+(?:_\w+)*):(?=\s|$)/g, (match) => {
+      const fieldName = match.replace(':', '');
+      return formatFieldName(fieldName) + ':';
+    })
+    // Handle "field_name set to" pattern
+    .replace(/(\w+(?:_\w+)*)\s+set\s+to\s/g, (match) => {
+      const fieldName = match.replace(/\s+set\s+to\s$/, '');
+      return formatFieldName(fieldName) + ' set to ';
+    })
+    // Handle "field_name has been" pattern
+    .replace(/(\w+(?:_\w+)*)\s+has\s+been\s/g, (match) => {
+      const fieldName = match.replace(/\s+has\s+been\s$/, '');
+      return formatFieldName(fieldName) + ' has been ';
+    })
+    // Handle "Updated field_name" pattern
+    .replace(/Updated\s+(\w+(?:_\w+)*)/g, (match, field) => {
+      return 'Updated ' + formatFieldName(field);
+    })
+    // Handle "the field_name" pattern
+    .replace(/the\s+(\w+(?:_\w+)*)\s/g, (match, field) => {
+      return 'the ' + formatFieldName(field) + ' ';
+    });
+};
+
 export function AutoCRMPanel() {
-  const [messages, setMessages] = useState<Message[]>([]);
-  const [input, setInput] = useState('');
-  const [isLoading, setIsLoading] = useState(false);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
+  const [input, setInput] = React.useState('');
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const { user } = useAuth();
+  const location = useLocation();
+  const { 
+    messages, 
+    setMessages, 
+    isLoading, 
+    setIsLoading,
+    isLoadingHistory,
+  } = useAutoCRM();
 
   // Check if user is agent or admin
   const isAgentOrAdmin = user?.user_metadata?.role === 'agent' || user?.user_metadata?.role === 'admin';
 
-  const scrollToBottom = () => {
-    messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
-  };
+  // Check if we're on a page where AutoCRM should be shown
+  const shouldShowAutoCRM = location.pathname === '/' || location.pathname === '/tickets';
 
-  // Load conversation history when component mounts
+  // Scroll to bottom immediately when messages change
   useEffect(() => {
-    if (user) {
-      loadConversationHistory();
+    const messagesContainer = messagesEndRef.current?.parentElement;
+    if (messagesContainer) {
+      messagesContainer.scrollTop = messagesContainer.scrollHeight;
     }
-  }, [user]);
-
-  useEffect(() => {
-    scrollToBottom();
   }, [messages]);
 
-  const loadConversationHistory = async () => {
-    if (!user || isLoadingHistory) return;
-
-    setIsLoadingHistory(true);
-    try {
-      // Get the most recent conversation
-      const { data: conversations, error: convError } = await supabase
-        .from('autocrm_conversations')
-        .select('id')
-        .eq('user_id', user.id)
-        .order('updated_at', { ascending: false })
-        .limit(1);
-
-      if (convError) throw convError;
-
-      const conversationId = conversations?.[0]?.id;
-
-      if (conversationId) {
-        // Load messages from this conversation
-        const { data: messageHistory, error: msgError } = await supabase
-          .from('autocrm_messages')
-          .select('*')
-          .eq('conversation_id', conversationId)
-          .order('created_at', { ascending: true });
-
-        if (msgError) throw msgError;
-
-        if (messageHistory) {
-          setMessages(messageHistory.map(msg => ({
-            id: msg.id,
-            sender: msg.sender,
-            content: msg.content,
-            timestamp: new Date(msg.created_at)
-          })));
-        }
-      }
-    } catch (error) {
-      console.error('Error loading conversation history:', error);
-    } finally {
-      setIsLoadingHistory(false);
-    }
-  };
+  // Don't render if user is not agent/admin or not on dashboard/tickets pages
+  if (!isAgentOrAdmin || !shouldShowAutoCRM) {
+    return null;
+  }
 
   const handleSend = async () => {
     if (!input.trim() || isLoading || !user) return;
 
-    const newMessage: Message = {
+    const newMessage = {
       id: Date.now().toString(),
-      sender: 'user',
+      sender: 'user' as const,
       content: input.trim(),
       timestamp: new Date()
     };
@@ -111,14 +113,15 @@ export function AutoCRMPanel() {
       
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
-        sender: 'system',
-        content: data.reply,
+        sender: 'system' as const,
+        content: data.error || formatResponseContent(data.reply),
         timestamp: new Date()
       }]);
     } catch (error) {
+      console.error('AutoCRM error:', error);
       setMessages(prev => [...prev, {
         id: Date.now().toString(),
-        sender: 'system',
+        sender: 'system' as const,
         content: 'Sorry, I encountered an error. Please try again.',
         timestamp: new Date()
       }]);
@@ -133,11 +136,6 @@ export function AutoCRMPanel() {
       handleSend();
     }
   };
-
-  // Don't render anything if user is not agent or admin
-  if (!isAgentOrAdmin) {
-    return null;
-  }
 
   return (
     <div className="autocrm-panel">

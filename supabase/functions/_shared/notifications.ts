@@ -20,6 +20,14 @@ interface NotificationPayload {
   ticket_id?: number;
 }
 
+// Utility function to format field names
+const formatFieldName = (field: string): string => {
+  return field
+    .split('_')
+    .map(word => word.charAt(0).toUpperCase() + word.slice(1).toLowerCase())
+    .join(' ');
+};
+
 export async function createNotification(
   supabaseClient: any,
   payload: NotificationPayload
@@ -199,8 +207,8 @@ export async function notifyTicketUpdated(
           notificationKey = `status_${change.newValue}_${ticket.id}`;
           notification = {
             user_id: null,
-            title: 'Status Update',
-            message: `${updaterName} changed the status to "${formattedNewValue}"`,
+            title: `${formatFieldName('status')} Update`,
+            message: `${updaterName} changed the ${formatFieldName('status')} to "${formattedNewValue}"`,
             type: 'TICKET_UPDATED',
             ticket_id: ticket.id
           };
@@ -210,8 +218,8 @@ export async function notifyTicketUpdated(
           notificationKey = `priority_${change.newValue}_${ticket.id}`;
           notification = {
             user_id: null,
-            title: 'Priority Update',
-            message: `${updaterName} set the priority to "${formattedNewValue}"`,
+            title: `${formatFieldName('priority')} Update`,
+            message: `${updaterName} set the ${formatFieldName('priority')} to "${formattedNewValue}"`,
             type: 'TICKET_UPDATED',
             ticket_id: ticket.id
           };
@@ -221,8 +229,8 @@ export async function notifyTicketUpdated(
           notificationKey = `type_${change.newValue}_${ticket.id}`;
           notification = {
             user_id: null,
-            title: 'Type Update',
-            message: `${updaterName} set the type to "${formattedNewValue}"`,
+            title: `${formatFieldName('ticket_type')} Update`,
+            message: `${updaterName} set the ${formatFieldName('ticket_type')} to "${formattedNewValue}"`,
             type: 'TICKET_UPDATED',
             ticket_id: ticket.id
           };
@@ -232,8 +240,8 @@ export async function notifyTicketUpdated(
           notificationKey = `topic_${change.newValue}_${ticket.id}`;
           notification = {
             user_id: null,
-            title: 'Topic Update',
-            message: `${updaterName} set the topic to "${formattedNewValue}"`,
+            title: `${formatFieldName('topic')} Update`,
+            message: `${updaterName} set the ${formatFieldName('topic')} to "${formattedNewValue}"`,
             type: 'TICKET_UPDATED',
             ticket_id: ticket.id
           };
@@ -243,8 +251,8 @@ export async function notifyTicketUpdated(
           notificationKey = `group_${change.newValue}_${ticket.id}`;
           notification = {
             user_id: null,
-            title: 'Group Update',
-            message: `${updaterName} set the group to "${formattedNewValue}"`,
+            title: `${formatFieldName('group_name')} Update`,
+            message: `${updaterName} set the ${formatFieldName('group_name')} to "${formattedNewValue}"`,
             type: 'TICKET_UPDATED',
             ticket_id: ticket.id
           };

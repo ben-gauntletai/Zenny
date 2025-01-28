@@ -445,7 +445,7 @@ const Dashboard: React.FC = () => {
                     Requester {getSortIndicator('requester')}
                   </th>
                   <th onClick={() => handleSort('updated')} className="sortable-header">
-                    Created {getSortIndicator('updated')}
+                    Updated {getSortIndicator('updated')}
                   </th>
                   <th onClick={() => handleSort('group')} className="sortable-header">
                     Group {getSortIndicator('group')}
