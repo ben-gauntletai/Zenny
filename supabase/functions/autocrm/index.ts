@@ -108,40 +108,15 @@ serve(async (req) => {
         apiKey: langsmithApiKey,
       });
 
-      // Configure manual tracing callbacks
+      // Configure single trace for LLM only
       tracingCallbacks = [{
         handleLLMStart: async (llm: any, prompts: string[]) => {
-          console.log("LLM Started:", llm.name);
+          console.log("AutoCRM LLM Started");
           try {
             await client.createRun({
               name: "AutoCRM LLM",
               run_type: "llm",
               inputs: { prompts },
-              project_name: "zenny-autocrm",
-              start_time: new Date().toISOString()
-            });
-          } catch (error) {
-            console.error("Error creating LLM run:", error);
-          }
-        },
-        handleLLMEnd: async (output: any) => {
-          console.log("LLM Finished");
-          try {
-            await client.updateRun({
-              end_time: new Date().toISOString(),
-              outputs: output
-            });
-          } catch (error) {
-            console.error("Error updating LLM run:", error);
-          }
-        },
-        handleChainStart: async (chain: any, inputs: Record<string, any>) => {
-          console.log("Chain Started:", chain.name);
-          try {
-            await client.createRun({
-              name: "AutoCRM Chain",
-              run_type: "chain",
-              inputs,
               project_name: "zenny-autocrm",
               start_time: new Date().toISOString(),
               tags: ["production", "autocrm"],
@@ -151,30 +126,36 @@ serve(async (req) => {
               }
             });
           } catch (error) {
-            console.error("Error creating chain run:", error);
+            console.error("Error creating LLM run:", error);
           }
         },
-        handleChainEnd: async (outputs: Record<string, any>) => {
-          console.log("Chain Finished");
+        handleLLMEnd: async (output: any) => {
+          console.log("AutoCRM LLM Finished");
           try {
             await client.updateRun({
               end_time: new Date().toISOString(),
-              outputs
+              outputs: output
             });
           } catch (error) {
-            console.error("Error updating chain run:", error);
+            console.error("Error updating LLM run:", error);
           }
         }
       }];
-    }
 
-    // Initialize ChatOpenAI with tracing callbacks
-    model = new ChatOpenAI({
-      openAIApiKey: openaiApiKey,
-      modelName: 'gpt-4o-mini',
-      temperature: 0.7,
-      callbacks: tracingCallbacks
-    });
+      // Apply callbacks to model instead of chain
+      model = new ChatOpenAI({
+        openAIApiKey: openaiApiKey,
+        modelName: 'gpt-4o-mini',
+        temperature: 0.7,
+        callbacks: tracingCallbacks
+      });
+    } else {
+      model = new ChatOpenAI({
+        openAIApiKey: openaiApiKey,
+        modelName: 'gpt-4o-mini',
+        temperature: 0.7
+      });
+    }
 
     // Create the prompt template
     const systemPrompt = `You are an AI assistant helping with CRM tasks. You must respond in a structured format that starts with an ACTION: followed by the action type and any relevant details.
@@ -199,22 +180,10 @@ Current request: {input}`;
       ["human", humanPrompt]
     ]);
 
-    // Create the chain with proper configuration
+    // Create the chain without tracing config
     chain = promptTemplate
       .pipe(model)
       .pipe(new StringOutputParser());
-
-    // Add tracing configuration if available
-    if (tracingCallbacks) {
-      chain = chain.withConfig({
-        callbacks: tracingCallbacks,
-        tags: ["production", "autocrm"],
-        metadata: {
-          userId: userId,
-          timestamp: new Date().toISOString()
-        }
-      });
-    }
 
     // Initialize CRM operations with service role client
     const crmOps: CRMOperations = {
