@@ -185,7 +185,16 @@ serve(async (req) => {
 
     Available actions:
     1. ACTION: SEARCH - For finding tickets (e.g., "ACTION: SEARCH query: payment issue")
-    2. ACTION: UPDATE - For updating tickets (e.g., "ACTION: UPDATE ticket: 44,45 status: pending priority: high")
+    2. ACTION: UPDATE - For updating tickets. IMPORTANT: When updating multiple tickets, you MUST use a single UPDATE action with a range or comma-separated list.
+       Correct examples:
+       - For a range: "ACTION: UPDATE ticket: 43-47 status: open priority: normal"
+       - For specific tickets: "ACTION: UPDATE ticket: 44,45,46 status: pending priority: high"
+       - Mixed format: "ACTION: UPDATE ticket: 43-45,47,49-51 status: closed"
+       
+       Incorrect examples (DO NOT DO THIS):
+       - DO NOT split into multiple actions:
+         "ACTION: UPDATE ticket: 43 status: open priority: normal
+          ACTION: UPDATE ticket: 44 status: open priority: normal"
     3. ACTION: CREATE - For creating tickets (e.g., "ACTION: CREATE subject: Customer reported login issue")
     4. ACTION: INFO - For getting customer info (e.g., "ACTION: INFO customer: 123")
 
@@ -193,7 +202,11 @@ serve(async (req) => {
     Available ticket statuses: open, pending, solved, closed
     Available priorities: low, normal, high, urgent
     
-    When updating multiple tickets, include all tickets in a single UPDATE action with comma-separated IDs.`;
+    CRITICAL INSTRUCTIONS FOR MULTIPLE TICKETS:
+    1. ALWAYS use a single UPDATE action
+    2. For consecutive numbers, use ranges (e.g., 43-47)
+    3. NEVER split updates into multiple actions
+    4. NEVER process tickets one at a time`;
 
     const humanPrompt = `Previous conversation:
 {history}
@@ -386,9 +399,15 @@ Current request: {input}`;
 
     // Handle the structured output
     try {
-      // Split response into multiple actions if present
+      console.log("Raw result from LLM:", result);
+      
+      // Split response into multiple actions if present (but we should only get one)
       const actions = result.split(/\n+/).filter(line => line.trim().startsWith('ACTION:'));
       console.log("Split actions:", JSON.stringify(actions, null, 2));
+
+      if (actions.length > 1) {
+        console.warn("WARNING: LLM generated multiple actions instead of using range syntax");
+      }
 
       if (actions.length > 0) {
         const responses = [];
@@ -418,16 +437,19 @@ Current request: {input}`;
               
               case 'UPDATE': {
                 console.log("Processing UPDATE action");
-                const ticketMatch = details.match(/ticket:\s*([\d,\s]+)(?=\s|$)/);
+                // Updated regex to better handle ranges and lists
+                const ticketMatch = details.match(/ticket:\s*([\d,\s\-]+)(?=\s|$)/);
                 const priorityMatch = details.match(/priority:\s*(\w+)(?=\s|$)/);
                 const statusMatch = details.match(/status:\s*(\w+)(?=\s|$)/);
                 const groupMatch = details.match(/group:\s*(\w+)(?=\s|$)/);
                 
-                console.log("Ticket match:", JSON.stringify(ticketMatch, null, 2));
-                console.log("Priority match:", JSON.stringify(priorityMatch, null, 2));
-                console.log("Status match:", JSON.stringify(statusMatch, null, 2));
-                console.log("Group match:", JSON.stringify(groupMatch, null, 2));
-                
+                console.log("Regex matches:", {
+                  ticketMatch: ticketMatch ? ticketMatch[1] : null,
+                  priorityMatch: priorityMatch ? priorityMatch[1] : null,
+                  statusMatch: statusMatch ? statusMatch[1] : null,
+                  groupMatch: groupMatch ? groupMatch[1] : null
+                });
+
                 if (ticketMatch) {
                   const updates: any = {};
                   
@@ -469,24 +491,56 @@ Current request: {input}`;
                   
                   // Parse multiple ticket IDs with logging
                   const rawTicketIds = ticketMatch[1].split(',');
-                  console.log("Raw ticket IDs:", rawTicketIds);
+                  console.log("Raw ticket segments:", rawTicketIds);
                   
-                  const ticketIds = rawTicketIds
-                    .map(id => {
-                      const parsed = parseInt(id.trim());
-                      console.log(`Parsing ticket ID: "${id.trim()}" -> ${parsed}`);
-                      return parsed;
-                    })
-                    .filter(id => {
-                      const isValid = !isNaN(id);
-                      console.log(`Validating ticket ID ${id}: ${isValid ? 'valid' : 'invalid'}`);
-                      return isValid;
-                    });
+                  const ticketIds = rawTicketIds.flatMap(segment => {
+                    segment = segment.trim();
+                    console.log(`Processing segment: "${segment}"`);
+                    
+                    // Check if it's a range (e.g., "43-47")
+                    const rangeMatch = segment.match(/^(\d+)-(\d+)$/);
+                    if (rangeMatch) {
+                      const start = parseInt(rangeMatch[1]);
+                      const end = parseInt(rangeMatch[2]);
+                      console.log(`Found range: ${start} to ${end}`);
+                      
+                      if (isNaN(start) || isNaN(end)) {
+                        console.log("Invalid range numbers");
+                        return [];
+                      }
+                      
+                      if (end < start) {
+                        console.log("Invalid range: end is less than start");
+                        return [];
+                      }
+                      
+                      if (end - start > 50) {
+                        console.log("Range too large: maximum 50 tickets at once");
+                        return [];
+                      }
+                      
+                      // Generate array of numbers in the range
+                      return Array.from(
+                        { length: end - start + 1 },
+                        (_, i) => start + i
+                      );
+                    }
+                    
+                    // Single number
+                    const parsed = parseInt(segment);
+                    console.log(`Parsing single ID: "${segment}" -> ${parsed}`);
+                    return isNaN(parsed) ? [] : [parsed];
+                  });
 
                   console.log("Final parsed ticket IDs:", ticketIds);
                   
                   if (ticketIds.length === 0) {
-                    actionResponse = 'Please specify valid ticket numbers (e.g., "ticket: 44, 45")';
+                    actionResponse = 'Please specify valid ticket numbers (e.g., "ticket: 44,45" or "ticket: 43-47")';
+                    break;
+                  }
+                  
+                  if (ticketIds.length > 50) {
+                    actionResponse = 'You can only update up to 50 tickets at once';
                     break;
                   }
 
