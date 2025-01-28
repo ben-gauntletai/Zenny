@@ -130,14 +130,37 @@ serve(async (req) => {
           }
         },
         handleLLMEnd: async (output: any) => {
-          console.log("AutoCRM LLM Finished");
+          console.log("AutoCRM LLM Finished - Raw output:", JSON.stringify(output, null, 2));
           try {
+            if (!currentRunId) {
+              console.error("No run ID found for LangSmith update");
+              return;
+            }
+
+            // Format the output properly for LangSmith
+            const formattedOutput = typeof output === 'object' ? 
+              { response: output.response || output.text || JSON.stringify(output) } : 
+              { response: String(output) };
+            
+            console.log("Formatted output for LangSmith:", JSON.stringify(formattedOutput, null, 2));
+            
             await client.updateRun({
+              id: currentRunId,
               end_time: new Date().toISOString(),
-              outputs: output
+              outputs: formattedOutput
             });
+            console.log("Successfully updated LangSmith run:", currentRunId);
           } catch (error) {
             console.error("Error updating LLM run:", error);
+            console.error("Error details:", {
+              runId: currentRunId,
+              outputType: typeof output,
+              outputValue: output,
+              message: error.message,
+              name: error.name,
+              stack: error.stack,
+              cause: error.cause
+            });
           }
         }
       }];
@@ -162,13 +185,15 @@ serve(async (req) => {
 
     Available actions:
     1. ACTION: SEARCH - For finding tickets (e.g., "ACTION: SEARCH query: payment issue")
-    2. ACTION: UPDATE - For updating tickets (e.g., "ACTION: UPDATE ticket: 44 priority: low")
+    2. ACTION: UPDATE - For updating tickets (e.g., "ACTION: UPDATE ticket: 44,45 status: pending priority: high")
     3. ACTION: CREATE - For creating tickets (e.g., "ACTION: CREATE subject: Customer reported login issue")
     4. ACTION: INFO - For getting customer info (e.g., "ACTION: INFO customer: 123")
 
     Keep responses concise and professional. Always start with ACTION: followed by the type.
     Available ticket statuses: open, pending, solved, closed
-    Available priorities: low, normal, high, urgent`;
+    Available priorities: low, normal, high, urgent
+    
+    When updating multiple tickets, include all tickets in a single UPDATE action with comma-separated IDs.`;
 
     const humanPrompt = `Previous conversation:
 {history}
@@ -343,109 +368,204 @@ Current request: {input}`;
       .map((msg) => `${msg.sender}: ${msg.content}`)
       .join('\n')
 
+    // Add logging for chain execution
+    console.log("Starting chain execution with input:", JSON.stringify({
+      input: query,
+      history: history || ''
+    }, null, 2));
+
     // Run the chain
     const result = await chain.invoke({
       input: query,
-      history: history || ''  // Provide empty string as fallback
-    })
+      history: history || ''
+    });
 
-    let aiResponse = ''
+    console.log("Chain execution result:", JSON.stringify(result, null, 2));
+
+    let aiResponse = '';
 
     // Handle the structured output
     try {
-      const actionMatch = result.match(/^ACTION: (\w+)(.*)$/i)
-      
-      if (actionMatch) {
-        const [_, action, details] = actionMatch
+      // Split response into multiple actions if present
+      const actions = result.split(/\n+/).filter(line => line.trim().startsWith('ACTION:'));
+      console.log("Split actions:", JSON.stringify(actions, null, 2));
+
+      if (actions.length > 0) {
+        const responses = [];
         
-        switch(action.toUpperCase()) {
-          case 'SEARCH': {
-            const queryMatch = details.match(/query:\s*([^\n]+)/)
-            const searchQuery = queryMatch ? queryMatch[1].trim() : query
-            const tickets = await crmOps.searchTickets(searchQuery, userId)
-            const ticketSummary = tickets.map(t => `#${t.id}: ${t.subject} (${t.status})`).join('\n')
-            aiResponse = tickets.length > 0 
-              ? `I found these tickets:\n${ticketSummary}`
-              : 'No tickets found matching your search.'
-            break
-          }
+        for (const actionText of actions) {
+          const actionMatch = actionText.match(/^ACTION: (\w+)(.*)$/i);
+          console.log("Processing action:", actionText);
+          console.log("Action match result:", JSON.stringify(actionMatch, null, 2));
           
-          case 'UPDATE': {
-            const ticketMatch = details.match(/ticket:\s*(\d+)/)
-            const priorityMatch = details.match(/priority:\s*(\w+)/)
-            const statusMatch = details.match(/status:\s*(\w+)/)
-            const groupMatch = details.match(/group:\s*(\w+)/)
+          if (actionMatch) {
+            const [_, action, details] = actionMatch;
+            console.log("Parsed action:", action);
+            console.log("Action details:", details);
             
-            if (ticketMatch) {
-              const updates: any = {}
-              
-              if (priorityMatch) {
-                const priorityInput = priorityMatch[1].toLowerCase()
-                switch (priorityInput) {
-                  case 'low': updates.priority = 'low'; break;
-                  case 'normal': updates.priority = 'normal'; break;
-                  case 'high': updates.priority = 'high'; break;
-                  case 'urgent': updates.priority = 'urgent'; break;
-                  default: throw new Error('Invalid priority. Must be "low", "normal", "high", or "urgent" (case insensitive)');
-                }
-              }
-
-              if (statusMatch) {
-                const statusInput = statusMatch[1].toLowerCase()
-                switch (statusInput) {
-                  case 'open': updates.status = 'open'; break;
-                  case 'pending': updates.status = 'pending'; break;
-                  case 'solved': updates.status = 'solved'; break;
-                  case 'closed': updates.status = 'closed'; break;
-                  default: throw new Error('Invalid status. Must be "open", "pending", "solved", or "closed" (case insensitive)');
-                }
-              }
-
-              if (groupMatch) {
-                const groupInput = groupMatch[1].toLowerCase()
-                switch (groupInput) {
-                  case 'admin': updates.group_name = 'Admin'; break;
-                  case 'support': updates.group_name = 'Support'; break;
-                  default: throw new Error('Invalid group name. Must be "Admin" or "Support" (case insensitive)');
-                }
+            let actionResponse = '';
+            switch(action.toUpperCase()) {
+              case 'SEARCH': {
+                const queryMatch = details.match(/query:\s*([^\n]+)/)
+                const searchQuery = queryMatch ? queryMatch[1].trim() : query
+                const tickets = await crmOps.searchTickets(searchQuery, userId)
+                const ticketSummary = tickets.map(t => `#${t.id}: ${t.subject} (${t.status})`).join('\n')
+                actionResponse = tickets.length > 0 
+                  ? `I found these tickets:\n${ticketSummary}`
+                  : 'No tickets found matching your search.'
+                break
               }
               
-              const ticketId = parseInt(ticketMatch[1])
-              const updatedTicket = await crmOps.updateTicket(ticketId, updates, userId)
-              aiResponse = `Ticket #${ticketId} has been updated: ${Object.entries(updates)
-                .map(([key, value]) => `${key} set to ${value}`)
-                .join(', ')}`
-            } else {
-              aiResponse = 'Please specify which ticket to update (e.g., "ticket: 44")'
+              case 'UPDATE': {
+                console.log("Processing UPDATE action");
+                const ticketMatch = details.match(/ticket:\s*([\d,\s]+)(?=\s|$)/);
+                const priorityMatch = details.match(/priority:\s*(\w+)(?=\s|$)/);
+                const statusMatch = details.match(/status:\s*(\w+)(?=\s|$)/);
+                const groupMatch = details.match(/group:\s*(\w+)(?=\s|$)/);
+                
+                console.log("Ticket match:", JSON.stringify(ticketMatch, null, 2));
+                console.log("Priority match:", JSON.stringify(priorityMatch, null, 2));
+                console.log("Status match:", JSON.stringify(statusMatch, null, 2));
+                console.log("Group match:", JSON.stringify(groupMatch, null, 2));
+                
+                if (ticketMatch) {
+                  const updates: any = {};
+                  
+                  if (priorityMatch) {
+                    const priorityInput = priorityMatch[1].toLowerCase();
+                    console.log("Processing priority:", priorityInput);
+                    switch (priorityInput) {
+                      case 'low': updates.priority = 'low'; break;
+                      case 'normal': updates.priority = 'normal'; break;
+                      case 'high': updates.priority = 'high'; break;
+                      case 'urgent': updates.priority = 'urgent'; break;
+                      default: throw new Error('Invalid priority. Must be "low", "normal", "high", or "urgent" (case insensitive)');
+                    }
+                  }
+
+                  if (statusMatch) {
+                    const statusInput = statusMatch[1].toLowerCase();
+                    console.log("Processing status:", statusInput);
+                    switch (statusInput) {
+                      case 'open': updates.status = 'open'; break;
+                      case 'pending': updates.status = 'pending'; break;
+                      case 'solved': updates.status = 'solved'; break;
+                      case 'closed': updates.status = 'closed'; break;
+                      default: throw new Error('Invalid status. Must be "open", "pending", "solved", or "closed" (case insensitive)');
+                    }
+                  }
+
+                  if (groupMatch) {
+                    const groupInput = groupMatch[1].toLowerCase();
+                    console.log("Processing group:", groupInput);
+                    switch (groupInput) {
+                      case 'admin': updates.group_name = 'Admin'; break;
+                      case 'support': updates.group_name = 'Support'; break;
+                      default: throw new Error('Invalid group name. Must be "Admin" or "Support" (case insensitive)');
+                    }
+                  }
+
+                  console.log("Final updates object:", updates);
+                  
+                  // Parse multiple ticket IDs with logging
+                  const rawTicketIds = ticketMatch[1].split(',');
+                  console.log("Raw ticket IDs:", rawTicketIds);
+                  
+                  const ticketIds = rawTicketIds
+                    .map(id => {
+                      const parsed = parseInt(id.trim());
+                      console.log(`Parsing ticket ID: "${id.trim()}" -> ${parsed}`);
+                      return parsed;
+                    })
+                    .filter(id => {
+                      const isValid = !isNaN(id);
+                      console.log(`Validating ticket ID ${id}: ${isValid ? 'valid' : 'invalid'}`);
+                      return isValid;
+                    });
+
+                  console.log("Final parsed ticket IDs:", ticketIds);
+                  
+                  if (ticketIds.length === 0) {
+                    actionResponse = 'Please specify valid ticket numbers (e.g., "ticket: 44, 45")';
+                    break;
+                  }
+
+                  // Update all tickets and collect results
+                  console.log("Starting ticket updates...");
+                  const updateResults = await Promise.all(
+                    ticketIds.map(async (ticketId) => {
+                      try {
+                        console.log(`Updating ticket ${ticketId} with:`, updates);
+                        const updatedTicket = await crmOps.updateTicket(ticketId, updates, userId);
+                        console.log(`Successfully updated ticket ${ticketId}`);
+                        return { ticketId, success: true };
+                      } catch (error) {
+                        console.error(`Failed to update ticket ${ticketId}:`, error);
+                        return { ticketId, success: false, error: error.message };
+                      }
+                    })
+                  );
+
+                  console.log("Update results:", JSON.stringify(updateResults, null, 2));
+
+                  // Format response message
+                  const successfulUpdates = updateResults.filter(r => r.success);
+                  const failedUpdates = updateResults.filter(r => !r.success);
+
+                  const updateSummary = [];
+                  if (successfulUpdates.length > 0) {
+                    const ticketList = successfulUpdates.map(r => `#${r.ticketId}`).join(', ');
+                    updateSummary.push(`Successfully updated tickets ${ticketList} with: ${
+                      Object.entries(updates)
+                        .map(([key, value]) => `${key} set to ${String(value).charAt(0).toUpperCase() + String(value).slice(1)}`)
+                        .join(', ')
+                    }`);
+                  }
+                  if (failedUpdates.length > 0) {
+                    const failureList = failedUpdates.map(r => `#${r.ticketId} (${r.error})`).join(', ');
+                    updateSummary.push(`Failed to update tickets: ${failureList}`);
+                  }
+
+                  actionResponse = updateSummary.join('\n');
+                  console.log("Final AI response:", actionResponse);
+                } else {
+                  actionResponse = 'Please specify which tickets to update (e.g., "ticket: 44, 45")';
+                }
+                break
+              }
+              
+              case 'CREATE': {
+                const subjectMatch = details.match(/subject:\s*([^\n]+)/)
+                const subject = subjectMatch ? subjectMatch[1].trim() : query
+                
+                const newTicket = await crmOps.createTicket({
+                  subject,
+                  status: 'open',
+                  priority: 'normal'
+                }, userId)
+                actionResponse = `Created new ticket #${newTicket.id} with subject: ${subject}`
+                break
+              }
+              
+              case 'INFO': {
+                const customerMatch = details.match(/customer:\s*(\w+)/)
+                const customerId = customerMatch ? customerMatch[1] : userId
+                
+                const customerInfo = await crmOps.getCustomerInfo(customerId)
+                actionResponse = `Customer Information:\nName: ${customerInfo.name}\nEmail: ${customerInfo.email}`
+                break
+              }
+              
+              default:
+                actionResponse = "I don't understand that action. Please try rephrasing your request."
             }
-            break
+            if (actionResponse) {
+              responses.push(actionResponse);
+            }
           }
-          
-          case 'CREATE': {
-            const subjectMatch = details.match(/subject:\s*([^\n]+)/)
-            const subject = subjectMatch ? subjectMatch[1].trim() : query
-            
-            const newTicket = await crmOps.createTicket({
-              subject,
-              status: 'open',
-              priority: 'normal'
-            }, userId)
-            aiResponse = `Created new ticket #${newTicket.id} with subject: ${subject}`
-            break
-          }
-          
-          case 'INFO': {
-            const customerMatch = details.match(/customer:\s*(\w+)/)
-            const customerId = customerMatch ? customerMatch[1] : userId
-            
-            const customerInfo = await crmOps.getCustomerInfo(customerId)
-            aiResponse = `Customer Information:\nName: ${customerInfo.name}\nEmail: ${customerInfo.email}`
-            break
-          }
-          
-          default:
-            aiResponse = "I don't understand that action. Please try rephrasing your request."
         }
+        
+        aiResponse = responses.join('\n');
       } else {
         aiResponse = "I couldn't understand your request. Please try rephrasing it."
       }
