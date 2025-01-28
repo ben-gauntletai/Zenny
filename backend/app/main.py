@@ -11,6 +11,7 @@ import os
 from dotenv import load_dotenv
 import json
 from .utils.notifications import notify_ticket_updated
+from .utils.formatting import format_ticket_numbers
 from datetime import datetime
 import logging
 import re
@@ -323,10 +324,44 @@ async def handle_crm_operations(result: str, user_id: str, supabase_client: Supa
                 
                 response_parts = []
                 if successful:
-                    fields_updated = ', '.join([f"{k.replace('_', ' ').title()}: {v}" for k, v in updates.items()])
-                    response_parts.append(f"Successfully updated tickets {', '.join(map(str, successful))} with {fields_updated}")
+                    # Format field updates with special handling for assigned_to
+                    formatted_updates = []
+                    for key, value in updates.items():
+                        if key == 'assigned_to':
+                            if value is None:
+                                formatted_updates.append('Assigned To set to Unassigned')
+                            else:
+                                # Get assignee info
+                                assignee_data = supabase_client.table('profiles').select('full_name,email').eq('id', value).single().execute()
+                                assignee = assignee_data.data if assignee_data.data else None
+                                assignee_display = assignee.get('full_name') or assignee.get('email') or 'Unknown user' if assignee else 'Unknown user'
+                                formatted_updates.append(f'Assigned To set to {assignee_display}')
+                        else:
+                            # Capitalize first letter of value and format key
+                            formatted_key = ' '.join(word.title() for word in key.split('_'))
+                            formatted_value = str(value)[0].upper() + str(value)[1:] if value else value
+                            formatted_updates.append(f'{formatted_key} set to {formatted_value}')
+                    
+                    fields_updated = ', '.join(formatted_updates)
+                    # Use the format_ticket_numbers helper for successful tickets
+                    ticket_nums = format_ticket_numbers(successful)
+                    response_parts.append(f"Successfully updated tickets {ticket_nums} with: {fields_updated}")
+
                 if failed:
-                    response_parts.append(f"Failed to update tickets: {', '.join([f'#{id} ({error})' for id, error in failed])}")
+                    # Group failed tickets by error message
+                    error_groups = {}
+                    for ticket_id, error in failed:
+                        if error not in error_groups:
+                            error_groups[error] = []
+                        error_groups[error].append(ticket_id)
+                    
+                    # Format each error group with ticket ranges
+                    failure_messages = []
+                    for error, tickets in error_groups.items():
+                        ticket_range = format_ticket_numbers(tickets)
+                        failure_messages.append(f"{ticket_range} ({error})")
+                    
+                    response_parts.append(f"Failed to update tickets: {', '.join(failure_messages)}")
                 
                 responses.append('\n'.join(response_parts))
                 
