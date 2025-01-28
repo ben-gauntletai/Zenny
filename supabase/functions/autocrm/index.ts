@@ -199,6 +199,7 @@ serve(async (req) => {
         status: open, pending, solved, closed
         priority: low, normal, high, urgent
         ticket_type: question, incident, problem, task
+        group_name: Admin, Support
         assigned_to: @email (e.g., assigned_to: @john.doe@example.com)
         assigned_to: unassigned (to remove assignment)
 
@@ -452,7 +453,7 @@ Current request: {input}`;
                 const ticketMatch = details.match(/ticket:\s*([\d,\s\-]+|unassigned)(?=\s|$)/i);
                 const priorityMatch = details.match(/priority:\s*(\w+)(?=\s|$)/);
                 const statusMatch = details.match(/status:\s*(\w+)(?=\s|$)/);
-                const groupMatch = details.match(/group:\s*(\w+)(?=\s|$)/);
+                const groupMatch = details.match(/group_name:\s*(\w+)(?=\s|$)/);
                 // Updated pattern to handle both @unassigned and unassigned
                 const assignedToMatch = details.match(/assigned_to:\s*(?:@?([^\s]+))(?=\s|$)/);
                 
@@ -492,12 +493,13 @@ Current request: {input}`;
                   }
 
                   if (groupMatch) {
-                    const groupInput = groupMatch[1].toLowerCase();
+                    const groupInput = groupMatch[1];  // Remove toLowerCase() to preserve case
                     console.log("Processing group:", groupInput);
-                    switch (groupInput) {
-                      case 'admin': updates.group_name = 'Admin'; break;
-                      case 'support': updates.group_name = 'Support'; break;
-                      default: throw new Error('Invalid group name. Must be "Admin" or "Support" (case insensitive)');
+                    // Direct assignment since we validate in the system prompt
+                    if (groupInput === 'Admin' || groupInput === 'Support') {
+                      updates.group_name = groupInput;
+                    } else {
+                      throw new Error('Invalid group name. Must be exactly "Admin" or "Support"');
                     }
                   }
 
