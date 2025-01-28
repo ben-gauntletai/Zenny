@@ -167,7 +167,7 @@ export function AutoCRMPanel() {
             >
               <div className="message-content">{msg.content}</div>
               <div className="message-timestamp">
-                {msg.timestamp.toLocaleTimeString()}
+                {msg.timestamp.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
               </div>
             </div>
           ))
@@ -191,6 +191,7 @@ export function AutoCRMPanel() {
           placeholder="Type your request... Use @ to mention agents"
           className="autocrm-mention-input"
           supabase={supabase}
+          onSubmit={handleSend}
         />
         <button 
           onClick={handleSend}

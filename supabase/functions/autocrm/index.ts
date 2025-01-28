@@ -200,6 +200,7 @@ serve(async (req) => {
         priority: low, normal, high, urgent
         ticket_type: question, incident, problem, task
         assigned_to: @[agent_email] (e.g., assigned_to: @john.doe@example.com)
+        assigned_to: unassigned (to remove assignment)
 
         Please use these to plug into the format given the user's request.
 
@@ -212,10 +213,10 @@ serve(async (req) => {
     1. ONLY include fields the user explicitly asks to update
     2. ALWAYS use a single UPDATE action for multiple tickets
     3. For consecutive numbers, use ranges (e.g., 43-47)
-    4. For unassigned tickets, use "ticket: unassigned"
+    4. For unassigned tickets, use "assigned_to: unassigned"
     5. NEVER split updates into multiple actions
     6. NEVER add fields that weren't requested
-    7. For assigning tickets, use the exact @email format provided by the user`;
+    7. For assigning tickets, use the exact @email format provided by the user or "unassigned" to remove assignment`;
 
     const humanPrompt = `Previous conversation:
 {history}
@@ -451,7 +452,8 @@ Current request: {input}`;
                 const priorityMatch = details.match(/priority:\s*(\w+)(?=\s|$)/);
                 const statusMatch = details.match(/status:\s*(\w+)(?=\s|$)/);
                 const groupMatch = details.match(/group:\s*(\w+)(?=\s|$)/);
-                const assignedToMatch = details.match(/assigned_to:\s*@([^\s]+)(?=\s|$)/);
+                // Updated pattern to handle both @unassigned and unassigned
+                const assignedToMatch = details.match(/assigned_to:\s*(?:@?([^\s]+))(?=\s|$)/);
                 
                 console.log("Regex matches:", {
                   ticketMatch: ticketMatch ? ticketMatch[1] : null,
@@ -500,18 +502,22 @@ Current request: {input}`;
 
                   if (assignedToMatch) {
                     const assigneeEmail = assignedToMatch[1];
-                    // Get the assignee's ID from their email
-                    const { data: assignee, error: assigneeError } = await serviceRoleClient
-                      .from('profiles')
-                      .select('id')
-                      .eq('email', assigneeEmail)
-                      .single();
+                    if (assigneeEmail.toLowerCase() === 'unassigned') {
+                      updates.assigned_to = null;
+                    } else {
+                      // Get the assignee's ID from their email
+                      const { data: assignee, error: assigneeError } = await serviceRoleClient
+                        .from('profiles')
+                        .select('id')
+                        .eq('email', assigneeEmail)
+                        .single();
 
-                    if (assigneeError || !assignee) {
-                      throw new Error(`Could not find agent with email ${assigneeEmail}`);
+                      if (assigneeError || !assignee) {
+                        throw new Error(`Could not find agent with email ${assigneeEmail}`);
+                      }
+                      
+                      updates.assigned_to = assignee.id;
                     }
-                    
-                    updates.assigned_to = assignee.id;
                   }
 
                   console.log("Final updates object:", updates);
@@ -620,7 +626,13 @@ Current request: {input}`;
                     const ticketList = successfulUpdates.map(r => `#${r.ticketId}`).join(', ');
                     updateSummary.push(`Successfully updated tickets ${ticketList} with: ${
                       Object.entries(updates)
-                        .map(([key, value]) => `${key} set to ${String(value).charAt(0).toUpperCase() + String(value).slice(1)}`)
+                        .map(([key, value]) => {
+                          // Special handling for assigned_to field
+                          if (key === 'assigned_to' && value === null) {
+                            return 'Assigned To set to Unassigned';
+                          }
+                          return `${key} set to ${String(value).charAt(0).toUpperCase() + String(value).slice(1)}`;
+                        })
                         .join(', ')
                     }`);
                   }

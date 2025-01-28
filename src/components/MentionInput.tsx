@@ -9,6 +9,7 @@ interface MentionInputProps {
   placeholder?: string;
   className?: string;
   supabase: SupabaseClient<Database>;
+  onSubmit?: (value: string) => void;
 }
 
 interface Agent {
@@ -35,6 +36,7 @@ export const MentionInput: React.FC<MentionInputProps> = ({
   placeholder,
   className,
   supabase,
+  onSubmit,
 }) => {
   const [mentionSearch, setMentionSearch] = useState('');
   const [mentionResults, setMentionResults] = useState<Agent[]>([]);
@@ -135,8 +137,25 @@ export const MentionInput: React.FC<MentionInputProps> = ({
       } else if (e.key === 'Enter' && showMentions) {
         e.preventDefault();
         handleSelectMention(mentionResults[selectedIndex]);
+        return;
       } else if (e.key === 'Escape') {
         setShowMentions(false);
+      }
+      return;
+    }
+
+    // Handle Enter key
+    if (e.key === 'Enter') {
+      if (e.shiftKey) {
+        // Allow new line with Shift+Enter
+        return;
+      }
+      
+      e.preventDefault();
+      if (contentRef.current?.textContent?.trim()) {
+        onSubmit?.(contentRef.current.textContent);
+        contentRef.current.textContent = '';
+        onChange('');
       }
       return;
     }
@@ -297,6 +316,11 @@ export const MentionInput: React.FC<MentionInputProps> = ({
         contentEditable
         onInput={handleInput}
         onKeyDown={handleKeyDown}
+        onPaste={(e) => {
+          e.preventDefault();
+          const text = e.clipboardData.getData('text/plain');
+          document.execCommand('insertText', false, text);
+        }}
         data-placeholder={placeholder}
         className={`autocrm-mention-content ${className || ''}`}
         role="textbox"
