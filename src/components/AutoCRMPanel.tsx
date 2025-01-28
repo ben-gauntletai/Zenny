@@ -11,7 +11,6 @@ interface Message {
 }
 
 export function AutoCRMPanel() {
-  const [isOpen, setIsOpen] = useState(false);
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -26,12 +25,12 @@ export function AutoCRMPanel() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   };
 
-  // Load conversation history when panel opens
+  // Load conversation history when component mounts
   useEffect(() => {
-    if (isOpen && user) {
+    if (user) {
       loadConversationHistory();
     }
-  }, [isOpen, user]);
+  }, [user]);
 
   useEffect(() => {
     scrollToBottom();
@@ -141,77 +140,66 @@ export function AutoCRMPanel() {
   }
 
   return (
-    <>
-      <button 
-        className={`autocrm-toggle-button ${isOpen ? 'open' : ''}`}
-        onClick={() => setIsOpen(!isOpen)}
-      >
-        <span className="material-icons">
-          {isOpen ? 'close' : 'chat'}
-        </span>
-      </button>
-
-      <div className={`autocrm-panel ${isOpen ? 'open' : ''}`}>
-        <div className="autocrm-header">
-          <h3>AutoCRM Assistant</h3>
-        </div>
-
-        <div className="autocrm-messages">
-          {isLoadingHistory ? (
-            <div className="message system loading">
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-            </div>
-          ) : messages.length === 0 ? (
-            <div className="message system welcome">
-              <div className="message-content">
-                Hello! I'm your AutoCRM assistant. How can I help you today?
-              </div>
-            </div>
-          ) : (
-            messages.map((msg) => (
-              <div 
-                key={msg.id} 
-                className={`message ${msg.sender}`}
-              >
-                <div className="message-content">{msg.content}</div>
-                <div className="message-timestamp">
-                  {msg.timestamp.toLocaleTimeString()}
-                </div>
-              </div>
-            ))
-          )}
-          {isLoading && (
-            <div className="message system loading">
-              <div className="typing-indicator">
-                <span></span>
-                <span></span>
-                <span></span>
-              </div>
-            </div>
-          )}
-          <div ref={messagesEndRef} />
-        </div>
-
-        <div className="autocrm-input">
-          <textarea
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyPress={handleKeyPress}
-            placeholder="Type your request..."
-            rows={1}
-          />
-          <button 
-            onClick={handleSend}
-            disabled={isLoading || !input.trim()}
-          >
-            <span className="material-icons">send</span>
-          </button>
-        </div>
+    <div className="autocrm-panel">
+      <div className="autocrm-header">
+        <h3>AutoCRM Assistant</h3>
       </div>
-    </>
+
+      <div className="autocrm-messages">
+        {isLoadingHistory ? (
+          <div className="message system loading">
+            <div className="typing-indicator">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+        ) : messages.length === 0 ? (
+          <div className="message system welcome">
+            <div className="message-content">
+              Hello! I'm your AutoCRM assistant. How can I help you today?
+            </div>
+          </div>
+        ) : (
+          messages.map((msg) => (
+            <div 
+              key={msg.id} 
+              className={`message ${msg.sender}`}
+            >
+              <div className="message-content">{msg.content}</div>
+              <div className="message-timestamp">
+                {msg.timestamp.toLocaleTimeString()}
+              </div>
+            </div>
+          ))
+        )}
+        {isLoading && (
+          <div className="message system loading">
+            <div className="typing-indicator">
+              <span></span>
+              <span></span>
+              <span></span>
+            </div>
+          </div>
+        )}
+        <div ref={messagesEndRef} />
+      </div>
+
+      <div className="autocrm-input">
+        <textarea
+          value={input}
+          onChange={(e) => setInput(e.target.value)}
+          onKeyPress={handleKeyPress}
+          placeholder="Type your request..."
+          rows={1}
+        />
+        <button 
+          onClick={handleSend}
+          disabled={isLoading || !input.trim()}
+        >
+          <span className="material-icons">send</span>
+        </button>
+      </div>
+    </div>
   );
-} 
+}

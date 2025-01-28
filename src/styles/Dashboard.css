@@ -1,7 +1,6 @@
 .dashboard {
   display: flex;
   height: calc(100vh - 64px);
-  margin-top: 64px;
   background: #f8fafc;
   transition: all 0.3s ease-in-out;
   overflow: hidden;
@@ -426,27 +425,111 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
   margin-bottom: 2rem;
   height: calc(100vh - 300px);
+  overflow-x: auto;
+  max-width: 100%;
 }
 
 .tickets-table {
-  table-layout: fixed;
   width: 100%;
+  table-layout: auto;
+  border-collapse: separate;
+  border-spacing: 0;
 }
 
 .tickets-table th,
 .tickets-table td {
-  width: 12.5%; /* Since we have 8 columns (100% / 8) */
-  padding: 0.75rem 12px;
+  padding: 0.75rem 16px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
 }
 
+/* Remove fixed widths and let content determine size */
+.tickets-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #4a5568;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+}
+
+/* ID Column */
+.ticket-id {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+  width: 70px;
+  min-width: 70px;
+}
+
+/* Status and Priority badges container */
+.status-badge,
+.priority-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  text-align: center;
+  width: auto;
+}
+
+/* Subject column - allow it to take remaining space */
+.tickets-table td:nth-child(4) {
+  width: auto;
+  max-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Make sure the table container allows horizontal scroll if needed */
+.tickets-table-container {
+  overflow-x: auto;
+  max-width: 100%;
+}
+
+/* Ensure the table doesn't shrink columns too much */
+.tickets-table {
+  min-width: 800px;
+}
+
+/* Cell content handling */
+.tickets-table td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Subject cell specific styling */
+.subject-cell {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #2d3748;
+  padding-right: 16px;
+}
+
+/* Status and priority badges */
+.status-badge,
+.priority-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  text-align: center;
+}
+
+/* Table header */
 .tickets-table thead {
   position: sticky;
   top: 0;
-  background: white;
   z-index: 1;
+  background: white;
 }
 
 .tickets-table th {
@@ -457,72 +540,49 @@
   top: 0;
   z-index: 1;
   height: 48px;
-  padding: 0 1rem;
-  transition: none;
 }
 
-/* Base styles for all cells */
-.tickets-table th,
-.tickets-table td {
-  padding: 0.75rem 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  border-bottom: 1px solid #e2e8f0;
-  border-right: 1px solid #e2e8f0;
+/* Table container */
+.tickets-table-container {
+  flex: 1;
+  overflow: auto;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  margin-bottom: 2rem;
+  height: calc(100vh - 300px);
 }
 
-/* Header specific styles */
-.tickets-table th {
-  font-size: 12px;
-  font-weight: 500;
-  color: #4a5568;
-  background: #f8fafc;
-  position: sticky;
-  top: 0;
-  z-index: 1;
+/* Hover effects */
+.tickets-table tr:hover td {
+  background-color: #f7fafc;
 }
 
-/* Column widths */
-.tickets-table .checkbox-column {
-  width: 32px;
-  padding: 0 8px;
+/* Responsive adjustments */
+@media (max-width: 1024px) {
+  .tickets-table th:nth-child(6),
+  .tickets-table td:nth-child(6),
+  .tickets-table th:nth-child(7),
+  .tickets-table td:nth-child(7) {
+    display: none;
+  }
 }
 
-.tickets-table .id-column {
-  width: 60px;
+@media (max-width: 768px) {
+  .tickets-table th:nth-child(5),
+  .tickets-table td:nth-child(5),
+  .tickets-table th:nth-child(8),
+  .tickets-table td:nth-child(8) {
+    display: none;
+  }
+  
+  .tickets-table th:nth-child(4), /* Subject */
+  .tickets-table td:nth-child(4) {
+    min-width: 150px;
+  }
 }
 
-.tickets-table .status-column {
-  width: 100px;
-}
-
-.tickets-table .priority-column {
-  width: 100px;
-}
-
-.tickets-table .subject-column {
-  width: auto;
-  min-width: 200px;
-}
-
-.tickets-table .requester-column {
-  width: 160px;
-}
-
-.tickets-table .updated-column {
-  width: 140px;
-}
-
-.tickets-table .group-column {
-  width: 100px;
-}
-
-.tickets-table .assignee-column {
-  width: 160px;
-}
-
-/* Table cell styles */
 .ticket-id {
   color: #64748b;
   font-size: 13px;

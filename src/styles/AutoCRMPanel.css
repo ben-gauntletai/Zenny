@@ -1,55 +1,28 @@
 .autocrm-toggle-button {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  background-color: #2563eb;
-  color: white;
-  border: none;
-  cursor: pointer;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  transition: transform 0.2s ease-in-out;
-}
-
-.autocrm-toggle-button:hover {
-  transform: scale(1.05);
-  background-color: #1d4ed8;
-}
-
-.autocrm-toggle-button.open {
-  background-color: #dc2626;
-}
-
-.autocrm-toggle-button .material-icons {
-  font-size: 24px;
+  display: none;
 }
 
 .autocrm-panel {
   position: fixed;
-  bottom: 90px;
-  right: 20px;
+  top: 64px;
+  right: 0;
   width: 380px;
-  height: 600px;
+  height: calc(100vh - 64px);
   background-color: #f8fafc;
-  border-radius: 12px;
-  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+  border-radius: 0;
+  border-left: 1px solid #e5e7eb;
+  box-shadow: -2px 0 10px rgba(0, 0, 0, 0.05);
   display: flex;
   flex-direction: column;
   z-index: 999;
-  transform: translateY(100%);
-  opacity: 0;
-  visibility: hidden;
-  transition: all 0.3s ease-in-out;
+  transform: none;
+  opacity: 1;
+  visibility: visible;
+  transition: none;
 }
 
 .autocrm-panel.open {
-  transform: translateY(0);
+  transform: none;
   opacity: 1;
   visibility: visible;
 }
@@ -58,7 +31,7 @@
   padding: 16px;
   border-bottom: 1px solid #e5e7eb;
   background-color: white;
-  border-radius: 12px 12px 0 0;
+  border-radius: 0;
 }
 
 .autocrm-header h3 {

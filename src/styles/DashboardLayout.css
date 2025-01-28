@@ -1,0 +1,26 @@
+.dashboard-page {
+  min-height: 100vh;
+  background-color: #f8fafc;
+  padding-top: 64px; /* Move padding to the page container */
+}
+
+.dashboard-content {
+  padding: 24px;
+  min-height: calc(100vh - 64px);
+  transition: padding-right 0.3s ease;
+}
+
+.dashboard-content.with-autocrm {
+  padding-right: 404px; /* 380px sidebar + 24px padding */
+}
+
+/* Add responsive adjustments */
+@media (max-width: 768px) {
+  .dashboard-content {
+    padding: 16px;
+  }
+  
+  .dashboard-content.with-autocrm {
+    padding-right: 16px;
+  }
+} 

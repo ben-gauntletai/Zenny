@@ -215,25 +215,15 @@ const TicketList: React.FC = () => {
         <table className="tickets-table">
           <thead>
             <tr>
-              <th onClick={() => handleSort('id')} className="sortable-header">
-                ID {getSortIndicator('id')}
-              </th>
-              <th onClick={() => handleSort('subject')} className="sortable-header">
-                Title {getSortIndicator('subject')}
-              </th>
-              <th onClick={() => handleSort('status')} className="sortable-header">
-                Status {getSortIndicator('status')}
-              </th>
+              <th className="ticket-id">ID {getSortIndicator('id')}</th>
+              <th className="subject-cell">Title {getSortIndicator('subject')}</th>
+              <th className="status-cell">Status {getSortIndicator('status')}</th>
               {isAgentOrAdmin && (
-                <th onClick={() => handleSort('priority')} className="sortable-header">
-                  Priority {getSortIndicator('priority')}
-                </th>
+                <th className="priority-cell">Priority {getSortIndicator('priority')}</th>
               )}
-              <th onClick={() => handleSort('created_at')} className="sortable-header">
-                Created {getSortIndicator('created_at')}
-              </th>
-              {isAgentOrAdmin && <th>Requester</th>}
-              <th>Assigned To</th>
+              <th className="date-cell">Created {getSortIndicator('created_at')}</th>
+              {isAgentOrAdmin && <th className="user-cell">Requester</th>}
+              <th className="user-cell">Assigned To</th>
             </tr>
           </thead>
           <tbody className={shouldAnimate ? 'initial-load' : loading ? 'loading' : ''}>
@@ -258,25 +248,23 @@ const TicketList: React.FC = () => {
                   onClick={() => handleRowClick(ticket.id)}
                   className="clickable-row"
                 >
-                  <td>#{ticket.id}</td>
-                  <td>
-                    {ticket.subject}
-                  </td>
-                  <td>
+                  <td className="ticket-id">#{ticket.id}</td>
+                  <td className="subject-cell">{ticket.subject}</td>
+                  <td className="status-cell">
                     <span className={`status-badge ${ticket.status.toLowerCase()}`}>
                       {ticket.status.charAt(0).toUpperCase() + ticket.status.slice(1).toLowerCase()}
                     </span>
                   </td>
                   {isAgentOrAdmin && (
-                    <td>
+                    <td className="priority-cell">
                       <span className={`priority-badge ${ticket.priority.toLowerCase()}`}>
                         {ticket.priority.charAt(0).toUpperCase() + ticket.priority.slice(1).toLowerCase()}
                       </span>
                     </td>
                   )}
-                  <td>{new Date(ticket.created_at).toLocaleDateString()}</td>
-                  {isAgentOrAdmin && <td>{ticket.creator_name || ticket.creator_email}</td>}
-                  <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
+                  <td className="date-cell">{new Date(ticket.created_at).toLocaleDateString()}</td>
+                  {isAgentOrAdmin && <td className="user-cell">{ticket.creator_name || ticket.creator_email}</td>}
+                  <td className="user-cell">{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
                 </tr>
               ));
             })()}

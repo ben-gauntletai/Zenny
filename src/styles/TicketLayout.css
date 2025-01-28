@@ -1,17 +1,22 @@
 .tickets-content {
-  height: calc(100vh - 64px);
+  padding: 24px;
   margin-top: 64px;
-  background: #f7fafc;
-  overflow-y: auto;
-  width: 100%;
+  min-height: calc(100vh - 64px);
+  background-color: #f8fafc;
+  transition: padding-right 0.3s ease;
+}
+
+.tickets-content.with-autocrm {
+  padding-right: 404px; /* 380px sidebar + 24px padding */
 }
 
 .tickets-main {
-  max-width: 1400px;
+  max-width: 1200px;
   margin: 0 auto;
-  padding: 2rem;
-  width: 100%;
-  box-sizing: border-box;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  padding: 24px;
 }
 
 /* Responsive adjustments */

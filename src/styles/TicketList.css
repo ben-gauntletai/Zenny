@@ -36,34 +36,57 @@
   width: 100%;
   border-collapse: separate;
   border-spacing: 0;
-  table-layout: fixed;
-  min-width: 100%;
+  table-layout: auto;
 }
 
 .tickets-table th,
 .tickets-table td {
-  width: 14.28%; /* Even width for 7 columns (100% / 7) */
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 2px solid #e2e8f0;
+  border-right: 2px solid #e2e8f0;
 }
 
-/* Adjust ID column to be narrower */
-.tickets-table th:first-child,
-.tickets-table td:first-child {
-  width: 8%;
+/* ID column */
+.ticket-id {
+  width: 80px !important;
+  min-width: 80px !important;
+  max-width: 80px !important;
 }
 
-/* Adjust title column to be wider */
-.tickets-table th:nth-child(2),
-.tickets-table td:nth-child(2) {
-  width: 25%;
+/* Status and Priority columns */
+.status-cell {
+  width: 100px !important;
+  min-width: 100px !important;
+  max-width: 100px !important;
+  text-align: center;
 }
 
-/* Adjust other columns to compensate */
-.tickets-table th:not(:first-child):not(:nth-child(2)),
-.tickets-table td:not(:first-child):not(:nth-child(2)) {
-  width: 13.4%;
+.priority-cell {
+  width: 100px !important;
+  min-width: 100px !important;
+  max-width: 100px !important;
+  text-align: center;
+}
+
+/* Subject column - let it take remaining space */
+.subject-cell {
+  width: auto;
+  min-width: 200px;
+}
+
+/* Date columns */
+.date-cell {
+  width: 120px !important;
+  min-width: 120px !important;
+  max-width: 120px !important;
+}
+
+/* Email/name columns */
+.user-cell {
+  width: 150px !important;
+  min-width: 150px !important;
+  max-width: 150px !important;
 }
 
 .tickets-table thead {
@@ -77,19 +100,28 @@
   background: #f8fafc;
   font-weight: 600;
   color: #4a5568;
-  padding: 1rem;
-  text-align: left;
-  border-bottom: 2px solid #e2e8f0;
-  border-right: 2px solid #e2e8f0;
+  white-space: nowrap;
 }
 
 .tickets-table td {
-  padding: 1rem;
-  text-align: left;
-  border-bottom: 2px solid #e2e8f0;
-  border-right: 2px solid #e2e8f0;
   background: white;
   color: #2d3748;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status and Priority badges */
+.status-badge,
+.priority-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 80px;
+  text-align: center;
 }
 
 .tickets-table th:last-child,
@@ -109,16 +141,19 @@
 }
 
 /* Responsive adjustments */
+@media (max-width: 1024px) {
+  .tickets-table {
+    min-width: 800px;
+  }
+}
+
 @media (max-width: 768px) {
   .ticket-list-container {
-    height: calc(100vh - 160px);
     padding: 0.75rem;
-    width: 100%;
-    max-width: 100%;
   }
-
-  .ticket-list-header h2 {
-    font-size: 1.25rem;
+  
+  .tickets-table {
+    min-width: 600px;
   }
 }
 
@@ -212,45 +247,6 @@
 
 .ticket-subject:hover {
   color: #3182ce;
-}
-
-.status-badge,
-.priority-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-}
-
-.status-badge.open {
-  background-color: #ebf8ff;
-  color: #2b6cb0;
-}
-
-.status-badge.pending {
-  background-color: #fefcbf;
-  color: #975a16;
-}
-
-.status-badge.solved {
-  background-color: #f0fff4;
-  color: #2f855a;
-}
-
-.priority-badge.low {
-  background-color: #f0fff4;
-  color: #2f855a;
-}
-
-.priority-badge.medium {
-  background-color: #fefcbf;
-  color: #975a16;
-}
-
-.priority-badge.high {
-  background-color: #fff5f5;
-  color: #c53030;
 }
 
 .loading {
