@@ -63,7 +63,11 @@ app.openapi = custom_openapi
 # CORS middleware
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Configure for production
+    allow_origins=[
+        "http://localhost:3000", 
+        "https://main.d7534wkloee0c.amplifyapp.com",       # Local development
+        "https://zenny-h9eu.onrender.com", # Render backend URL
+    ],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

@@ -143,7 +143,7 @@ export function AutoCRMPanel() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch('http://localhost:8000/autocrm', {
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/autocrm`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
