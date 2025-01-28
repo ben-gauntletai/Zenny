@@ -1,10 +1,9 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
-import { ChatOpenAI } from "npm:@langchain/openai@0.3.0"
-import { SystemMessage, HumanMessage } from "npm:@langchain/core@0.3.33/messages"
-import { StringOutputParser } from "npm:@langchain/core@0.1.48/output_parsers"
-import { ChatPromptTemplate } from "npm:@langchain/core@0.1.48/prompts"
-import { Client } from "npm:langsmith@0.0.48"
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.38.4"
+import { ChatOpenAI } from "https://esm.sh/@langchain/openai@0.0.10"
+import { ChatPromptTemplate } from "https://esm.sh/@langchain/core@0.1.48/prompts"
+import { StringOutputParser } from "https://esm.sh/@langchain/core@0.1.48/output_parsers"
+import { SystemMessage, HumanMessage } from "https://esm.sh/@langchain/core@0.1.48/messages"
 import { z } from "https://deno.land/x/zod@v3.21.4/mod.ts"
 import { notifyTicketUpdated } from "../_shared/notifications.ts"
 
@@ -100,87 +99,7 @@ serve(async (req) => {
       throw new Error('Query and userId are required')
     }
 
-    // Initialize LangSmith client and configure tracing
-    let tracingCallbacks = undefined;
-    if (langsmithApiKey) {
-      const client = new Client({
-        apiUrl: "https://api.smith.langchain.com",
-        apiKey: langsmithApiKey,
-      });
-
-      // Configure single trace for LLM only
-      tracingCallbacks = [{
-        handleLLMStart: async (llm: any, prompts: string[]) => {
-          console.log("AutoCRM LLM Started");
-          try {
-            await client.createRun({
-              name: "AutoCRM LLM",
-              run_type: "llm",
-              inputs: { prompts },
-              project_name: "zenny-autocrm",
-              start_time: new Date().toISOString(),
-              tags: ["production", "autocrm"],
-              metadata: {
-                userId: userId,
-                timestamp: new Date().toISOString()
-              }
-            });
-          } catch (error) {
-            console.error("Error creating LLM run:", error);
-          }
-        },
-        handleLLMEnd: async (output: any) => {
-          console.log("AutoCRM LLM Finished - Raw output:", JSON.stringify(output, null, 2));
-          try {
-            if (!currentRunId) {
-              console.error("No run ID found for LangSmith update");
-              return;
-            }
-
-            // Format the output properly for LangSmith
-            const formattedOutput = typeof output === 'object' ? 
-              { response: output.response || output.text || JSON.stringify(output) } : 
-              { response: String(output) };
-            
-            console.log("Formatted output for LangSmith:", JSON.stringify(formattedOutput, null, 2));
-            
-            await client.updateRun({
-              id: currentRunId,
-              end_time: new Date().toISOString(),
-              outputs: formattedOutput
-            });
-            console.log("Successfully updated LangSmith run:", currentRunId);
-          } catch (error) {
-            console.error("Error updating LLM run:", error);
-            console.error("Error details:", {
-              runId: currentRunId,
-              outputType: typeof output,
-              outputValue: output,
-              message: error.message,
-              name: error.name,
-              stack: error.stack,
-              cause: error.cause
-            });
-          }
-        }
-      }];
-
-      // Apply callbacks to model instead of chain
-      model = new ChatOpenAI({
-        openAIApiKey: openaiApiKey,
-        modelName: 'gpt-4o-mini',
-        temperature: 0.7,
-        callbacks: tracingCallbacks
-      });
-    } else {
-      model = new ChatOpenAI({
-        openAIApiKey: openaiApiKey,
-        modelName: 'gpt-4o-mini',
-        temperature: 0.7
-      });
-    }
-
-    // Create the prompt template
+    // Create the prompt template first
     const systemPrompt = `You are an AI assistant helping with CRM tasks. You must respond in a structured format that starts with an ACTION: followed by the action type and any relevant details.
 
     Available actions:
@@ -229,10 +148,34 @@ Current request: {input}`;
       ["human", humanPrompt]
     ]);
 
-    // Create the chain without tracing config
+    // Initialize model with simple configuration
+    model = new ChatOpenAI({
+      openAIApiKey: openaiApiKey,
+      modelName: 'gpt-4o-mini',
+      temperature: 0.7
+    });
+
+    // Create chain
     chain = promptTemplate
       .pipe(model)
       .pipe(new StringOutputParser());
+
+    // Test LangSmith if available
+    if (langsmithApiKey) {
+      console.log("Testing LangSmith initialization...")
+      const client = new Client({
+        apiUrl: "https://api.smith.langchain.com",
+        apiKey: langsmithApiKey
+      })
+
+      try {
+        console.log("Testing LangSmith project access...")
+        await client.readProject("zenny-autocrm")
+        console.log("LangSmith connection successful")
+      } catch (error) {
+        console.error("LangSmith connection failed:", error)
+      }
+    }
 
     // Initialize CRM operations with service role client
     const crmOps: CRMOperations = {

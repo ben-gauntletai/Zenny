@@ -143,7 +143,7 @@ export function AutoCRMPanel() {
 
     try {
       const { data: { session } } = await supabase.auth.getSession();
-      const response = await fetch('https://syyaqprmiekyqfoilbna.supabase.co/functions/v1/autocrm', {
+      const response = await fetch('http://localhost:8000/autocrm', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -156,7 +156,15 @@ export function AutoCRMPanel() {
         })
       });
 
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+
       const data = await response.json();
+      
+      if (!data.reply) {
+        throw new Error('No reply received from server');
+      }
       
       // For system messages, use the same content for both since it's already processed
       const systemResponse = formatResponseContent(data.reply);

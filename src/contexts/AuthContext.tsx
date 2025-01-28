@@ -67,6 +67,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     });
     if (signInError) throw signInError;
 
+    // Log the session token for testing
+    console.log('Auth Debug - Session token:', signInData.session?.access_token);
+
     // Fetch user's role from profiles table
     const { data: profileData, error: profileError } = await supabase
       .from('profiles')
