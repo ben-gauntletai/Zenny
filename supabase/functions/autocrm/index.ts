@@ -622,9 +622,31 @@ Current request: {input}`;
                   const successfulUpdates = updateResults.filter(r => r.success);
                   const failedUpdates = updateResults.filter(r => !r.success);
 
+                  // Helper function to convert array of numbers to ranges
+                  const numbersToRanges = (numbers: number[]): string => {
+                    if (numbers.length === 0) return '';
+                    const sorted = [...numbers].sort((a, b) => a - b);
+                    const ranges: string[] = [];
+                    let rangeStart = sorted[0];
+                    let prev = sorted[0];
+
+                    for (let i = 1; i <= sorted.length; i++) {
+                      if (i === sorted.length || sorted[i] !== prev + 1) {
+                        ranges.push(rangeStart === prev ? `#${rangeStart}` : `#${rangeStart}-#${prev}`);
+                        if (i < sorted.length) {
+                          rangeStart = sorted[i];
+                          prev = sorted[i];
+                        }
+                      } else {
+                        prev = sorted[i];
+                      }
+                    }
+                    return ranges.join(', ');
+                  };
+
                   const updateSummary = [];
                   if (successfulUpdates.length > 0) {
-                    const ticketList = successfulUpdates.map(r => `#${r.ticketId}`).join(', ');
+                    const ticketList = numbersToRanges(successfulUpdates.map(r => r.ticketId));
                     updateSummary.push(`Successfully updated tickets ${ticketList} with: ${
                       await Promise.all(Object.entries(updates).map(async ([key, value]) => {
                         // Special handling for assigned_to field
@@ -645,8 +667,22 @@ Current request: {input}`;
                     }`);
                   }
                   if (failedUpdates.length > 0) {
-                    const failureList = failedUpdates.map(r => `#${r.ticketId} (${r.error})`).join(', ');
-                    updateSummary.push(`Failed to update tickets: ${failureList}`);
+                    // Convert failed ticket IDs to ranges too
+                    const failedTicketList = numbersToRanges(failedUpdates.map(r => r.ticketId));
+                    // Group errors by message to avoid repetition
+                    const errorGroups = failedUpdates.reduce((acc: { [key: string]: number[] }, update) => {
+                      const errorMsg = update.error || 'Unknown error';
+                      if (!acc[errorMsg]) acc[errorMsg] = [];
+                      acc[errorMsg].push(update.ticketId);
+                      return acc;
+                    }, {});
+                    
+                    const failureMessages = Object.entries(errorGroups).map(([error, tickets]) => {
+                      const ticketRange = numbersToRanges(tickets);
+                      return `${ticketRange} (${error})`;
+                    });
+                    
+                    updateSummary.push(`Failed to update tickets: ${failureMessages.join(', ')}`);
                   }
 
                   actionResponse = updateSummary.join('\n');
