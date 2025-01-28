@@ -185,28 +185,37 @@ serve(async (req) => {
 
     Available actions:
     1. ACTION: SEARCH - For finding tickets (e.g., "ACTION: SEARCH query: payment issue")
-    2. ACTION: UPDATE - For updating tickets. IMPORTANT: When updating multiple tickets, you MUST use a single UPDATE action with a range or comma-separated list.
-       Correct examples:
-       - For a range: "ACTION: UPDATE ticket: 43-47 status: open priority: normal"
-       - For specific tickets: "ACTION: UPDATE ticket: 44,45,46 status: pending priority: high"
-       - Mixed format: "ACTION: UPDATE ticket: 43-45,47,49-51 status: closed"
-       
-       Incorrect examples (DO NOT DO THIS):
-       - DO NOT split into multiple actions:
-         "ACTION: UPDATE ticket: 43 status: open priority: normal
-          ACTION: UPDATE ticket: 44 status: open priority: normal"
+    2. ACTION: UPDATE - For updating tickets. IMPORTANT: When updating multiple tickets, you MUST use a single UPDATE action.
+
+        Please follow this format for updating multiple tickets (we could add more fields than this):
+
+        When user asks to update only one field: "ACTION: UPDATE ticket: field: value"
+        When user asks to update two fields: "ACTION: UPDATE ticket: 43-47 field1: value1 field2: value2"
+        Mixed format updating one field: "ACTION: UPDATE ticket: 43-45,47,49-51 field1: value1"
+
+        IMPORTANT: DO NOT ADD FIELDS THAT THE USER DIDN'T REQUEST. YOU MUST REPLACE THE FIELD AND VALUE.
+
+        Here are the fields along with their values:
+        status: open, pending, solved, closed
+        priority: low, normal, high, urgent
+        ticket_type: question, incident, problem, task
+        assigned_to: @[agent_email] (e.g., assigned_to: @john.doe@example.com)
+
+        Please use these to plug into the format given the user's request.
+
     3. ACTION: CREATE - For creating tickets (e.g., "ACTION: CREATE subject: Customer reported login issue")
     4. ACTION: INFO - For getting customer info (e.g., "ACTION: INFO customer: 123")
 
     Keep responses concise and professional. Always start with ACTION: followed by the type.
-    Available ticket statuses: open, pending, solved, closed
-    Available priorities: low, normal, high, urgent
     
-    CRITICAL INSTRUCTIONS FOR MULTIPLE TICKETS:
-    1. ALWAYS use a single UPDATE action
-    2. For consecutive numbers, use ranges (e.g., 43-47)
-    3. NEVER split updates into multiple actions
-    4. NEVER process tickets one at a time`;
+    CRITICAL INSTRUCTIONS FOR UPDATES:
+    1. ONLY include fields the user explicitly asks to update
+    2. ALWAYS use a single UPDATE action for multiple tickets
+    3. For consecutive numbers, use ranges (e.g., 43-47)
+    4. For unassigned tickets, use "ticket: unassigned"
+    5. NEVER split updates into multiple actions
+    6. NEVER add fields that weren't requested
+    7. For assigning tickets, use the exact @email format provided by the user`;
 
     const humanPrompt = `Previous conversation:
 {history}
@@ -437,17 +446,19 @@ Current request: {input}`;
               
               case 'UPDATE': {
                 console.log("Processing UPDATE action");
-                // Updated regex to better handle ranges and lists
-                const ticketMatch = details.match(/ticket:\s*([\d,\s\-]+)(?=\s|$)/);
+                // Updated regex to handle unassigned tickets and ranges
+                const ticketMatch = details.match(/ticket:\s*([\d,\s\-]+|unassigned)(?=\s|$)/i);
                 const priorityMatch = details.match(/priority:\s*(\w+)(?=\s|$)/);
                 const statusMatch = details.match(/status:\s*(\w+)(?=\s|$)/);
                 const groupMatch = details.match(/group:\s*(\w+)(?=\s|$)/);
+                const assignedToMatch = details.match(/assigned_to:\s*@([^\s]+)(?=\s|$)/);
                 
                 console.log("Regex matches:", {
                   ticketMatch: ticketMatch ? ticketMatch[1] : null,
                   priorityMatch: priorityMatch ? priorityMatch[1] : null,
                   statusMatch: statusMatch ? statusMatch[1] : null,
-                  groupMatch: groupMatch ? groupMatch[1] : null
+                  groupMatch: groupMatch ? groupMatch[1] : null,
+                  assignedToMatch: assignedToMatch ? assignedToMatch[1] : null
                 });
 
                 if (ticketMatch) {
@@ -487,55 +498,93 @@ Current request: {input}`;
                     }
                   }
 
-                  console.log("Final updates object:", updates);
-                  
-                  // Parse multiple ticket IDs with logging
-                  const rawTicketIds = ticketMatch[1].split(',');
-                  console.log("Raw ticket segments:", rawTicketIds);
-                  
-                  const ticketIds = rawTicketIds.flatMap(segment => {
-                    segment = segment.trim();
-                    console.log(`Processing segment: "${segment}"`);
-                    
-                    // Check if it's a range (e.g., "43-47")
-                    const rangeMatch = segment.match(/^(\d+)-(\d+)$/);
-                    if (rangeMatch) {
-                      const start = parseInt(rangeMatch[1]);
-                      const end = parseInt(rangeMatch[2]);
-                      console.log(`Found range: ${start} to ${end}`);
-                      
-                      if (isNaN(start) || isNaN(end)) {
-                        console.log("Invalid range numbers");
-                        return [];
-                      }
-                      
-                      if (end < start) {
-                        console.log("Invalid range: end is less than start");
-                        return [];
-                      }
-                      
-                      if (end - start > 50) {
-                        console.log("Range too large: maximum 50 tickets at once");
-                        return [];
-                      }
-                      
-                      // Generate array of numbers in the range
-                      return Array.from(
-                        { length: end - start + 1 },
-                        (_, i) => start + i
-                      );
+                  if (assignedToMatch) {
+                    const assigneeEmail = assignedToMatch[1];
+                    // Get the assignee's ID from their email
+                    const { data: assignee, error: assigneeError } = await serviceRoleClient
+                      .from('profiles')
+                      .select('id')
+                      .eq('email', assigneeEmail)
+                      .single();
+
+                    if (assigneeError || !assignee) {
+                      throw new Error(`Could not find agent with email ${assigneeEmail}`);
                     }
                     
-                    // Single number
-                    const parsed = parseInt(segment);
-                    console.log(`Parsing single ID: "${segment}" -> ${parsed}`);
-                    return isNaN(parsed) ? [] : [parsed];
-                  });
+                    updates.assigned_to = assignee.id;
+                  }
+
+                  console.log("Final updates object:", updates);
+                  
+                  let ticketIds: number[] = [];
+                  
+                  // Handle unassigned tickets
+                  if (ticketMatch[1].toLowerCase() === 'unassigned') {
+                    console.log("Fetching unassigned tickets...");
+                    const { data: unassignedTickets, error } = await serviceRoleClient
+                      .from('tickets')
+                      .select('id')
+                      .is('assigned_to', null);
+                      
+                    if (error) {
+                      console.error("Error fetching unassigned tickets:", error);
+                      actionResponse = 'Failed to fetch unassigned tickets';
+                      break;
+                    }
+                    
+                    ticketIds = unassignedTickets.map(t => t.id);
+                    console.log("Found unassigned ticket IDs:", ticketIds);
+                  } else {
+                    // Process normal ticket IDs or ranges
+                    const rawTicketIds = ticketMatch[1].split(',');
+                    console.log("Raw ticket segments:", rawTicketIds);
+                    
+                    ticketIds = rawTicketIds.flatMap(segment => {
+                      segment = segment.trim();
+                      console.log(`Processing segment: "${segment}"`);
+                      
+                      // Check if it's a range (e.g., "43-47")
+                      const rangeMatch = segment.match(/^(\d+)-(\d+)$/);
+                      if (rangeMatch) {
+                        const start = parseInt(rangeMatch[1]);
+                        const end = parseInt(rangeMatch[2]);
+                        console.log(`Found range: ${start} to ${end}`);
+                        
+                        if (isNaN(start) || isNaN(end)) {
+                          console.log("Invalid range numbers");
+                          return [];
+                        }
+                        
+                        if (end < start) {
+                          console.log("Invalid range: end is less than start");
+                          return [];
+                        }
+                        
+                        if (end - start > 50) {
+                          console.log("Range too large: maximum 50 tickets at once");
+                          return [];
+                        }
+                        
+                        // Generate array of numbers in the range
+                        return Array.from(
+                          { length: end - start + 1 },
+                          (_, i) => start + i
+                        );
+                      }
+                      
+                      // Single number
+                      const parsed = parseInt(segment);
+                      console.log(`Parsing single ID: "${segment}" -> ${parsed}`);
+                      return isNaN(parsed) ? [] : [parsed];
+                    });
+                  }
 
                   console.log("Final parsed ticket IDs:", ticketIds);
                   
                   if (ticketIds.length === 0) {
-                    actionResponse = 'Please specify valid ticket numbers (e.g., "ticket: 44,45" or "ticket: 43-47")';
+                    actionResponse = ticketMatch[1].toLowerCase() === 'unassigned' 
+                      ? 'No unassigned tickets found'
+                      : 'Please specify valid ticket numbers (e.g., "ticket: 44,45" or "ticket: 43-47")';
                     break;
                   }
                   

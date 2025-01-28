@@ -3,6 +3,7 @@ import { useAuth } from '../contexts/AuthContext';
 import { useLocation } from 'react-router-dom';
 import { supabase } from '../lib/supabaseClient';
 import { useAutoCRM } from '../contexts/AutoCRMContext';
+import { MentionInput } from './MentionInput';
 import '../styles/AutoCRMPanel.css';
 
 interface Message {
@@ -184,12 +185,12 @@ export function AutoCRMPanel() {
       </div>
 
       <div className="autocrm-input">
-        <textarea
+        <MentionInput
           value={input}
-          onChange={(e) => setInput(e.target.value)}
-          onKeyPress={handleKeyPress}
-          placeholder="Type your request..."
-          rows={1}
+          onChange={setInput}
+          placeholder="Type your request... Use @ to mention agents"
+          className="autocrm-mention-input"
+          supabase={supabase}
         />
         <button 
           onClick={handleSend}

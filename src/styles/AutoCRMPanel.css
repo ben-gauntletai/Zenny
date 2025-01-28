@@ -121,7 +121,10 @@
   display: flex;
   gap: 8px;
   align-items: flex-end;
-  border-radius: 0 0 12px 12px;
+  border-radius: 0;
+  position: relative;
+  width: 100%;
+  flex-shrink: 0;
 }
 
 .autocrm-input textarea {
@@ -222,4 +225,241 @@
 
 .autocrm-messages::-webkit-scrollbar-thumb:hover {
   background-color: #94a3b8;
+}
+
+/* Enhanced Mention Input and Dropdown Styling */
+.autocrm-mention-input {
+  flex: 1;
+  width: 100%;
+  min-height: 40px;
+  max-height: 120px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  line-height: 1.5;
+  resize: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-family: inherit;
+  margin: 0;
+  display: block;
+}
+
+/* Style for the mention text */
+.autocrm-mention-input[data-value*="@"] {
+  color: #1e293b;
+}
+
+.autocrm-mention-input[data-value*="@"]::selection {
+  background-color: rgba(59, 130, 246, 0.1);
+}
+
+/* Regex to match @{name} pattern and color it */
+.autocrm-mention-input {
+  color: #1e293b;
+}
+
+.autocrm-mention-input::placeholder {
+  color: #94a3b8;
+}
+
+/* This creates a blue color for @mentions */
+.autocrm-mention-input {
+  caret-color: #1e293b;
+}
+
+/* Use a contenteditable div instead of textarea for rich text */
+.autocrm-mention-content {
+  flex: 1;
+  width: 100%;
+  min-height: 40px;
+  max-height: 120px;
+  padding: 12px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: white;
+  font-size: 14px;
+  line-height: 1.5;
+  outline: none;
+  transition: all 0.2s ease;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+  font-family: inherit;
+  margin: 0;
+  display: block;
+  white-space: pre-wrap;
+  word-break: break-word;
+  overflow-y: auto;
+}
+
+.autocrm-mention-content:empty::before {
+  content: attr(data-placeholder);
+  color: #94a3b8;
+  pointer-events: none;
+}
+
+.autocrm-mention-content:focus {
+  outline: none;
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+}
+
+.mention-text {
+  color: #3b82f6;
+  font-weight: 500;
+  background-color: rgba(59, 130, 246, 0.1);
+  padding: 1px 2px;
+  border-radius: 3px;
+  white-space: nowrap;
+  display: inline-block;
+  margin: 0 1px;
+}
+
+.mention-dropdown {
+  position: absolute;
+  bottom: calc(100% + 16px);
+  left: 16px;
+  right: 16px;
+  width: auto;
+  max-height: 240px;
+  overflow-y: auto;
+  overflow-x: hidden;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+  z-index: 1000;
+  scrollbar-width: thin;
+  scrollbar-color: transparent transparent;
+}
+
+.mention-dropdown::-webkit-scrollbar {
+  width: 4px;
+}
+
+.mention-dropdown::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.mention-dropdown::-webkit-scrollbar-thumb {
+  background-color: transparent;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.mention-dropdown:hover::-webkit-scrollbar-thumb {
+  background-color: rgba(148, 163, 184, 0.3);
+}
+
+.mention-dropdown:hover::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(148, 163, 184, 0.5);
+}
+
+.mention-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: all 0.2s ease;
+  border-bottom: 1px solid #f1f5f9;
+  position: relative;
+  overflow: hidden;
+  outline: none;
+}
+
+.mention-item:last-child {
+  border-bottom: none;
+}
+
+.mention-item:hover {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+.mention-item.selected {
+  background-color: rgba(59, 130, 246, 0.1);
+  border-left: 2px solid #3b82f6;
+  padding-left: 10px;
+}
+
+.mention-item.selected .mention-name {
+  color: #3b82f6;
+}
+
+.mention-item > * {
+  position: relative;
+  z-index: 1;
+}
+
+.mention-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  color: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 500;
+  font-size: 14px;
+  flex-shrink: 0;
+  transition: transform 0.2s ease;
+}
+
+.mention-item:hover .mention-avatar {
+  transform: scale(1.05);
+}
+
+.mention-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mention-name {
+  font-weight: 500;
+  color: #1e293b;
+  font-size: 14px;
+  margin-bottom: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: color 0.2s ease;
+}
+
+.mention-email {
+  font-size: 12px;
+  color: #64748b;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.mention-role {
+  font-size: 11px;
+  padding: 2px 6px;
+  border-radius: 12px;
+  text-transform: capitalize;
+  flex-shrink: 0;
+  font-weight: 500;
+  transition: transform 0.2s ease;
+}
+
+.mention-item:hover .mention-role {
+  transform: translateX(-2px);
+}
+
+.mention-role.admin {
+  background-color: #fee2e2;
+  color: #991b1b;
+}
+
+.mention-role.agent {
+  background-color: #e0f2fe;
+  color: #0369a1;
+}
+
+.relative {
+  position: relative;
+  width: 100%;
+  flex: 1;
 } 
