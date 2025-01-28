@@ -293,6 +293,10 @@ const Dashboard: React.FC = () => {
     navigate(`/tickets/${ticketId}`);
   };
 
+  const handleActivityClick = (ticketId: string) => {
+    navigate(`/tickets/${ticketId}`);
+  };
+
   if (error) {
     return (
       <div className="dashboard error">
@@ -317,7 +321,12 @@ const Dashboard: React.FC = () => {
             </div>
           ) : (
             stats.activityFeed.map((activity: ActivityFeedItem) => (
-              <div key={activity.id} className="interaction-item">
+              <div 
+                key={activity.id} 
+                className="interaction-item"
+                onClick={() => handleActivityClick(activity.ticketId)}
+                style={{ cursor: 'pointer' }}
+              >
                 <div className="interaction-icon">
                   <i className={getInteractionIcon(activity.type)}></i>
                 </div>

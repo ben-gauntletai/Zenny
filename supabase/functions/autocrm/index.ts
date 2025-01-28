@@ -6,6 +6,7 @@ import { StringOutputParser } from "npm:@langchain/core@0.1.48/output_parsers"
 import { ChatPromptTemplate } from "npm:@langchain/core@0.1.48/prompts"
 import { Client } from "npm:langsmith@0.0.48"
 import { z } from "https://deno.land/x/zod@v3.21.4/mod.ts"
+import { notifyTicketUpdated } from "../_shared/notifications.ts"
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -224,7 +225,10 @@ Current request: {input}`, ["history", "input"]]
           throw new Error('Agents cannot modify Admin group tickets');
         }
 
-        const { data, error } = await supabaseClient
+        // Store previous ticket state for notification
+        const previousTicket = { ...ticket };
+
+        const { data: updatedTicket, error } = await supabaseClient
           .from('tickets')
           .update(updates)
           .eq('id', ticketId)
@@ -232,7 +236,16 @@ Current request: {input}`, ["history", "input"]]
           .single();
 
         if (error) throw error;
-        return data;
+
+        // Create notification for the update with AutoCRM as the updater name
+        await notifyTicketUpdated(
+          supabaseClient,
+          updatedTicket,
+          { id: userId, user_metadata: { ...userInfo, full_name: 'AutoCRM' } },
+          previousTicket
+        );
+
+        return updatedTicket;
       },
 
       createTicket: async (data: any, userId: string) => {
