@@ -63,8 +63,8 @@ export async function notifyTicketCreated(
       .from('notifications')
       .insert({
         user_id: null,  // NULL user_id means this is a system notification visible to agents/admins
-        title: 'New Unassigned Ticket',
-        message: `New ticket '${ticket.subject}' needs assignment`,
+        title: 'New Ticket Created',
+        message: `New ticket '${ticket.subject}' has been created`,
         type: 'TICKET_CREATED',
         ticket_id: ticket.id,
         read: false
