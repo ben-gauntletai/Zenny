@@ -200,4 +200,24 @@ textarea:focus {
   padding: 2rem;
   margin-bottom: 2rem;
   max-height: calc(100vh - 64px - 4rem); /* Account for header height and margins */
+  overflow: auto;
+  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+}
+
+/* Hide scrollbar for Chrome, Safari and Opera */
+.tickets-main::-webkit-scrollbar,
+.knowledge-base-main::-webkit-scrollbar,
+.customers-main::-webkit-scrollbar {
+  display: none;
+}
+
+/* Hide scrollbar for the table container */
+.tickets-table-container {
+  scrollbar-width: none;  /* Firefox */
+  -ms-overflow-style: none;  /* IE and Edge */
+}
+
+.tickets-table-container::-webkit-scrollbar {
+  display: none;
 }

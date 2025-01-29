@@ -272,8 +272,6 @@ const Dashboard: React.FC = () => {
         const aTopic = a.topic || '';
         const bTopic = b.topic || '';
         return aTopic.localeCompare(bTopic) * direction;
-      case 'updated':
-        return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * direction;
       case 'group':
         return (a.group_name || 'Support').localeCompare(b.group_name || 'Support') * direction;
       case 'assignee':
@@ -444,9 +442,6 @@ const Dashboard: React.FC = () => {
                   <th onClick={() => handleSort('topic')} className="sortable-header">
                     Topic {getSortIndicator('topic')}
                   </th>
-                  <th onClick={() => handleSort('updated')} className="sortable-header">
-                    Updated {getSortIndicator('updated')}
-                  </th>
                   <th onClick={() => handleSort('group')} className="sortable-header">
                     Group {getSortIndicator('group')}
                   </th>
@@ -477,7 +472,6 @@ const Dashboard: React.FC = () => {
                       {ticket.subject}
                     </td>
                     <td>{ticket.topic || 'None'}</td>
-                    <td>{formatDate(ticket.updated_at)}</td>
                     <td>{ticket.group_name}</td>
                     <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>
                   </tr>
