@@ -43,7 +43,7 @@ async def notify_ticket_updated(
         
         # Determine what changed
         changes = []
-        for field in ['status', 'priority', 'assigned_to', 'group_name']:
+        for field in ['status', 'priority', 'assigned_to', 'group_name', 'type', 'topic']:
             if updated_ticket.get(field) != previous_ticket.get(field):
                 # Format field name
                 formatted_field = ' '.join(word.title() for word in field.split('_'))
@@ -75,6 +75,10 @@ async def notify_ticket_updated(
                             formatted_new = f"@{name}"
                         else:
                             formatted_new = 'Unknown user'
+                # Special handling for type and topic to preserve case
+                elif field in ['type', 'topic']:
+                    formatted_old = old_value if old_value else 'None'
+                    formatted_new = new_value if new_value else 'None'
                 else:
                     # For other fields, capitalize first letter
                     formatted_old = str(old_value)[0].upper() + str(old_value)[1:] if old_value else 'None'
