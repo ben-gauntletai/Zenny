@@ -986,11 +986,13 @@ select option {
 .customer-ticket-view {
   display: flex;
   flex-direction: column;
-  height: calc(100vh - 2rem); /* Account for margins */
-  background-color: white;
-  margin: 0.5rem;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+  height: calc(100vh - 64px - 6rem); /* Account for tickets-main padding (4rem) and margin (2rem) */
+  background: #f8fafc;
+  overflow-y: auto;
+  width: 100%;
+  border: 1px solid var(--chakra-colors-gray-200);
+  opacity: 1;
+  transition: opacity 0.2s ease-in-out;
 }
 
 .customer-ticket-header {

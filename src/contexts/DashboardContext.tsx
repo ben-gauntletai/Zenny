@@ -6,24 +6,20 @@ import { supabase } from '../lib/supabaseClient';
 export interface Ticket {
   id: number;
   subject: string;
-  status: 'open' | 'pending' | 'solved' | 'closed';
-  priority: 'low' | 'medium' | 'high';
-  updated_at: string;
+  description: string;
+  status: string;
+  priority: string;
+  ticket_type: string;
+  topic: string | null;
   created_at: string;
-  assigned_to?: string;
+  updated_at: string;
+  user_id: string;
+  assigned_to: string | null;
+  group_name: string | null;
   creator_email: string;
   creator_name: string;
-  agent_email?: string;
-  agent_name?: string;
-  group_name?: string;
-  assignee?: {
-    email: string;
-    name?: string;
-  };
-  users?: {
-    email: string;
-    name?: string;
-  };
+  agent_email: string | null;
+  agent_name: string | null;
 }
 
 export interface ActivityFeedItem {

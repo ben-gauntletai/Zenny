@@ -64,17 +64,15 @@ const RecentTickets: React.FC<RecentTicketsProps> = ({ userId, isAgent }) => {
           priority,
           ticket_type,
           topic,
-          customer_type,
           created_at,
           updated_at,
           user_id,
           assigned_to,
-          group_id,
+          group_name,
           creator_email,
           creator_name,
           agent_email,
-          agent_name,
-          group_name
+          agent_name
         `)
         .order('created_at', { ascending: false })
         .limit(5);
@@ -270,8 +268,10 @@ const Dashboard: React.FC = () => {
         return (getPriorityOrder(a.priority) - getPriorityOrder(b.priority)) * direction;
       case 'subject':
         return a.subject.localeCompare(b.subject) * direction;
-      case 'requester':
-        return a.creator_name.localeCompare(b.creator_name) * direction;
+      case 'topic':
+        const aTopic = a.topic || '';
+        const bTopic = b.topic || '';
+        return aTopic.localeCompare(bTopic) * direction;
       case 'updated':
         return (new Date(a.updated_at).getTime() - new Date(b.updated_at).getTime()) * direction;
       case 'group':
@@ -441,8 +441,8 @@ const Dashboard: React.FC = () => {
                   <th onClick={() => handleSort('subject')} className="sortable-header">
                     Subject {getSortIndicator('subject')}
                   </th>
-                  <th onClick={() => handleSort('requester')} className="sortable-header">
-                    Requester {getSortIndicator('requester')}
+                  <th onClick={() => handleSort('topic')} className="sortable-header">
+                    Topic {getSortIndicator('topic')}
                   </th>
                   <th onClick={() => handleSort('updated')} className="sortable-header">
                     Updated {getSortIndicator('updated')}
@@ -476,7 +476,7 @@ const Dashboard: React.FC = () => {
                     <td className="subject-cell">
                       {ticket.subject}
                     </td>
-                    <td>{ticket.creator_name || ticket.creator_email}</td>
+                    <td>{ticket.topic || 'None'}</td>
                     <td>{formatDate(ticket.updated_at)}</td>
                     <td>{ticket.group_name}</td>
                     <td>{ticket.agent_name || ticket.agent_email || 'Unassigned'}</td>

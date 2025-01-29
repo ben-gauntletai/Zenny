@@ -196,7 +196,8 @@ textarea:focus {
 .knowledge-base-main,
 .customers-main {
   flex: 1;
-  overflow: auto;
   background-color: #f8fafc;
   padding: 2rem;
+  margin-bottom: 2rem;
+  max-height: calc(100vh - 64px - 4rem); /* Account for header height and margins */
 }
