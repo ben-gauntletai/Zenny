@@ -32,6 +32,29 @@ const Login: React.FC = () => {
       setEmail(savedEmail);
       setRememberMe(true);
     }
+
+    // Warm up the database connection
+    const warmupDatabase = async () => {
+      console.log('Login page mounted, initiating database warmup...');
+      try {
+        const apiUrl = process.env.REACT_APP_API_URL;
+        console.log('Making warmup request to:', `${apiUrl}/warmup`);
+        const response = await fetch(`${apiUrl}/warmup`, {
+          method: 'GET',
+          headers: {
+            'Accept': 'application/json',
+            'Cache-Control': 'no-cache'
+          },
+        });
+        const data = await response.json();
+        console.log('Warmup response:', data);
+      } catch (error) {
+        console.error('Database warmup failed with error:', error);
+      }
+    };
+
+    // Execute warmup
+    warmupDatabase();
   }, []);
 
   useEffect(() => {

@@ -91,15 +91,15 @@ async def health_check():
     Health check endpoint to verify the API is running.
     """
     try:
-        # Test Supabase connection
-        logger.info("Testing Supabase connection...")
-        user = supabase.auth.get_user("test")
-        logger.info("Supabase connection test successful")
+        # Simple connection test
+        logger.info("Testing database connection...")
+        result = supabase.table('profiles').select('count', count='exact').limit(1).execute()
+        logger.info("Database connection test successful")
         return {
             "status": "healthy",
             "services": {
                 "api": "up",
-                "supabase": "up"
+                "database": "up"
             },
             "timestamp": datetime.now().isoformat()
         }
@@ -109,9 +109,34 @@ async def health_check():
             "status": "unhealthy",
             "services": {
                 "api": "up",
-                "supabase": "down",
+                "database": "down",
                 "error": str(e)
             },
+            "timestamp": datetime.now().isoformat()
+        }
+
+@app.get("/warmup")
+async def warmup_database():
+    """
+    Endpoint to warm up the database connection.
+    Makes a lightweight query to ensure the connection is established.
+    """
+    try:
+        logger.info("Warming up database connection...")
+        # Make a simple count query
+        result = supabase.table('profiles').select('count', count='exact').limit(1).execute()
+        logger.info("Database warmup successful with result: %s", result)
+        return {
+            "status": "success",
+            "message": "Database connection warmed up successfully",
+            "timestamp": datetime.now().isoformat()
+        }
+    except Exception as e:
+        logger.error(f"Database warmup failed: {str(e)}")
+        return {
+            "status": "error",
+            "message": "Failed to warm up database connection",
+            "error": str(e),
             "timestamp": datetime.now().isoformat()
         }
 
