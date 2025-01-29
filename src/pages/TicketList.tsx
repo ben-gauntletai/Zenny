@@ -215,13 +215,23 @@ const TicketList: React.FC = () => {
         <table className="tickets-table">
           <thead>
             <tr>
-              <th className="ticket-id">ID {getSortIndicator('id')}</th>
-              <th className="subject-cell">Title {getSortIndicator('subject')}</th>
-              <th className="status-cell">Status {getSortIndicator('status')}</th>
+              <th className="ticket-id sortable-header" onClick={() => handleSort('id')}>
+                ID {getSortIndicator('id')}
+              </th>
+              <th className="subject-cell sortable-header" onClick={() => handleSort('subject')}>
+                Title {getSortIndicator('subject')}
+              </th>
+              <th className="status-cell sortable-header" onClick={() => handleSort('status')}>
+                Status {getSortIndicator('status')}
+              </th>
               {isAgentOrAdmin && (
-                <th className="priority-cell">Priority {getSortIndicator('priority')}</th>
+                <th className="priority-cell sortable-header" onClick={() => handleSort('priority')}>
+                  Priority {getSortIndicator('priority')}
+                </th>
               )}
-              <th className="date-cell">Created {getSortIndicator('created_at')}</th>
+              <th className="date-cell sortable-header" onClick={() => handleSort('created_at')}>
+                Created {getSortIndicator('created_at')}
+              </th>
               {isAgentOrAdmin && <th className="user-cell">Requester</th>}
               <th className="user-cell">Assigned To</th>
             </tr>
