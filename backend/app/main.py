@@ -187,7 +187,8 @@ async def handle_crm_operations(result: str, user_id: str, supabase_client: Supa
                 priority_match = re.search(r'priority:\s*(\w+)(?=\s|$)', details)
                 status_match = re.search(r'status:\s*(\w+)(?=\s|$)', details)
                 group_match = re.search(r'group_name:\s*(\w+)(?=\s|$)', details)
-                assigned_to_match = re.search(r'assigned_to:\s*(?:@?([^\s]+))(?=\s|$)', details)
+                # Updated pattern to handle email addresses without @ prefix
+                assigned_to_match = re.search(r'assigned_to:\s*(unassigned|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?=\s|$)', details, re.IGNORECASE)
                 
                 logger.info("Regex matches: %s", {
                     'ticket_match': ticket_match.group(1) if ticket_match else None,
@@ -234,14 +235,28 @@ async def handle_crm_operations(result: str, user_id: str, supabase_client: Supa
                         
                 if assigned_to_match:
                     assignee = assigned_to_match.group(1)
+                    logger.info("Found assigned_to match: %s", assignee)
+                    
                     if assignee.lower() == 'unassigned':
                         updates['assigned_to'] = None
                     else:
-                        assignee_email = assignee
-                        assignee_data = supabase_client.table('profiles').select('id').eq('email', assignee_email).execute()
+                        # Extract email from the raw content
+                        # The MentionInput component sends the email in the format: assigned_to: john.doe@example.com
+                        # Remove any @ prefix if present as the email is stored without it
+                        assignee_email = assignee.lstrip('@')
+                        logger.info("Looking up agent with email (after processing): %s", assignee_email)
+                        
+                        assignee_data = supabase_client.table('profiles').select('id,full_name,email').eq('email', assignee_email).execute()
+                        logger.info("Assignee lookup result: %s", json.dumps(assignee_data.data if assignee_data.data else None, indent=2))
+                        
                         if assignee_data.data:
                             updates['assigned_to'] = assignee_data.data[0]['id']
+                            logger.info("Found agent %s (%s) with ID %s", 
+                                assignee_data.data[0].get('full_name'),
+                                assignee_data.data[0].get('email'),
+                                assignee_data.data[0]['id'])
                         else:
+                            logger.error("Could not find agent with email %s. Raw assignee value was: %s", assignee_email, assignee)
                             responses.append(f'Could not find agent with email {assignee_email}')
                             continue
                 
@@ -251,11 +266,13 @@ async def handle_crm_operations(result: str, user_id: str, supabase_client: Supa
                 ticket_ids = []
                 if ticket_ids_str.lower() == 'unassigned':
                     logger.info("Fetching unassigned tickets...")
-                    unassigned_tickets = supabase_client.table('tickets').select('id').is_('assigned_to', None).execute()
+                    unassigned_tickets = supabase_client.table('tickets').select('id').filter('assigned_to', 'is', 'null').execute()
+                    logger.info("Unassigned tickets query result: %s", json.dumps(unassigned_tickets.data if unassigned_tickets.data else [], indent=2))
                     if unassigned_tickets.data:
                         ticket_ids = [t['id'] for t in unassigned_tickets.data]
-                        logger.info("Found unassigned ticket IDs: %s", ticket_ids)
+                        logger.info("Processing the following unassigned ticket IDs: %s", ticket_ids)
                     else:
+                        logger.info("No unassigned tickets found in the system")
                         responses.append('No unassigned tickets found')
                         continue
                 else:
@@ -334,8 +351,12 @@ async def handle_crm_operations(result: str, user_id: str, supabase_client: Supa
                                 # Get assignee info
                                 assignee_data = supabase_client.table('profiles').select('full_name,email').eq('id', value).single().execute()
                                 assignee = assignee_data.data if assignee_data.data else None
-                                assignee_display = assignee.get('full_name') or assignee.get('email') or 'Unknown user' if assignee else 'Unknown user'
-                                formatted_updates.append(f'Assigned To set to {assignee_display}')
+                                # Show name in UI but keep email as reference
+                                if assignee:
+                                    name = assignee.get('full_name') or 'Unknown user'
+                                    formatted_updates.append(f'Assigned To set to @{name}')
+                                else:
+                                    formatted_updates.append('Assigned To set to Unknown user')
                         else:
                             # Capitalize first letter of value and format key
                             formatted_key = ' '.join(word.title() for word in key.split('_'))
@@ -449,10 +470,15 @@ async def handle_autocrm(
             )
 
         # Get request data
-        query = request.get('query')
+        query = request.get('query')  # This is the raw text content
+        display_content = request.get('displayContent')  # This is the HTML content with mentions
         user_id = request.get('userId')
-        display_content = request.get('displayContent')
-        logger.info(f"Request data - query: {query}, user_id: {user_id}")
+        
+        # Add detailed logging of the request data
+        logger.info("Raw request data: %s", json.dumps(request, indent=2))
+        logger.info("Query (raw content): %s", query)
+        logger.info("Display content (HTML): %s", display_content)
+        logger.info("User ID: %s", user_id)
 
         if not query or not user_id:
             logger.error("Missing required fields in request")
@@ -471,6 +497,8 @@ async def handle_autocrm(
         When user asks to update only one field: "ACTION: UPDATE ticket: field: value"
         When user asks to update two fields: "ACTION: UPDATE ticket: 43-47 field1: value1 field2: value2"
         Mixed format updating one field: "ACTION: UPDATE ticket: 43-45,47,49-51 field1: value1"
+        When user asks to update unassigned tickets: "ACTION: UPDATE ticket: unassigned field1: value1"
+        When user asks to update unassigned tickets to a user (email): "ACTION: UPDATE ticket: 43,46 assigned_to: email_here"
 
         IMPORTANT: DO NOT ADD FIELDS THAT THE USER DIDN'T REQUEST. YOU MUST REPLACE THE FIELD AND VALUE.
 
@@ -479,8 +507,10 @@ async def handle_autocrm(
         priority: low, normal, high, urgent
         ticket_type: question, incident, problem, task
         group_name: Admin, Support
-        assigned_to: @email (e.g., assigned_to: @john.doe@example.com)
+        assigned_to: email (e.g., assigned_to: john.doe@example.com) - Do not include @ prefix in email
         assigned_to: unassigned (to remove assignment)
+
+        IMPORTANT: If the user specifies to update unassigned tickets, please just use "assigned_to: unassigned". Do not assume they want to update certain tickets.
 
         Please use these to plug into the format given the user's request.
 
@@ -496,7 +526,7 @@ async def handle_autocrm(
     4. For unassigned tickets, use "assigned_to: unassigned"
     5. NEVER split updates into multiple actions
     6. NEVER add fields that weren't requested
-    7. For assigning tickets, use the exact @email format provided by the user or "unassigned" to remove assignment"""
+    7. For assigning tickets, use the exact email format without @ prefix (e.g., assigned_to: john.doe@example.com)"""
 
         human_prompt = """Previous conversation:
 {history}
@@ -527,12 +557,12 @@ Current request: {input}"""
                 .execute()
             conversation_id = conv_result.data[0]['id']
 
-        # Store user message
+        # Store user message with both content and display_content
         supabase.table('autocrm_messages').insert({
             'conversation_id': conversation_id,
             'sender': 'user',
-            'content': query,
-            'display_content': display_content or query
+            'content': query,  # Raw text with emails
+            'display_content': display_content or query  # HTML with styled mentions
         }).execute()
 
         # Get conversation history
@@ -543,7 +573,7 @@ Current request: {input}"""
             .limit(10) \
             .execute()
 
-        # Format history for the prompt using display_content
+        # Format history for the prompt using display_content for better readability
         history = '\n'.join([
             f"{msg['sender']}: {msg['display_content']}"
             for msg in messages_data.data
@@ -565,28 +595,36 @@ Current request: {input}"""
         # Create chain with tracing
         chain = prompt.pipe(model).pipe(StrOutputParser())
 
-        # Add logging for chain execution
-        logger.info("Starting chain execution with input: %s", {
+        # Log the full prompt being sent to the LLM
+        prompt_input = {
             'input': query,
             'history': history or ''
-        })
+        }
+        formatted_prompt = prompt.format_messages(**prompt_input)
+        logger.info("Full prompt being sent to LLM:")
+        for message in formatted_prompt:
+            logger.info("Role: %s", message.type)
+            logger.info("Content:\n%s", message.content)
 
         # Run the chain
-        result = await chain.ainvoke({
-            'input': query,
-            'history': history or ''
-        })
+        result = await chain.ainvoke(prompt_input)
 
-        logger.info("Chain execution result: %s", result)
+        # Log the raw LLM response with clear separator for visibility
+        logger.info("=" * 50)
+        logger.info("Raw LLM response (ACTION):\n%s", result)
+        logger.info("=" * 50)
 
         # Process the result
         response = await handle_crm_operations(result, user_id, supabase)
+
+        # Log the processed response
+        logger.info("Processed CRM response:\n%s", response)
 
         # Store AI response
         supabase.table('autocrm_messages').insert({
             'conversation_id': conversation_id,
             'sender': 'system',
-            'content': response,
+            'content': response,  # For system responses, content and display_content are the same
             'display_content': response
         }).execute()
 

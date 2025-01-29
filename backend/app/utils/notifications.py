@@ -59,14 +59,22 @@ async def notify_ticket_updated(
                     else:
                         old_user = supabase.table('profiles').select('full_name,email').eq('id', old_value).single().execute()
                         old_data = old_user.data if old_user.data else None
-                        formatted_old = old_data.get('full_name') or old_data.get('email') or 'Unknown user' if old_data else 'Unknown user'
+                        if old_data:
+                            name = old_data.get('full_name') or 'Unknown user'
+                            formatted_old = f"@{name}"
+                        else:
+                            formatted_old = 'Unknown user'
                     
                     if new_value is None:
                         formatted_new = 'Unassigned'
                     else:
                         new_user = supabase.table('profiles').select('full_name,email').eq('id', new_value).single().execute()
                         new_data = new_user.data if new_user.data else None
-                        formatted_new = new_data.get('full_name') or new_data.get('email') or 'Unknown user' if new_data else 'Unknown user'
+                        if new_data:
+                            name = new_data.get('full_name') or 'Unknown user'
+                            formatted_new = f"@{name}"
+                        else:
+                            formatted_new = 'Unknown user'
                 else:
                     # For other fields, capitalize first letter
                     formatted_old = str(old_value)[0].upper() + str(old_value)[1:] if old_value else 'None'
