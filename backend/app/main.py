@@ -76,7 +76,7 @@ app.add_middleware(
 
 # Initialize Supabase client
 try:
-    supabase: SupabaseClient = create_client(
+    supabase_client: SupabaseClient = create_client(
         os.getenv("SUPABASE_URL", ""),
         os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
     )
@@ -93,7 +93,7 @@ async def health_check():
     try:
         # Simple connection test
         logger.info("Testing database connection...")
-        result = supabase.table('profiles').select('count', count='exact').limit(1).execute()
+        result = supabase_client.table('profiles').select('count', count='exact').limit(1).execute()
         logger.info("Database connection test successful")
         return {
             "status": "healthy",
@@ -124,7 +124,7 @@ async def warmup_database():
     try:
         logger.info("Warming up database connection...")
         # Make a simple count query
-        result = supabase.table('profiles').select('count', count='exact').limit(1).execute()
+        result = supabase_client.table('profiles').select('count', count='exact').limit(1).execute()
         logger.info("Database warmup successful with result: %s", result)
         return {
             "status": "success",
@@ -315,7 +315,7 @@ async def handle_crm_operations(result: str, user_id: str, supabase_client: Supa
                     ticket_type = type_match.group(1).lower()
                     logger.info("Processing type: %s", ticket_type)
                     if ticket_type in ['question', 'incident', 'problem', 'task']:
-                        updates['type'] = ticket_type
+                        updates['ticket_type'] = ticket_type
                     else:
                         responses.append('Invalid type. Must be "question", "incident", "problem", or "task" (case insensitive)')
                         continue
@@ -547,7 +547,7 @@ async def handle_autocrm(
         
         # Get user from auth token
         logger.info("Attempting to get user from auth token")
-        user_response = supabase.auth.get_user(authorization.replace('Bearer ', ''))
+        user_response = supabase_client.auth.get_user(authorization.replace('Bearer ', ''))
         logger.info(f"User response received: {user_response}")
         user = user_response.user
 
@@ -605,6 +605,51 @@ async def handle_autocrm(
             logger.error("Missing required fields in request")
             raise HTTPException(status_code=400, detail="Query and userId are required")
 
+        # Get or create conversation and store user message
+        try:
+            # Get or create conversation
+            conversation = supabase_client.table('autocrm_conversations').select('id').eq('user_id', user_id).order('updated_at.desc').limit(1).execute()
+            
+            conversation_id = None
+            if conversation.data:
+                conversation_id = conversation.data[0]['id']
+                logger.info("Found existing conversation for user message: %s", conversation_id)
+            else:
+                # Create new conversation
+                new_conv = supabase_client.table('autocrm_conversations').insert({
+                    'user_id': user_id,
+                    'created_at': datetime.now().isoformat(),
+                    'updated_at': datetime.now().isoformat()
+                }).execute()
+                if new_conv.data:
+                    conversation_id = new_conv.data[0]['id']
+                    logger.info("Created new conversation for user message: %s", conversation_id)
+
+            if conversation_id:
+                # Store the user message
+                user_message_data = {
+                    'conversation_id': conversation_id,
+                    'sender': 'user',
+                    'content': query,
+                    'display_content': display_content or query,
+                    'created_at': datetime.now().isoformat()
+                }
+                logger.info("Storing user message: %s", json.dumps(user_message_data, indent=2))
+                user_message_result = supabase_client.table('autocrm_messages').insert(user_message_data).execute()
+                logger.info("User message store result: %s", json.dumps(user_message_result.data if user_message_result.data else [], indent=2))
+
+                # Update conversation timestamp
+                update_result = supabase_client.table('autocrm_conversations').update({
+                    'updated_at': datetime.now().isoformat()
+                }).eq('id', conversation_id).execute()
+                logger.info("Update result: %s", json.dumps(update_result.data if update_result.data else [], indent=2))
+
+        except Exception as e:
+            logger.error(f"Error storing user message: {str(e)}")
+            logger.error("Stack trace:", exc_info=True)
+            # Continue even if storing fails
+            pass
+
         # Initialize LangChain components
         logger.info("Initializing LangChain components")
         system_prompt = """You are an AI assistant helping with CRM tasks. You must respond in a structured format that starts with an ACTION: followed by the action type and any relevant details.
@@ -634,9 +679,10 @@ async def handle_autocrm(
         group_name: Admin; Support
         assigned_to: email (e.g., assigned_to: john.doe@example.com) - Do not include @ prefix in email
         assigned_to: unassigned (to remove assignment)
-        type: question; incident; problem; task
         topic: Order & Shipping Issues; Billing & Account Concerns; Communication & Customer Experience; Policy, Promotions & Loyalty Programs; Product & Service Usage
+    
         If a user mentions topic as well as something that might sound like one of these topics even if it isn't the exact value, please use these values.
+        If a user mentions type, please assume it's ticket_type.
 
         IMPORTANT: If the user specifies to update unassigned tickets, please just use "assigned_to: unassigned". Do not assume they want to update certain tickets.
 
@@ -653,12 +699,47 @@ async def handle_autocrm(
     6. NEVER add fields that weren't requested
     7. For assigning tickets, use the exact email format without @ prefix (e.g., assigned_to: john.doe@example.com)"""
 
-        human_prompt = """{input}"""
+        human_prompt = """Previous conversation:
+{history}
+
+Current request:
+{input}"""
 
         prompt = ChatPromptTemplate.from_messages([
             ("system", system_prompt),
             ("human", human_prompt),
         ])
+
+        # Get conversation history
+        history = []
+        try:
+            # Get the most recent conversation
+            logger.info("Fetching most recent conversation for user_id: %s", user_id)
+            conversation = supabase_client.table('autocrm_conversations').select('id').eq('user_id', user_id).order('updated_at.desc').limit(1).execute()
+            logger.info("Conversation query result: %s", json.dumps(conversation.data if conversation.data else [], indent=2))
+            
+            if conversation.data:
+                conversation_id = conversation.data[0]['id']
+                logger.info("Found conversation ID: %s", conversation_id)
+                # Get only the last system message from this conversation
+                logger.info("Fetching last system message from conversation")
+                messages = supabase_client.table('autocrm_messages').select('sender,content').eq('conversation_id', conversation_id).eq('sender', 'system').order('created_at.desc').limit(1).execute()
+                logger.info("Messages query result: %s", json.dumps(messages.data if messages.data else [], indent=2))
+                
+                if messages.data:
+                    history = [f"{msg['sender']}: {msg['content']}" for msg in messages.data]
+                    logger.info("Constructed history: %s", history)
+                else:
+                    logger.info("No system messages found in conversation")
+            else:
+                logger.info("No conversation found for user")
+        except Exception as e:
+            logger.error(f"Error fetching conversation history: {str(e)}")
+            logger.error("Stack trace:", exc_info=True)
+            # Continue without history if there's an error
+            pass
+
+        logger.info("Final history to be used in prompt: %s", history)
 
         # Initialize model with tracing enabled
         model = ChatOpenAI(
@@ -677,13 +758,16 @@ async def handle_autocrm(
 
         # Log the full prompt being sent to the LLM
         prompt_input = {
-            'input': query  # Using only the raw query, no history needed
+            'input': query,  # Current query
+            'history': '\n'.join(history) if history else 'No previous conversation'  # Add conversation history
         }
+        logger.info("Prompt input parameters: %s", json.dumps(prompt_input, indent=2))
         formatted_prompt = prompt.format_messages(**prompt_input)
         logger.info("Full prompt being sent to LLM:")
         for message in formatted_prompt:
             logger.info("Role: %s", message.type)
             logger.info("Content:\n%s", message.content)
+            logger.info("-" * 50)  # Add separator between messages
 
         # Run the chain
         result = await chain.ainvoke(prompt_input)
@@ -694,7 +778,52 @@ async def handle_autocrm(
         logger.info("=" * 50)
 
         # Process the result
-        response = await handle_crm_operations(result, user_id, supabase)
+        response = await handle_crm_operations(result, user_id, supabase_client)
+
+        # Store AI response
+        try:
+            # Get or create conversation
+            conversation = supabase_client.table('autocrm_conversations').select('id').eq('user_id', user_id).order('updated_at.desc').limit(1).execute()
+            
+            conversation_id = None
+            if conversation.data:
+                conversation_id = conversation.data[0]['id']
+                logger.info("Found existing conversation: %s", conversation_id)
+            else:
+                # Create new conversation
+                new_conv = supabase_client.table('autocrm_conversations').insert({
+                    'user_id': user_id,
+                    'created_at': datetime.now().isoformat(),
+                    'updated_at': datetime.now().isoformat()
+                }).execute()
+                if new_conv.data:
+                    conversation_id = new_conv.data[0]['id']
+                    logger.info("Created new conversation: %s", conversation_id)
+
+            if conversation_id:
+                # Store the system response
+                message_data = {
+                    'conversation_id': conversation_id,
+                    'sender': 'system',
+                    'content': response,
+                    'display_content': response,
+                    'created_at': datetime.now().isoformat()
+                }
+                logger.info("Storing system message: %s", json.dumps(message_data, indent=2))
+                message_result = supabase_client.table('autocrm_messages').insert(message_data).execute()
+                logger.info("Store result: %s", json.dumps(message_result.data if message_result.data else [], indent=2))
+
+                # Update conversation timestamp
+                update_result = supabase_client.table('autocrm_conversations').update({
+                    'updated_at': datetime.now().isoformat()
+                }).eq('id', conversation_id).execute()
+                logger.info("Update result: %s", json.dumps(update_result.data if update_result.data else [], indent=2))
+
+        except Exception as e:
+            logger.error(f"Error storing conversation: {str(e)}")
+            logger.error("Stack trace:", exc_info=True)
+            # Continue even if storing fails
+            pass
 
         # Log the processed response
         logger.info("Processed CRM response: \n%s", response)
