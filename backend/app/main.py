@@ -643,7 +643,7 @@ Current request: {input}"""
         response = await handle_crm_operations(result, user_id, supabase)
 
         # Log the processed response
-        logger.info("Processed CRM response:\n%s", response)
+        logger.info("Processed CRM response: \n%s", response)
 
         # Store AI response
         supabase.table('autocrm_messages').insert({
