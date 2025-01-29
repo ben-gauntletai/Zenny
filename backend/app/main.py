@@ -1,4 +1,4 @@
-from fastapi import FastAPI, HTTPException, Header
+from fastapi import FastAPI, HTTPException, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
 from langchain_openai import ChatOpenAI
@@ -15,6 +15,8 @@ from .utils.formatting import format_ticket_numbers
 from datetime import datetime
 import logging
 import re
+import tempfile
+import openai
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -832,4 +834,84 @@ Current request:
 
     except Exception as e:
         logger.error(f"Error in handle_autocrm: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/autocrm/transcribe")
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    authorization: str = Header(None)
+):
+    """
+    Endpoint to transcribe audio using OpenAI Whisper and process it through AutoCRM.
+    """
+    logger.info("Received audio transcription request")
+    
+    if not authorization:
+        logger.error("No authorization header provided")
+        raise HTTPException(status_code=401, detail="No authorization header")
+
+    try:
+        # Get user from auth token
+        logger.info("Attempting to get user from auth token")
+        user_response = supabase_client.auth.get_user(authorization.replace('Bearer ', ''))
+        logger.info(f"User response received: {user_response}")
+        user = user_response.user
+
+        if not user:
+            logger.error("Invalid token - no user found")
+            raise HTTPException(status_code=401, detail="Invalid token")
+
+        # Check if user is agent or admin
+        user_role = user.user_metadata.get('role')
+        logger.info(f"User role: {user_role}")
+        is_agent_or_admin = user_role in ['agent', 'admin']
+        if not is_agent_or_admin:
+            logger.error(f"Unauthorized access attempt by user with role: {user_role}")
+            raise HTTPException(
+                status_code=403,
+                detail="Unauthorized. Only agents and admins can use AutoCRM."
+            )
+
+        # Save uploaded file temporarily
+        with tempfile.NamedTemporaryFile(delete=False, suffix='.wav') as temp_file:
+            content = await file.read()
+            temp_file.write(content)
+            temp_file.flush()
+            
+            try:
+                # Initialize OpenAI client
+                client = openai.OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+                
+                # Transcribe audio using OpenAI Whisper
+                logger.info("Transcribing audio with Whisper")
+                with open(temp_file.name, 'rb') as audio_file:
+                    transcript = client.audio.transcriptions.create(
+                        file=audio_file,
+                        model="whisper-1"
+                    )
+                logger.info("Transcription successful")
+                
+                # Process transcribed text through AutoCRM
+                autocrm_request = {
+                    'query': transcript.text,
+                    'userId': user.id
+                }
+                
+                logger.info(f"Processing transcribed text through AutoCRM: {transcript.text}")
+                
+                # Process through existing AutoCRM logic
+                response = await handle_autocrm(autocrm_request, authorization)
+                
+                return {
+                    "transcription": transcript.text,
+                    "reply": response["reply"]
+                }
+                
+            finally:
+                # Clean up temporary file
+                os.unlink(temp_file.name)
+                
+    except Exception as e:
+        logger.error(f"Error in transcribe_audio: {str(e)}")
+        logger.error("Stack trace:", exc_info=True)
         raise HTTPException(status_code=500, detail=str(e)) 

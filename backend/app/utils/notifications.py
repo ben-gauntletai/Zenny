@@ -26,6 +26,29 @@ def format_ticket_numbers(numbers: List[int]) -> str:
     
     return ", ".join(ranges)
 
+async def create_notification(supabase: Client, payload: Dict[str, Any]) -> None:
+    """
+    Create a notification in the database.
+    """
+    try:
+        # Create notification
+        result = supabase.table('notifications').insert({
+            'user_id': payload['user_id'],
+            'title': payload['title'],
+            'message': payload['message'],
+            'type': payload['type'],
+            'ticket_id': payload.get('ticket_id'),
+            'read': False
+        }).execute()
+        
+        if result.error:
+            print(f"Error inserting notification: {result.error}")
+            raise result.error
+            
+    except Exception as e:
+        print(f"Error creating notification: {str(e)}")
+        raise e
+
 async def notify_ticket_updated(
     supabase: Client,
     updated_ticket: Dict[str, Any],
@@ -103,15 +126,15 @@ async def notify_ticket_updated(
         
         # Notify ticket owner
         if owner_id and owner_id != updater['id']:
-            await create_notification(supabase, {
+            create_notification(supabase, {
                 **notification_data,
                 'user_id': owner_id,
                 'message': f"Your ticket {ticket_num} was updated by {updater_name}: {change_text}"
             })
-            
+        
         # Notify previous assignee if changed
         if previous_assignee_id and previous_assignee_id != assignee_id and previous_assignee_id != updater['id']:
-            await create_notification(supabase, {
+            create_notification(supabase, {
                 **notification_data,
                 'user_id': previous_assignee_id,
                 'message': f"Ticket {ticket_num} was unassigned from you by {updater_name}: {change_text}"
@@ -119,7 +142,7 @@ async def notify_ticket_updated(
         
         # Notify new assignee if changed
         if assignee_id and assignee_id != previous_assignee_id and assignee_id != updater['id']:
-            await create_notification(supabase, {
+            create_notification(supabase, {
                 **notification_data,
                 'user_id': assignee_id,
                 'message': f"Ticket {ticket_num} was assigned to you by {updater_name}: {change_text}"
@@ -127,19 +150,4 @@ async def notify_ticket_updated(
             
     except Exception as e:
         print(f"Error creating notification: {str(e)}")
-
-async def create_notification(supabase: Client, data: Dict[str, Any]) -> None:
-    """
-    Create a notification in the database.
-    """
-    try:
-        await supabase.table('notifications').insert({
-            'user_id': data['user_id'],
-            'title': data.get('type', 'Ticket Update').title(),
-            'message': data['message'],
-            'type': data['type'],
-            'ticket_id': data['ticket_id'],
-            'read': False
-        }).execute()
-    except Exception as e:
-        print(f"Error inserting notification: {str(e)}") 
+        raise e 
