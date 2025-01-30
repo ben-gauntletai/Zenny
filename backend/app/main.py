@@ -722,7 +722,7 @@ async def handle_autocrm(
         priority: low; normal; high; urgent
         ticket_type: question; incident; problem; task
         group_name: Admin; Support
-        assigned_to: email (e.g., assigned_to: john.doe@example.com) - Do not include @ prefix in email
+        assigned_to: email (e.g., assigned_to: john.doe@example.com)
         assigned_to: unassigned (to remove assignment)
         topic: Order & Shipping Issues; Billing & Account Concerns; Communication & Customer Experience; Policy, Promotions & Loyalty Programs; Product & Service Usage
     
