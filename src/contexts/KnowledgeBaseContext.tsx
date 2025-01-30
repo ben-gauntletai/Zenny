@@ -156,7 +156,23 @@ export const KnowledgeBaseProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const deleteArticle = async (articleId: string): Promise<void> => {
     try {
-      // First delete the tag connections
+      // Get the API URL based on environment
+      const apiUrl = process.env.REACT_APP_API_URL || '';
+      
+      // First delete from FastAPI backend (which will delete from Pinecone)
+      const response = await fetch(`${apiUrl}/api/knowledge-base/articles/${articleId}`, {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+          'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to delete article from backend');
+      }
+
+      // Then delete the tag connections
       const { error: tagError } = await supabase
         .from('knowledge_base_article_tags')
         .delete()

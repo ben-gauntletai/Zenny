@@ -99,16 +99,18 @@ const ArticleDetail: React.FC = () => {
         // Fetch user's feedback
         const { data: feedbackData, error: feedbackError } = await supabase
           .from('article_feedback')
-          .select('is_helpful')
+          .select('id, is_helpful')
           .eq('article_id', id)
           .eq('user_id', user.id)
-          .single();
+          .maybeSingle();
 
-        if (feedbackError && feedbackError.code !== 'PGRST116') { // PGRST116 is "not found"
-          throw feedbackError;
+        if (feedbackError) {
+          console.error('Error fetching feedback:', feedbackError);
+          // Don't throw the error, just set feedback to null
+          setUserFeedback(null);
+        } else {
+          setUserFeedback(feedbackData?.is_helpful ? 'helpful' : feedbackData?.is_helpful === false ? 'not_helpful' : null);
         }
-
-        setUserFeedback(feedbackData?.is_helpful ? 'helpful' : feedbackData?.is_helpful === false ? 'not_helpful' : null);
       } catch (err) {
         console.error('Error fetching article:', err);
         setError('Failed to load article');

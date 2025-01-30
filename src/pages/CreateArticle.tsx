@@ -168,6 +168,25 @@ const CreateArticle: React.FC = () => {
 
           if (tagError) throw tagError;
         }
+
+        // Generate embeddings for the new article
+        try {
+          const response = await fetch('/api/knowledge-base/generate-embeddings', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${(await supabase.auth.getSession()).data.session?.access_token}`
+            },
+            body: JSON.stringify({ article_id: articleId })
+          });
+
+          if (!response.ok) {
+            console.error('Failed to generate embeddings:', await response.text());
+          }
+        } catch (embeddingError) {
+          console.error('Error generating embeddings:', embeddingError);
+          // Don't throw here, as we still want to navigate to the article even if embedding fails
+        }
       }
 
       await refreshArticles(); // Refresh the articles list

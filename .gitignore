@@ -33,3 +33,6 @@ autocrm.md
 project.md
 at.md
 /backend/venv
+backend/.env.docker
+backend/docker-compose.dev.yml
+database.md

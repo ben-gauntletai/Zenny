@@ -1,12 +1,13 @@
 from fastapi import FastAPI, HTTPException, Header, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.openapi.utils import get_openapi
-from langchain_openai import ChatOpenAI
+from langchain_openai import ChatOpenAI, OpenAIEmbeddings
 from langchain_core.prompts import ChatPromptTemplate
 from langchain_core.output_parsers import StrOutputParser
+from langchain_core.messages import SystemMessage, HumanMessage, AIMessage
 from langsmith import Client
 from supabase import create_client, Client as SupabaseClient
-from typing import Optional, Dict, Any
+from typing import Optional, Dict, Any, List
 import os
 from dotenv import load_dotenv
 import json
@@ -17,6 +18,19 @@ import logging
 import re
 import tempfile
 import openai
+from openai import OpenAI
+import numpy as np
+from fastapi.responses import JSONResponse
+from yarl import URL
+from math import isnan
+from fastapi import Depends
+from pinecone import Pinecone
+
+corsHeaders = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type, Authorization"
+}
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -24,12 +38,41 @@ logger = logging.getLogger(__name__)
 
 load_dotenv()
 
-# Log environment variables (excluding sensitive values)
-logger.info(f"SUPABASE_URL set: {bool(os.getenv('SUPABASE_URL'))}")
-logger.info(f"SUPABASE_SERVICE_ROLE_KEY set: {bool(os.getenv('SUPABASE_SERVICE_ROLE_KEY'))}")
-logger.info(f"OPENAI_API_KEY set: {bool(os.getenv('OPENAI_API_KEY'))}")
-logger.info(f"LANGCHAIN_API_KEY set: {bool(os.getenv('LANGCHAIN_API_KEY'))}")
-logger.info(f"LANGCHAIN_PROJECT set: {os.getenv('LANGCHAIN_PROJECT')}")
+# Initialize Supabase client
+try:
+    supabase_url = os.getenv("SUPABASE_URL", "")
+    supabase_key = os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
+    if not supabase_url or not supabase_key:
+        raise ValueError("Supabase URL and key must be provided")
+    
+    supabase = create_client(supabase_url, supabase_key)
+    logger.info("Supabase client initialized successfully")
+except Exception as e:
+    logger.error(f"Failed to initialize Supabase client: {str(e)}")
+    raise
+
+# Initialize Pinecone
+pc = Pinecone(api_key=os.getenv('PINECONE_API_KEY'))
+index = pc.Index(os.getenv('PINECONE_INDEX'))
+
+app = FastAPI(
+    title="AutoCRM API",
+    description="API for handling CRM operations with AI assistance",
+    version="1.0.0"
+)
+
+# Add CORS middleware
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:3000", 
+        "https://main.d7534wkloee0c.amplifyapp.com",       # Local development
+        "https://zenny-h9eu.onrender.com", # Render backend URL
+    ],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
 # Initialize LangSmith client if API key is available
 langsmith_api_key = os.getenv('LANGCHAIN_API_KEY')
@@ -42,12 +85,6 @@ if langsmith_api_key:
         logger.info("LangSmith environment variables set successfully")
     except Exception as e:
         logger.error(f"Failed to initialize LangSmith: {str(e)}")
-
-app = FastAPI(
-    title="AutoCRM API",
-    description="API for handling CRM operations with AI assistance",
-    version="1.0.0"
-)
 
 def custom_openapi():
     if app.openapi_schema:
@@ -63,29 +100,35 @@ def custom_openapi():
 
 app.openapi = custom_openapi
 
-# CORS middleware
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=[
-        "http://localhost:3000", 
-        "https://main.d7534wkloee0c.amplifyapp.com",       # Local development
-        "https://zenny-h9eu.onrender.com", # Render backend URL
-    ],
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+async def get_supabase_client() -> SupabaseClient:
+    return supabase
 
-# Initialize Supabase client
-try:
-    supabase_client: SupabaseClient = create_client(
-        os.getenv("SUPABASE_URL", ""),
-        os.getenv("SUPABASE_SERVICE_ROLE_KEY", "")
-    )
-    logger.info("Supabase client initialized successfully")
-except Exception as e:
-    logger.error(f"Failed to initialize Supabase client: {str(e)}")
-    raise
+async def get_current_user(authorization: str = Header(...)) -> Dict[str, Any]:
+    try:
+        # Extract the token from the Authorization header
+        token = authorization.split(' ')[1] if authorization.startswith('Bearer ') else authorization
+        
+        # Get user data from Supabase
+        user_response = supabase.auth.get_user(token)
+        if not user_response or not user_response.user:
+            raise HTTPException(status_code=401, detail="Invalid token")
+        
+        user = user_response.user
+        
+        # Get user's role from profiles table
+        profile_response = supabase.table('profiles').select('role').eq('id', user.id).single().execute()
+        if not profile_response.data:
+            raise HTTPException(status_code=401, detail="Could not fetch user profile")
+        
+        # Add role to user object
+        user.user_metadata = user.user_metadata or {}
+        user.user_metadata['role'] = profile_response.data['role']
+        
+        return user
+        
+    except Exception as e:
+        logger.error('Error getting current user: %s', str(e))
+        raise HTTPException(status_code=401, detail="Invalid token")
 
 @app.get("/health")
 async def health_check():
@@ -95,7 +138,7 @@ async def health_check():
     try:
         # Simple connection test
         logger.info("Testing database connection...")
-        result = supabase_client.table('profiles').select('count', count='exact').limit(1).execute()
+        result = supabase.table('profiles').select('count', count='exact').limit(1).execute()
         logger.info("Database connection test successful")
         return {
             "status": "healthy",
@@ -126,7 +169,7 @@ async def warmup_database():
     try:
         logger.info("Warming up database connection...")
         # Make a simple count query
-        result = supabase_client.table('profiles').select('count', count='exact').limit(1).execute()
+        result = supabase.table('profiles').select('count', count='exact').limit(1).execute()
         logger.info("Database warmup successful with result: %s", result)
         return {
             "status": "success",
@@ -255,7 +298,7 @@ async def handle_crm_operations(result: str, user_id: str, supabase_client: Supa
             elif action.upper() == 'UPDATE':
                 logger.info("Processing UPDATE action")
                 # Updated regex to handle unassigned tickets and ranges
-                ticket_match = re.search(r'ticket:\s*([\d,\s\-]+|unassigned)(?=\s|$)', details, re.IGNORECASE)
+                ticket_match = re.search(r'ticket:\s*([\d,\s\-]+|unassigned)(?=\s|$)', details)
                 priority_match = re.search(r'priority:\s*(\w+)(?=\s|$)', details)
                 status_match = re.search(r'status:\s*(\w+)(?=\s|$)', details)
                 group_match = re.search(r'group_name:\s*(\w+)(?=\s|$)', details)
@@ -549,7 +592,7 @@ async def handle_autocrm(
         
         # Get user from auth token
         logger.info("Attempting to get user from auth token")
-        user_response = supabase_client.auth.get_user(authorization.replace('Bearer ', ''))
+        user_response = supabase.auth.get_user(authorization.replace('Bearer ', ''))
         logger.info(f"User response received: {user_response}")
         user = user_response.user
 
@@ -610,7 +653,7 @@ async def handle_autocrm(
         # Get or create conversation and store user message
         try:
             # Get or create conversation
-            conversation = supabase_client.table('autocrm_conversations').select('id').eq('user_id', user_id).order('updated_at.desc').limit(1).execute()
+            conversation = supabase.table('autocrm_conversations').select('id').eq('user_id', user_id).order('updated_at.desc').limit(1).execute()
             
             conversation_id = None
             if conversation.data:
@@ -618,7 +661,7 @@ async def handle_autocrm(
                 logger.info("Found existing conversation for user message: %s", conversation_id)
             else:
                 # Create new conversation
-                new_conv = supabase_client.table('autocrm_conversations').insert({
+                new_conv = supabase.table('autocrm_conversations').insert({
                     'user_id': user_id,
                     'created_at': datetime.now().isoformat(),
                     'updated_at': datetime.now().isoformat()
@@ -637,11 +680,11 @@ async def handle_autocrm(
                     'created_at': datetime.now().isoformat()
                 }
                 logger.info("Storing user message: %s", json.dumps(user_message_data, indent=2))
-                user_message_result = supabase_client.table('autocrm_messages').insert(user_message_data).execute()
+                user_message_result = supabase.table('autocrm_messages').insert(user_message_data).execute()
                 logger.info("User message store result: %s", json.dumps(user_message_result.data if user_message_result.data else [], indent=2))
 
                 # Update conversation timestamp
-                update_result = supabase_client.table('autocrm_conversations').update({
+                update_result = supabase.table('autocrm_conversations').update({
                     'updated_at': datetime.now().isoformat()
                 }).eq('id', conversation_id).execute()
                 logger.info("Update result: %s", json.dumps(update_result.data if update_result.data else [], indent=2))
@@ -717,7 +760,7 @@ Current request:
         try:
             # Get the most recent conversation
             logger.info("Fetching most recent conversation for user_id: %s", user_id)
-            conversation = supabase_client.table('autocrm_conversations').select('id').eq('user_id', user_id).order('updated_at.desc').limit(1).execute()
+            conversation = supabase.table('autocrm_conversations').select('id').eq('user_id', user_id).order('updated_at.desc').limit(1).execute()
             logger.info("Conversation query result: %s", json.dumps(conversation.data if conversation.data else [], indent=2))
             
             if conversation.data:
@@ -725,7 +768,7 @@ Current request:
                 logger.info("Found conversation ID: %s", conversation_id)
                 # Get only the last system message from this conversation
                 logger.info("Fetching last system message from conversation")
-                messages = supabase_client.table('autocrm_messages').select('sender,content').eq('conversation_id', conversation_id).eq('sender', 'system').order('created_at.desc').limit(1).execute()
+                messages = supabase.table('autocrm_messages').select('sender,content').eq('conversation_id', conversation_id).eq('sender', 'system').order('created_at.desc').limit(1).execute()
                 logger.info("Messages query result: %s", json.dumps(messages.data if messages.data else [], indent=2))
                 
                 if messages.data:
@@ -780,12 +823,12 @@ Current request:
         logger.info("=" * 50)
 
         # Process the result
-        response = await handle_crm_operations(result, user_id, supabase_client)
+        response = await handle_crm_operations(result, user_id, supabase)
 
         # Store AI response
         try:
             # Get or create conversation
-            conversation = supabase_client.table('autocrm_conversations').select('id').eq('user_id', user_id).order('updated_at.desc').limit(1).execute()
+            conversation = supabase.table('autocrm_conversations').select('id').eq('user_id', user_id).order('updated_at.desc').limit(1).execute()
             
             conversation_id = None
             if conversation.data:
@@ -793,7 +836,7 @@ Current request:
                 logger.info("Found existing conversation: %s", conversation_id)
             else:
                 # Create new conversation
-                new_conv = supabase_client.table('autocrm_conversations').insert({
+                new_conv = supabase.table('autocrm_conversations').insert({
                     'user_id': user_id,
                     'created_at': datetime.now().isoformat(),
                     'updated_at': datetime.now().isoformat()
@@ -812,11 +855,11 @@ Current request:
                     'created_at': datetime.now().isoformat()
                 }
                 logger.info("Storing system message: %s", json.dumps(message_data, indent=2))
-                message_result = supabase_client.table('autocrm_messages').insert(message_data).execute()
+                message_result = supabase.table('autocrm_messages').insert(message_data).execute()
                 logger.info("Store result: %s", json.dumps(message_result.data if message_result.data else [], indent=2))
 
                 # Update conversation timestamp
-                update_result = supabase_client.table('autocrm_conversations').update({
+                update_result = supabase.table('autocrm_conversations').update({
                     'updated_at': datetime.now().isoformat()
                 }).eq('id', conversation_id).execute()
                 logger.info("Update result: %s", json.dumps(update_result.data if update_result.data else [], indent=2))
@@ -853,7 +896,7 @@ async def transcribe_audio(
     try:
         # Get user from auth token
         logger.info("Attempting to get user from auth token")
-        user_response = supabase_client.auth.get_user(authorization.replace('Bearer ', ''))
+        user_response = supabase.auth.get_user(authorization.replace('Bearer ', ''))
         logger.info(f"User response received: {user_response}")
         user = user_response.user
 
@@ -914,4 +957,514 @@ async def transcribe_audio(
     except Exception as e:
         logger.error(f"Error in transcribe_audio: {str(e)}")
         logger.error("Stack trace:", exc_info=True)
-        raise HTTPException(status_code=500, detail=str(e)) 
+        raise HTTPException(status_code=500, detail=str(e))
+
+async def get_relevant_articles(ticket_context, recent_messages, supabase_client):
+    try:
+        # Combine ticket context and recent messages into a query
+        query_text = ""
+        if ticket_context:
+            query_text += f"{ticket_context.get('title', '')} {ticket_context.get('description', '')} "
+        
+        for msg in recent_messages[:3]:  # Only use last 3 messages for context
+            query_text += f"{msg.get('content', '')} "
+
+        # Get embeddings using LangChain
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        query_embedding = await embeddings.aembed_query(query_text.strip())
+
+        # Query Pinecone for similar articles
+        query_response = index.query(
+            vector=query_embedding,
+            top_k=5,
+            include_metadata=True
+        )
+
+        # Get the articles from Supabase using the IDs from Pinecone
+        article_ids = [match['metadata']['article_id'] for match in query_response['matches']]
+        articles_result = await supabase_client.table('knowledge_base_articles').select('*').in_('id', article_ids).execute()
+        
+        if articles_result.error:
+            logger.error('Error fetching knowledge base articles: %s', articles_result.error)
+            return []
+
+        return articles_result.data or []
+
+    except Exception as e:
+        logger.error('Error in get_relevant_articles: %s', str(e))
+        return []
+
+async def generate_ai_response(ticket_context, recent_messages, relevant_articles, agent_message):
+    try:
+        # Create conversation history
+        messages = []
+        
+        # Add system message with context
+        system_content = "You are a helpful customer service AI assistant. "
+        if ticket_context:
+            system_content += f"\nTicket Context:\nTitle: {ticket_context.get('title', '')}\nDescription: {ticket_context.get('description', '')}"
+        
+        if relevant_articles:
+            system_content += "\n\nRelevant Knowledge Base Articles:"
+            for article in relevant_articles:
+                system_content += f"\n- {article.get('title', '')}: {article.get('content', '')}"
+        
+        messages.append(SystemMessage(content=system_content))
+
+        # Add conversation history
+        for msg in reversed(recent_messages):
+            if msg.get('is_ai_generated'):
+                messages.append(AIMessage(content=msg.get('content', '')))
+            else:
+                messages.append(HumanMessage(content=msg.get('content', '')))
+
+        # Add the agent's message
+        messages.append(HumanMessage(content=f"Agent's message: {agent_message}\nPlease generate a helpful response based on the ticket context and knowledge base articles provided."))
+
+        # Create LangChain chat model
+        chat = ChatOpenAI(
+            temperature=0.7,
+            model_name="gpt-4o-mini",
+            max_tokens=500
+        )
+
+        # Create prompt template
+        prompt = ChatPromptTemplate.from_messages(messages)
+
+        # Create chain
+        chain = prompt | chat | StrOutputParser()
+
+        # Generate response
+        response = await chain.ainvoke({})
+        return response
+
+    except Exception as e:
+        logger.error('Error generating AI response: %s', str(e))
+        return None
+
+async def generate_message_embedding(content: str) -> List[float]:
+    try:
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        embedding_vector = await embeddings.aembed_query(content.strip())
+        return embedding_vector.tolist() if isinstance(embedding_vector, np.ndarray) else embedding_vector
+    except Exception as e:
+        logger.error('Error generating message embedding: %s', str(e))
+        return None
+
+async def find_similar_messages(content: str, ticket_id: int, supabase_client: SupabaseClient, limit: int = 5) -> List[Dict]:
+    try:
+        # Generate embedding for the query
+        query_embedding = await generate_message_embedding(content)
+        if not query_embedding:
+            return []
+
+        # Get messages with embeddings for this ticket
+        messages_result = await supabase_client.rpc(
+            'match_messages',
+            {
+                'query_embedding': query_embedding,
+                'match_threshold': 0.7,
+                'match_count': limit,
+                'ticket_id': ticket_id
+            }
+        ).execute()
+
+        if messages_result.error:
+            logger.error('Error finding similar messages: %s', messages_result.error)
+            return []
+
+        return messages_result.data or []
+    except Exception as e:
+        logger.error('Error in find_similar_messages: %s', str(e))
+        return []
+
+@app.post("/api/tickets/{ticket_id}/replies", response_model=Dict[str, Any])
+async def create_reply(
+    ticket_id: int,
+    data: Dict[str, Any],
+    supabase_client: SupabaseClient = Depends(get_supabase_client),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    try:
+        content = data.get('content')
+        is_public = data.get('is_public', True)
+        relevant_articles = data.get('relevant_articles', [])
+
+        if not content:
+            raise ValueError('Content is required')
+
+        logger.info('Creating reply: %s', {
+            'ticket_id': ticket_id,
+            'content': content,
+            'is_public': is_public,
+            'relevant_articles': relevant_articles,
+            'user_id': user.id
+        })
+
+        # Get ticket details for context
+        ticket_result = await supabase_client.table('tickets').select('*').eq('id', ticket_id).single().execute()
+        if ticket_result.error:
+            logger.error('Error fetching ticket: %s', ticket_result.error)
+            raise ticket_result.error
+        
+        ticket_context = ticket_result.data
+
+        # Get recent messages for context
+        messages_result = await supabase_client.table('replies').select('*').eq('ticket_id', ticket_id).order('created_at', desc=True).limit(5).execute()
+        recent_messages = []
+        if not messages_result.error:
+            recent_messages = messages_result.data
+
+        # Generate embedding for the message
+        message_embedding = await generate_message_embedding(content)
+
+        # Create the reply with embedding
+        reply_result = await supabase_client.table('replies').insert({
+            'ticket_id': ticket_id,
+            'content': content,
+            'user_id': user.id,
+            'is_public': is_public,
+            'embedding': message_embedding
+        }).select('''
+            *,
+            user_profile:profiles!replies_user_id_fkey (
+                email,
+                full_name,
+                avatar_url,
+                role
+            )
+        ''').single().execute()
+
+        if reply_result.error:
+            logger.error('Error creating reply: %s', reply_result.error)
+            raise reply_result.error
+
+        # Find similar messages from ticket history
+        similar_messages = await find_similar_messages(content, ticket_id, supabase_client)
+
+        # Generate AI response if user is customer
+        ai_response = None
+        if user.get('role') == 'user':
+            # Format context from ticket, messages, articles, and similar messages
+            context = f"""
+            Ticket Subject: {ticket_context['subject']}
+            Ticket Description: {ticket_context['description']}
+            
+            Recent Messages:
+            {format_messages_for_context(recent_messages)}
+            
+            Similar Past Messages:
+            {format_messages_for_context(similar_messages)}
+            
+            Relevant Knowledge Base Articles:
+            {format_articles_for_context(relevant_articles)}
+            
+            Customer Message:
+            {content}
+            """
+
+            # Generate AI response using context
+            openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
+            response = await openai_client.chat.completions.create(
+                model="gpt-4o-mini",
+                messages=[
+                    {"role": "system", "content": "You are a helpful customer support agent. Use the provided knowledge base articles and similar past conversations to help answer the customer's question. Be concise but thorough."},
+                    {"role": "user", "content": context}
+                ]
+            )
+            
+            ai_response = response.choices[0].message.content
+
+            if ai_response:
+                # Get the assigned agent's ID from the ticket
+                assigned_agent_id = ticket_context.get('assigned_to')
+                if not assigned_agent_id:
+                    logger.error('No assigned agent found for ticket %s', ticket_id)
+                    return {
+                        'message': 'Reply created successfully',
+                        'reply': {
+                            **reply_result.data,
+                            'user_avatar': reply_result.data['user_profile'].get('avatar_url'),
+                        }
+                    }
+
+                # Create AI reply as the assigned agent
+                ai_reply_result = await supabase_client.table('replies').insert({
+                    'ticket_id': ticket_id,
+                    'content': ai_response,
+                    'user_id': assigned_agent_id,  # Use assigned agent's ID
+                    'is_public': True,
+                    'is_ai_generated': True
+                }).select('''
+                    *,
+                    user_profile:profiles!replies_user_id_fkey (
+                        email,
+                        full_name,
+                        avatar_url,
+                        role
+                    )
+                ''').single().execute()
+
+                if ai_reply_result.error:
+                    logger.error('Error creating AI reply: %s', ai_reply_result.error)
+                else:
+                    logger.info('Successfully created AI reply')
+
+        # Notify about ticket update
+        await notify_ticket_updated(supabase_client, ticket_id)
+
+        return {
+            'message': 'Reply created successfully',
+            'reply': {
+                **reply_result.data,
+                'user_avatar': reply_result.data['user_profile'].get('avatar_url'),
+            },
+            'ai_reply': ai_response
+        }
+
+    except Exception as error:
+        logger.error('Error in create_reply: %s', str(error))
+        return JSONResponse(
+            content={
+                'error': str(error),
+                'details': getattr(error, 'details', None)
+            },
+            status_code=400
+        )
+
+def format_messages_for_context(messages: List[Dict]) -> str:
+    formatted = []
+    for msg in messages:
+        formatted.append(f"{msg.get('user_profile', {}).get('role', 'user')}: {msg['content']}")
+    return "\n".join(formatted)
+
+def format_articles_for_context(articles: List[Dict]) -> str:
+    formatted = []
+    for article in articles:
+        metadata = article.get('metadata', {})
+        formatted.append(f"Title: {metadata.get('title')}\nContent: {metadata.get('content')}\n")
+    return "\n".join(formatted)
+
+@app.post("/api/knowledge-base/generate-embeddings", response_model=Dict[str, Any])
+async def generate_embeddings(
+    request: Dict[str, Any],
+    supabase_client: SupabaseClient = Depends(get_supabase_client)
+):
+    try:
+        # Get article_id from request body
+        article_id = request.get('article_id')
+        
+        # Get articles to process
+        if article_id:
+            # Get single article
+            articles_query = supabase_client.table('knowledge_base_articles').select('id, title, content').eq('id', article_id)
+        else:
+            # Get all articles without embeddings
+            articles_query = supabase_client.table('knowledge_base_articles').select('id, title, content').eq('has_embedding', False)
+        
+        articles_response = articles_query.execute()
+        articles = articles_response.data if hasattr(articles_response, 'data') else []
+        
+        if not articles:
+            return {"message": "No articles found to process", "updated_count": 0}
+
+        # Initialize OpenAI embeddings
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        updated_count = 0
+
+        # Process each article
+        for article in articles:
+            try:
+                # Combine title and content for embedding
+                text_to_embed = f"Title: {article['title']}\nContent: {article['content']}"
+                embedding_vector = await embeddings.aembed_query(text_to_embed.strip())
+
+                # Store in Pinecone
+                index.upsert(
+                    vectors=[{
+                        'id': f"article_{article['id']}",
+                        'values': embedding_vector,
+                        'metadata': {
+                            'title': article['title'],
+                            'content': article['content'],
+                            'article_id': article['id'],
+                            'type': 'article'
+                        }
+                    }]
+                )
+
+                # Update has_embedding flag in Supabase
+                update_result = supabase_client.table('knowledge_base_articles').update({
+                    'has_embedding': True
+                }).eq('id', article['id']).execute()
+
+                if update_result.error:
+                    logger.error('Error updating has_embedding flag for article %s: %s', article['id'], update_result.error)
+                    continue
+
+                updated_count += 1
+                logger.info('Successfully updated embedding for article %s', article['id'])
+
+            except Exception as e:
+                logger.error('Error processing article %s: %s', article['id'], str(e))
+                continue
+
+        return {
+            "message": f"Successfully updated {updated_count} articles with embeddings",
+            "updated_count": updated_count
+        }
+
+    except Exception as e:
+        logger.error('Error generating embeddings: %s', str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/knowledge-base/search", response_model=Dict[str, Any])
+async def search_similar_articles(
+    request: Dict[str, str],
+    supabase_client: SupabaseClient = Depends(get_supabase_client),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    try:
+        query = request.get('query')
+        if not query:
+            raise HTTPException(status_code=400, detail="Query is required")
+
+        # Generate embedding for the query
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        query_embedding = await embeddings.aembed_query(query.strip())
+
+        # Search Pinecone for similar articles
+        search_response = index.query(
+            vector=query_embedding,
+            top_k=5,
+            include_metadata=True,
+            filter={
+                "type": "article"
+            }
+        )
+
+        # Get article IDs from search results
+        article_ids = [
+            match['metadata']['article_id'] 
+            for match in search_response['matches']
+            if 'article_id' in match['metadata']
+        ]
+
+        if not article_ids:
+            return {"articles": []}
+
+        # Fetch full article data from Supabase
+        articles_result = supabase_client.table('knowledge_base_articles').select('*').in_('id', article_ids).execute()
+        
+        if articles_result.error:
+            logger.error('Error fetching articles: %s', articles_result.error)
+            raise HTTPException(status_code=500, detail="Failed to fetch articles")
+
+        return {"articles": articles_result.data or []}
+
+    except Exception as e:
+        logger.error('Error in search_similar_articles: %s', str(e))
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/embeddings/backfill", response_model=Dict[str, Any])
+async def backfill_embeddings(
+    supabase_client: SupabaseClient = Depends(get_supabase_client),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    try:
+        # Get user's role from profiles table
+        profile_response = supabase_client.table('profiles').select('role').eq('id', user.id).single().execute()
+        if not profile_response.data or profile_response.data['role'] != 'admin':
+            raise HTTPException(status_code=403, detail="Only admins can perform embedding backfill")
+
+        total_processed = 0
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+
+        # Process knowledge base articles
+        articles_result = supabase_client.table('knowledge_base_articles').select('id,title,content').execute()
+        if articles_result.data:
+            for article in articles_result.data:
+                try:
+                    # Generate embedding
+                    text_to_embed = f"Title: {article['title']}\nContent: {article['content']}"
+                    embedding_vector = await embeddings.aembed_query(text_to_embed.strip())
+
+                    # Store in Pinecone
+                    index.upsert(
+                        vectors=[{
+                            'id': f"article_{article['id']}",
+                            'values': embedding_vector,
+                            'metadata': {
+                                'title': article['title'],
+                                'content': article['content'],
+                                'article_id': article['id'],
+                                'type': 'article'
+                            }
+                        }]
+                    )
+
+                    total_processed += 1
+                    logger.info(f"Processed article {article['id']}")
+                except Exception as e:
+                    logger.error(f"Error processing article {article['id']}: {str(e)}")
+                    continue
+
+        return {
+            "message": f"Successfully processed {total_processed} items",
+            "total_processed": total_processed
+        }
+
+    except Exception as e:
+        logger.error(f"Error in backfill_embeddings: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.delete("/api/knowledge-base/articles/{article_id}", response_model=Dict[str, Any])
+async def delete_article(
+    article_id: str,
+    supabase_client: SupabaseClient = Depends(get_supabase_client),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    try:
+        # Check if user is admin
+        profile_response = supabase_client.table('profiles').select('role').eq('id', user.id).single().execute()
+        if not profile_response.data or profile_response.data['role'] != 'admin':
+            raise HTTPException(status_code=403, detail="Only admins can delete articles")
+
+        # Delete from Pinecone first
+        try:
+            index.delete(ids=[f"article_{article_id}"])
+            logger.info(f"Successfully deleted embedding for article {article_id} from Pinecone")
+        except Exception as e:
+            logger.error(f"Error deleting embedding from Pinecone for article {article_id}: {str(e)}")
+            # Continue with Supabase deletion even if Pinecone deletion fails
+
+        # Delete from Supabase
+        try:
+            delete_result = supabase_client.table('knowledge_base_articles').delete().eq('id', article_id).execute()
+            
+            # Check if any rows were deleted
+            if not delete_result.data:
+                raise HTTPException(status_code=404, detail="Article not found")
+                
+            logger.info(f"Successfully deleted article {article_id} from Supabase")
+            
+            return {
+                "message": f"Successfully deleted article {article_id} and its embedding",
+                "article_id": article_id
+            }
+        except Exception as e:
+            logger.error(f"Error deleting article from Supabase: {str(e)}")
+            raise HTTPException(status_code=500, detail="Failed to delete article")
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        logger.error(f"Error in delete_article: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.get("/favicon.ico")
+async def favicon():
+    """
+    Handle favicon.ico requests gracefully
+    """
+    return {"status": "ok"}

@@ -8,12 +8,17 @@ services:
     container_name: autocrm-api-dev
     volumes:
       - .:/app
+      - /app/venv
+      - python-packages:/usr/local/lib/python3.11/site-packages/
     ports:
       - "8000:8000"
     environment:
       - SUPABASE_URL=${SUPABASE_URL}
       - SUPABASE_SERVICE_ROLE_KEY=${SUPABASE_SERVICE_ROLE_KEY}
       - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - PINECONE_API_KEY=${PINECONE_API_KEY}
+      - PINECONE_ENVIRONMENT=${PINECONE_ENVIRONMENT}
+      - PINECONE_INDEX=${PINECONE_INDEX}
     restart: unless-stopped
     # Enable hot reload for development
     command: ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000", "--reload"]
@@ -24,3 +29,6 @@ services:
       timeout: 10s
       retries: 3
       start_period: 10s 
+
+volumes:
+  python-packages: 
