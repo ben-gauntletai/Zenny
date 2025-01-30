@@ -23,6 +23,7 @@ const CreateArticle: React.FC = () => {
   const [categories, setCategories] = useState<Array<{ id: string; name: string }>>([]);
   const [tags, setTags] = useState<Array<{ id: string; name: string }>>([]);
   const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   // Fetch article data if editing and not in context
   useEffect(() => {
@@ -87,6 +88,7 @@ const CreateArticle: React.FC = () => {
     if (!user) return;
 
     try {
+      setIsSubmitting(true);
       let articleId = id;
 
       if (id) {
@@ -194,6 +196,8 @@ const CreateArticle: React.FC = () => {
     } catch (err) {
       console.error('Error creating/updating article:', err);
       setError('Failed to save article');
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
@@ -269,8 +273,8 @@ const CreateArticle: React.FC = () => {
             Cancel
           </button>
         )}
-        <button type="submit" className="submit-button">
-          {id ? 'Update' : 'Create'}
+        <button type="submit" className="submit-button" disabled={isSubmitting}>
+          {isSubmitting ? (id ? 'Updating...' : 'Creating...') : (id ? 'Update' : 'Create')}
         </button>
       </div>
     </form>

@@ -41,6 +41,7 @@ const ArticleDetail: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [userFeedback, setUserFeedback] = useState<'helpful' | 'not_helpful' | null>(null);
   const [canDelete, setCanDelete] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
   const isAgentOrAdmin = user?.user_metadata?.role === 'admin' || user?.user_metadata?.role === 'agent';
 
   useEffect(() => {
@@ -56,12 +57,15 @@ const ArticleDetail: React.FC = () => {
     }
 
     try {
+      setIsDeleting(true);
       await deleteArticle(article.id);
       navigate('/knowledge-base');
     } catch (err) {
       console.error('Error during deletion:', err);
       setError('Failed to delete article. Please try again.');
       window.alert('Failed to delete article. Please try again.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -216,8 +220,12 @@ const ArticleDetail: React.FC = () => {
               <Link to={`/knowledge-base/article/${article.id}/edit`} className="edit-button">
                 Edit Article
               </Link>
-              <button onClick={handleDelete} className="delete-button">
-                Delete Article
+              <button 
+                onClick={handleDelete} 
+                className="delete-button"
+                disabled={isDeleting}
+              >
+                {isDeleting ? 'Deleting...' : 'Delete Article'}
               </button>
             </div>
           )}
