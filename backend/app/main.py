@@ -1115,17 +1115,25 @@ async def create_reply(
         if not messages_result.error:
             recent_messages = messages_result.data
 
-        # Generate embedding for the message
-        message_embedding = await generate_message_embedding(content)
+        # Generate embedding for the reply
+        try:
+            reply_embedding = await generate_embedding(content)
+            logger.info('Generated embedding for reply')
+        except Exception as e:
+            logger.error('Error generating embedding for reply: %s', str(e))
+            reply_embedding = None
 
         # Create the reply with embedding
-        reply_result = await supabase_client.table('replies').insert({
+        reply_data = {
             'ticket_id': ticket_id,
             'content': content,
             'user_id': user.id,
             'is_public': is_public,
-            'embedding': message_embedding
-        }).select('''
+        }
+        if reply_embedding is not None:
+            reply_data['embedding'] = reply_embedding
+
+        reply_result = await supabase_client.table('replies').insert(reply_data).select('''
             *,
             user_profile:profiles!replies_user_id_fkey (
                 email,
@@ -1188,14 +1196,26 @@ async def create_reply(
                         }
                     }
 
+                # Generate embedding for AI response
+                try:
+                    ai_reply_embedding = await generate_embedding(ai_response)
+                    logger.info('Generated embedding for AI reply')
+                except Exception as e:
+                    logger.error('Error generating embedding for AI reply: %s', str(e))
+                    ai_reply_embedding = None
+
                 # Create AI reply as the assigned agent
-                ai_reply_result = await supabase_client.table('replies').insert({
+                ai_reply_data = {
                     'ticket_id': ticket_id,
                     'content': ai_response,
-                    'user_id': assigned_agent_id,  # Use assigned agent's ID
+                    'user_id': assigned_agent_id,
                     'is_public': True,
-                    'is_ai_generated': True
-                }).select('''
+                    'is_ai_generated': True,
+                }
+                if ai_reply_embedding is not None:
+                    ai_reply_data['embedding'] = ai_reply_embedding
+
+                ai_reply_result = await supabase_client.table('replies').insert(ai_reply_data).select('''
                     *,
                     user_profile:profiles!replies_user_id_fkey (
                         email,

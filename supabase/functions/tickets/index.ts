@@ -480,11 +480,7 @@ async function handleTicketList(req, supabaseClient, user) {
         console.error('Error fetching replies:', repliesError);
         throw repliesError;
       }
-      // Filter out the initial reply if it matches the description
-      const filteredReplies = replies.filter((reply)=>{
-        const isInitialReply = reply.content === ticket.description && reply.user_id === ticket.user_id && Math.abs(new Date(reply.created_at).getTime() - new Date(ticket.created_at).getTime()) < 1000;
-        return !isInitialReply;
-      });
+
       // Format the response
       const response = {
         ticket: {
@@ -501,13 +497,13 @@ async function handleTicketList(req, supabaseClient, user) {
           agent_avatar: ticket.agents?.avatar_url,
           agent_role: ticket.agents?.role
         },
-        replies: filteredReplies.map((reply)=>({
-            ...reply,
-            user_email: reply.user_profile?.email,
-            user_name: reply.user_profile?.full_name,
-            user_avatar: reply.user_profile?.avatar_url,
-            user_role: reply.user_profile?.role
-          }))
+        replies: replies.map((reply) => ({
+          ...reply,
+          user_email: reply.user_profile?.email,
+          user_name: reply.user_profile?.full_name,
+          user_avatar: reply.user_profile?.avatar_url,
+          user_role: reply.user_profile?.role
+        }))
       };
       return new Response(JSON.stringify(response), {
         headers: {

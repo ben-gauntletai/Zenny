@@ -64,36 +64,6 @@ export const CustomerTicketView: React.FC<CustomerTicketViewProps> = ({
       </div>
 
       <div className="ticket-conversation" ref={conversationRef}>
-        {/* Initial ticket description message */}
-        <div className="message own-message">
-          <div className="message-avatar">
-            <div 
-              className="profile-icon" 
-              style={{ 
-                backgroundColor: getProfileColor(ticket.profiles?.email || ''),
-                color: 'white',
-                fontSize: '14px',
-                fontWeight: 'bold',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: '32px',
-                height: '32px',
-                borderRadius: '50%'
-              }}
-            >
-              {getInitials(ticket.profiles?.full_name || '')}
-            </div>
-          </div>
-          <div className="message-content">
-            <div className="message-header">
-              <span className="message-author">{ticket.profiles?.full_name || ticket.profiles?.email}</span>
-              <span className="message-time">{new Date(ticket.created_at).toLocaleString()}</span>
-            </div>
-            <div className="message-body">{ticket.description}</div>
-          </div>
-        </div>
-
         {messages.map((message) => {
           if (message.type === 'system') {
             return (

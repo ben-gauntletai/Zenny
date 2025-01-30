@@ -494,55 +494,6 @@ const TicketContent: React.FC = () => {
           </header>
 
           <div className="ticket-conversation" ref={conversationRef} style={{ flex: 1, overflowY: 'auto' }}>
-            <div className="message other-message">
-              <div className="message-avatar" style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                gap: '4px',
-                height: '100%',
-                justifyContent: 'center',
-                minWidth: '40px',
-                padding: '8px 0'
-              }}>
-                <div 
-                  className="profile-icon" 
-                  style={{ 
-                    backgroundColor: getProfileColor(ticket.profiles?.email || ''),
-                    color: 'white',
-                    fontSize: '14px',
-                    fontWeight: 'bold',
-                    display: 'flex',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    width: '32px',
-                    height: '32px',
-                    borderRadius: '50%'
-                  }}
-                >
-                  {getInitials(ticket.profiles?.full_name || '')}
-                </div>
-                <div style={{ 
-                  textAlign: 'center', 
-                  fontSize: '12px', 
-                  color: '#718096',
-                  fontWeight: 'bold',
-                  lineHeight: '1'
-                }}>
-                  {ticket.profiles?.role ? ticket.profiles.role.charAt(0).toUpperCase() + ticket.profiles.role.slice(1).toLowerCase() : ''}
-                </div>
-              </div>
-              <div className="message-content">
-                <div className="message-header">
-                  <span className="message-author">{ticket.profiles?.full_name || ticket.profiles?.email}</span>
-                  <span className="message-time">{new Date(ticket.created_at).toLocaleString()}</span>
-                </div>
-                <div className="message-body">
-                  {ticket.description}
-                </div>
-              </div>
-            </div>
-
             {messages.map((message) => {
               if (message.type === 'system') {
                 return (
@@ -605,35 +556,6 @@ const TicketContent: React.FC = () => {
                           : message.user_email)}
                       </span>
                       <span className="message-time">{new Date(message.created_at).toLocaleString()}</span>
-                      {isOwnMessage && (
-                        <button
-                          onClick={() => {/* TODO: Add delete functionality */}}
-                          style={{
-                            marginLeft: 'auto',
-                            padding: '4px 8px',
-                            background: 'none',
-                            border: 'none',
-                            cursor: 'pointer',
-                            color: '#A0AEC0',
-                            fontSize: '14px',
-                            transition: 'all 0.2s',
-                            borderRadius: '4px',
-                            display: 'flex',
-                            alignItems: 'center',
-                            justifyContent: 'center'
-                          }}
-                          onMouseEnter={(e) => {
-                            e.currentTarget.style.color = '#E53E3E';
-                            e.currentTarget.style.background = '#FFF5F5';
-                          }}
-                          onMouseLeave={(e) => {
-                            e.currentTarget.style.color = '#A0AEC0';
-                            e.currentTarget.style.background = 'none';
-                          }}
-                        >
-                          <i className="fas fa-times"></i>
-                        </button>
-                      )}
                     </div>
                     <div className="message-body">
                       {message.content}
