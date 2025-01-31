@@ -1,7 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
 import { ticketService } from '../services/ticketService';
+import { supabase } from '../lib/supabaseClient';
 import '../styles/TicketList.css';
 
 interface FormattedTicket {
@@ -45,10 +46,40 @@ const TicketList: React.FC = () => {
     sortField: 'created_at',
     sortDirection: 'desc'
   });
+  const subscriptionRef = useRef<any>(null);
 
   // Only fetch tickets when component mounts or user changes
   useEffect(() => {
     fetchTickets();
+
+    // Set up real-time subscription
+    if (user) {
+      console.log('Setting up real-time subscription for tickets');
+      subscriptionRef.current = supabase
+        .channel('tickets-list-changes')
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'tickets'
+          },
+          async (payload) => {
+            console.log('Ticket change received:', payload);
+            // Refresh tickets data to get the latest state
+            await fetchTickets();
+          }
+        )
+        .subscribe();
+
+      // Cleanup subscription on unmount
+      return () => {
+        console.log('Cleaning up ticket subscription');
+        if (subscriptionRef.current) {
+          subscriptionRef.current.unsubscribe();
+        }
+      };
+    }
   }, [user?.id]);
 
   // Apply filters and sorting locally
