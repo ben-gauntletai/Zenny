@@ -313,16 +313,16 @@ async def handle_crm_operations(result: str, user_id: str, supabase_client: Supa
             elif action.upper() == 'UPDATE':
                 logger.info("Processing UPDATE action")
                 # Updated regex to handle unassigned tickets and ranges
-                ticket_match = re.search(r'ticket:\s*([\d,\s\-]+|unassigned)(?=\s|$)', details)
-                priority_match = re.search(r'priority:\s*(\w+)(?=\s|$)', details)
-                status_match = re.search(r'status:\s*(\w+)(?=\s|$)', details)
-                group_match = re.search(r'group_name:\s*(\w+)(?=\s|$)', details)
-                type_match = re.search(r'type:\s*(\w+)(?=\s|$)', details)
+                ticket_match = re.search(r'ticket:\s*([\d,\s\-]+|unassigned)(?=\s+\w+:|$)', details)
+                priority_match = re.search(r'priority:\s*(low|normal|high|urgent)(?=\s+\w+:|$)', details, re.IGNORECASE)
+                status_match = re.search(r'status:\s*(open|pending|solved|closed)(?=\s+\w+:|$)', details, re.IGNORECASE)
+                group_match = re.search(r'group_name:\s*(Admin|Support)(?=\s+\w+:|$)', details)
+                type_match = re.search(r'type:\s*(question|incident|problem|task)(?=\s+\w+:|$)', details, re.IGNORECASE)
                 # Updated pattern to handle topic values with spaces and special characters
-                topic_match = re.search(r'topic:\s*"([^"]+)"(?=\s|$)', details)
+                topic_match = re.search(r'topic:\s*"([^"]+)"(?=\s+\w+:|$)', details)
                 if not topic_match:
-                    # Try without quotes for backward compatibility
-                    topic_match = re.search(r'topic:\s*((?:[^"\s]+\s*)+?)(?=\s+\w+:|$)', details)
+                    # Try without quotes but ensure we don't capture subsequent fields
+                    topic_match = re.search(r'topic:\s*((?:[^"\s]+(?:\s+(?!(?:status|priority|group_name|assigned_to|type):|$)[^"\s]+)*)+)(?=\s+\w+:|$)', details)
                 # Updated pattern to handle email addresses without @ prefix
                 assigned_to_match = re.search(r'assigned_to:\s*(unassigned|[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})(?=\s|$)', details, re.IGNORECASE)
                 
