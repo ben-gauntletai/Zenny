@@ -55,45 +55,57 @@ async def create_notification(supabase: Client, payload: Dict[str, Any]) -> None
 
 async def notify_ticket_updated(supabase_client, ticket, updater, previous_ticket):
     try:
-        # Create notification for the ticket owner if updater is different
-        if ticket['user_id'] != updater['id']:
-            notification_data = {
-                'user_id': ticket['user_id'],
-                'title': 'Ticket Updated',
-                'message': f'Your ticket #{ticket["id"]} has been updated',
-                'type': 'ticket_updated',
-                'ticket_id': ticket['id'],
-                'created_at': datetime.now().isoformat()
-            }
-            
-            notification_result = supabase_client.table('notifications').insert(notification_data).execute()
-            
-            if notification_result.error:
-                logger.error('Error creating notification for ticket owner: %s', notification_result.error)
-                return
+        # Get updater info
+        updater_name = "System"
+        if updater and updater.get('id'):
+            updater_info = supabase_client.table('profiles').select('full_name').eq('id', updater['id']).single().execute()
+            if hasattr(updater_info, 'data') and updater_info.data:
+                updater_name = updater_info.data.get('full_name', updater.get('email', 'Unknown User'))
 
-        # Notify new assignee if assignment changed
-        if ticket.get('assigned_to') and ticket['assigned_to'] != previous_ticket.get('assigned_to'):
-            assignee_notification = {
-                'user_id': ticket['assigned_to'],
-                'title': 'Ticket Assigned',
-                'message': f'Ticket #{ticket["id"]} has been assigned to you',
-                'type': 'ticket_assigned',
+        # Detect changes
+        changes = []
+        fields_to_check = ['status', 'priority', 'ticket_type', 'topic', 'group_name', 'subject', 'assigned_to', 'tags']
+        
+        for field in fields_to_check:
+            old_value = previous_ticket.get(field)
+            new_value = ticket.get(field)
+            
+            if old_value != new_value:
+                changes.append({
+                    'field': field,
+                    'oldValue': old_value,
+                    'newValue': new_value
+                })
+
+        logger.info('Detected changes: %s', changes)
+
+        # Create notifications only for fields that have actually changed
+        notifications = []
+        for change in changes:
+            notification = {
+                'user_id': None,  # System notification
+                'title': f'{change["field"].replace("_", " ").title()} Update',
+                'message': f'{updater_name} changed {change["field"].replace("_", " ")} from "{change["oldValue"]}" to "{change["newValue"]}"',
+                'type': 'TICKET_UPDATED',
                 'ticket_id': ticket['id'],
                 'created_at': datetime.now().isoformat()
             }
+            notifications.append(notification)
+
+        # Insert all notifications at once if there are any
+        if notifications:
+            logger.info('Creating notifications: %s', notifications)
+            result = supabase_client.table('notifications').insert(notifications).execute()
             
-            assignee_result = supabase_client.table('notifications').insert(assignee_notification).execute()
-            
-            if assignee_result.error:
-                logger.error('Error creating notification for assignee: %s', assignee_result.error)
+            if not hasattr(result, 'data'):
+                logger.error('Error creating notifications: No data in response')
                 return
-            
-        logger.info('Successfully created notifications for ticket update')
-        
-    except Exception as e:
-        logger.error('Error in notify_ticket_updated: %s', str(e))
-        return
+                
+            logger.info('Successfully created %d notifications', len(notifications))
+
+    except Exception as error:
+        logger.error('Error in notify_ticket_updated: %s', str(error))
+        logger.error('Stack trace:', exc_info=True)
 
 async def notify_ticket_created(supabase_client, ticket, user):
     try:
