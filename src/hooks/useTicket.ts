@@ -4,6 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 
 const EDGE_FUNCTION_URL = process.env.REACT_APP_SUPABASE_URL + '/functions/v1/tickets';
+const PYTHON_BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
 export interface Reply {
   id: number;
@@ -78,83 +79,121 @@ export const useTicket = (ticketId: string) => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const channelRef = useRef<any>(null);
+  const isInitialLoadRef = useRef(true);
+  const isSubscribedRef = useRef(false);
+  const mountedRef = useRef(true);
 
+  // Cleanup on unmount
+  useEffect(() => {
+    mountedRef.current = true;
+    return () => {
+      mountedRef.current = false;
+    };
+  }, []);
+
+  // Separate effect for data fetching
   useEffect(() => {
     if (ticketId) {
       fetchTicket();
+    }
+  }, [ticketId]);
 
-      console.log('Setting up real-time subscription for ticket:', ticketId);
+  // Separate effect for subscription setup
+  useEffect(() => {
+    // Only set up subscription if we have the ticket data and haven't subscribed yet
+    if (!ticket || isSubscribedRef.current || !mountedRef.current) {
+      return;
+    }
 
-      // Create a channel with the correct format
-      const channel = supabase.channel('any').on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'replies',
-          filter: `ticket_id=eq.${ticketId}`
-        },
-        handleNewReply
-      ).on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'tickets',
-          filter: `id=eq.${ticketId}`
-        },
-        (payload: { new: Ticket }) => {
-          console.log('🔄 Realtime update received:', payload.new);
-          // Parse the tags back from JSONB to array if needed
-          setTicket(current => {
-            const updatedTicket = {
-              ...payload.new,
-              tags: Array.isArray(payload.new.tags) ? payload.new.tags : JSON.parse(payload.new.tags || '[]')
-            };
-            console.log('🔄 Setting ticket state to:', updatedTicket);
-            return updatedTicket;
-          });
-        }
-      );
+    console.log('Setting up real-time subscription for ticket:', ticketId);
 
-      // Store channel in ref for cleanup
-      channelRef.current = channel;
+    // Create a unique channel name for this ticket
+    const channelName = `ticket-${ticketId}`;
+    console.log('Creating channel:', channelName);
 
-      // Subscribe and handle connection status
-      channel.subscribe((status) => {
-        console.log(`Subscription status:`, status);
-        if (status === 'SUBSCRIBED') {
-          console.log('Successfully subscribed to changes for ticket:', ticketId);
-        } else if (status === 'CHANNEL_ERROR') {
-          console.error('Channel error for ticket:', ticketId);
-          // Try to resubscribe after a delay
-          setTimeout(() => {
+    // Create a channel with the unique name
+    const channel = supabase.channel(channelName).on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'replies',
+        filter: `ticket_id=eq.${ticketId}`
+      },
+      handleNewReply
+    ).on(
+      'postgres_changes',
+      {
+        event: 'UPDATE',
+        schema: 'public',
+        table: 'tickets',
+        filter: `id=eq.${ticketId}`
+      },
+      (payload: { new: Ticket }) => {
+        if (!mountedRef.current) return;
+        console.log('🔄 Realtime update received:', payload.new);
+        // Parse the tags back from JSONB to array if needed
+        setTicket(current => {
+          const updatedTicket = {
+            ...payload.new,
+            tags: Array.isArray(payload.new.tags) ? payload.new.tags : JSON.parse(payload.new.tags || '[]')
+          };
+          console.log('🔄 Setting ticket state to:', updatedTicket);
+          return updatedTicket;
+        });
+      }
+    );
+
+    // Store channel in ref for cleanup
+    channelRef.current = channel;
+
+    // Subscribe and handle connection status
+    channel.subscribe((status) => {
+      if (!mountedRef.current) return;
+      console.log(`Subscription status for ${channelName}:`, status);
+      if (status === 'SUBSCRIBED') {
+        isSubscribedRef.current = true;
+        console.log('Successfully subscribed to changes for ticket:', ticketId);
+      } else if (status === 'CHANNEL_ERROR') {
+        console.error('Channel error for ticket:', ticketId);
+        isSubscribedRef.current = false;
+        // Try to resubscribe after a delay
+        setTimeout(() => {
+          if (mountedRef.current && channelRef.current) {
             console.log('Attempting to resubscribe...');
-            if (channelRef.current) {
-              channelRef.current.subscribe();
-            }
-          }, 2000);
-        } else if (status === 'TIMED_OUT') {
-          console.error('Subscription timed out for ticket:', ticketId);
-          // Try to resubscribe after a delay
-          setTimeout(() => {
+            channelRef.current.subscribe();
+          }
+        }, 2000);
+      } else if (status === 'TIMED_OUT') {
+        console.error('Subscription timed out for ticket:', ticketId);
+        isSubscribedRef.current = false;
+        // Try to resubscribe after a delay
+        setTimeout(() => {
+          if (mountedRef.current && channelRef.current) {
             console.log('Attempting to resubscribe after timeout...');
-            if (channelRef.current) {
-              channelRef.current.subscribe();
-            }
-          }, 2000);
-        }
-      });
+            channelRef.current.subscribe();
+          }
+        }, 2000);
+      } else if (status === 'CLOSED') {
+        isSubscribedRef.current = false;
+      }
+    });
 
-      return () => {
-        console.log('Cleaning up subscription');
-        if (channelRef.current) {
+    // Cleanup function
+    return () => {
+      if (channelRef.current) {
+        console.log(`Cleaning up subscription for channel ${channelName}`);
+        try {
           channelRef.current.unsubscribe();
+          isSubscribedRef.current = false;
+        } catch (err) {
+          console.error('Error unsubscribing from channel:', err);
+        } finally {
           channelRef.current = null;
         }
-      };
-    }
-  }, [ticketId]); // Remove ticket from dependencies to prevent subscription loop
+      }
+    };
+  }, [ticketId, ticket]); // Only depend on ticketId and ticket
 
   const handleNewReply = async (payload: any) => {
     console.log('Received new reply from Postgres:', payload.new);
@@ -305,7 +344,8 @@ export const useTicket = (ticketId: string) => {
 
     console.log('Adding new reply:', { content, isPublic, ticketId: ticket.id });
 
-    const response = await fetch(`${EDGE_FUNCTION_URL}/${ticket.id}/replies`, {
+    // First, create the reply using the Python backend
+    const pythonResponse = await fetch(`${PYTHON_BACKEND_URL}/api/tickets/${ticket.id}/replies`, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -317,12 +357,17 @@ export const useTicket = (ticketId: string) => {
       })
     });
 
-    if (!response.ok) {
-      const error = await response.json();
+    if (!pythonResponse.ok) {
+      const error = await pythonResponse.json();
+      console.error('Error from Python backend:', error);
       throw new Error(error.message || 'Failed to add reply');
     }
 
-    const { reply } = await response.json();
+    const { reply, ai_reply } = await pythonResponse.json();
+    console.log('Reply created successfully:', reply);
+    if (ai_reply) {
+      console.log('AI reply generated:', ai_reply);
+    }
 
     // Don't add to local state - wait for real-time update
     // This prevents duplicate messages

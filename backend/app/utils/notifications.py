@@ -1,6 +1,10 @@
 from typing import Dict, Any, List
 from supabase import Client
 from .formatting import format_ticket_numbers
+from datetime import datetime
+import logging
+
+logger = logging.getLogger(__name__)
 
 def format_ticket_numbers(numbers: List[int]) -> str:
     """
@@ -49,105 +53,83 @@ async def create_notification(supabase: Client, payload: Dict[str, Any]) -> None
         print(f"Error creating notification: {str(e)}")
         raise e
 
-async def notify_ticket_updated(
-    supabase: Client,
-    updated_ticket: Dict[str, Any],
-    updater: Dict[str, Any],
-    previous_ticket: Dict[str, Any]
-) -> None:
-    """
-    Create a notification for ticket updates.
-    """
+async def notify_ticket_updated(supabase_client, ticket_id):
     try:
-        # Get ticket owner and assignee info
-        owner_id = updated_ticket.get('user_id')
-        assignee_id = updated_ticket.get('assigned_to')
-        previous_assignee_id = previous_ticket.get('assigned_to')
+        # Get ticket details
+        ticket_result = supabase_client.table('tickets').select('''
+            *,
+            user:profiles!tickets_user_id_fkey (email, full_name),
+            agent:profiles!tickets_assigned_to_fkey (email, full_name)
+        ''').eq('id', ticket_id).single().execute()
         
-        # Determine what changed
-        changes = []
-        for field in ['status', 'priority', 'assigned_to', 'group_name', 'type', 'topic']:
-            if updated_ticket.get(field) != previous_ticket.get(field):
-                # Format field name
-                formatted_field = ' '.join(word.title() for word in field.split('_'))
-                
-                # Get and format values
-                old_value = previous_ticket.get(field)
-                new_value = updated_ticket.get(field)
-                
-                # Special handling for assigned_to
-                if field == 'assigned_to':
-                    if old_value is None:
-                        formatted_old = 'Unassigned'
-                    else:
-                        old_user = supabase.table('profiles').select('full_name,email').eq('id', old_value).single().execute()
-                        old_data = old_user.data if old_user.data else None
-                        if old_data:
-                            name = old_data.get('full_name') or 'Unknown user'
-                            formatted_old = f"@{name}"
-                        else:
-                            formatted_old = 'Unknown user'
-                    
-                    if new_value is None:
-                        formatted_new = 'Unassigned'
-                    else:
-                        new_user = supabase.table('profiles').select('full_name,email').eq('id', new_value).single().execute()
-                        new_data = new_user.data if new_user.data else None
-                        if new_data:
-                            name = new_data.get('full_name') or 'Unknown user'
-                            formatted_new = f"@{name}"
-                        else:
-                            formatted_new = 'Unknown user'
-                # Special handling for type and topic to preserve case
-                elif field in ['type', 'topic']:
-                    formatted_old = old_value if old_value else 'None'
-                    formatted_new = new_value if new_value else 'None'
-                else:
-                    # For other fields, capitalize first letter
-                    formatted_old = str(old_value)[0].upper() + str(old_value)[1:] if old_value else 'None'
-                    formatted_new = str(new_value)[0].upper() + str(new_value)[1:] if new_value else 'None'
-                
-                changes.append(f"{formatted_field}: {formatted_old} → {formatted_new}")
-        
-        if not changes:
+        if ticket_result.error:
+            logger.error('Error fetching ticket details: %s', ticket_result.error)
             return
             
-        change_text = ", ".join(changes)
-        updater_name = updater['user_metadata'].get('full_name', 'Unknown')
-        
-        # Create notifications
+        ticket = ticket_result.data
+        if not ticket:
+            logger.error('Ticket not found: %s', ticket_id)
+            return
+            
+        # Create notification
         notification_data = {
-            'type': 'TICKET_UPDATED',
-            'ticket_id': updated_ticket['id']
+            'ticket_id': ticket_id,
+            'user_id': ticket['user_id'],
+            'message': f'Ticket #{ticket_id} has been updated',
+            'created_at': datetime.now().isoformat()
         }
         
-        # Format ticket number
-        ticket_num = format_ticket_numbers([updated_ticket['id']])
+        notification_result = supabase_client.table('notifications').insert(notification_data).execute()
         
-        # Notify ticket owner
-        if owner_id and owner_id != updater['id']:
-            create_notification(supabase, {
-                **notification_data,
-                'user_id': owner_id,
-                'message': f"Your ticket {ticket_num} was updated by {updater_name}: {change_text}"
-            })
-        
-        # Notify previous assignee if changed
-        if previous_assignee_id and previous_assignee_id != assignee_id and previous_assignee_id != updater['id']:
-            create_notification(supabase, {
-                **notification_data,
-                'user_id': previous_assignee_id,
-                'message': f"Ticket {ticket_num} was unassigned from you by {updater_name}: {change_text}"
-            })
-        
-        # Notify new assignee if changed
-        if assignee_id and assignee_id != previous_assignee_id and assignee_id != updater['id']:
-            create_notification(supabase, {
-                **notification_data,
-                'user_id': assignee_id,
-                'message': f"Ticket {ticket_num} was assigned to you by {updater_name}: {change_text}"
-            })
+        if notification_result.error:
+            logger.error('Error creating notification: %s', notification_result.error)
+            return
             
+        logger.info('Successfully created notification for ticket update')
+        
     except Exception as e:
-        print(f"Error creating notification: {str(e)}")
-        raise e 
+        logger.error('Error in notify_ticket_updated: %s', str(e))
+        return 
+
+async def notify_ticket_created(supabase_client, ticket, user):
+    try:
+        # Get assigned agent details if any
+        agent_name = None
+        if ticket.get('assigned_to'):
+            agent_result = supabase_client.table('profiles').select('full_name').eq('id', ticket['assigned_to']).single().execute()
+            if agent_result.data:
+                agent_name = agent_result.data.get('full_name')
+
+        # Create notification for the ticket creator
+        creator_notification = {
+            'user_id': user['id'],
+            'title': 'Ticket Created',
+            'message': f'Your ticket #{ticket["id"]} has been created successfully' + 
+                      (f' and assigned to {agent_name}' if agent_name else ''),
+            'type': 'ticket_created',
+            'ticket_id': ticket['id'],
+            'created_at': datetime.now().isoformat()
+        }
+        creator_result = supabase_client.table('notifications').insert(creator_notification).execute()
+        if not creator_result.data:
+            logger.error('Failed to create notification for ticket creator')
+
+        # If there's an assigned agent, create notification for them
+        if ticket.get('assigned_to'):
+            agent_notification = {
+                'user_id': ticket['assigned_to'],
+                'title': 'New Ticket Assigned',
+                'message': f'Ticket #{ticket["id"]} has been assigned to you',
+                'type': 'ticket_assigned',
+                'ticket_id': ticket['id'],
+                'created_at': datetime.now().isoformat()
+            }
+            agent_result = supabase_client.table('notifications').insert(agent_notification).execute()
+            if not agent_result.data:
+                logger.error('Failed to create notification for assigned agent')
+
+        logger.info('Successfully created notifications for ticket creation')
+
+    except Exception as e:
+        logger.error('Error in notify_ticket_created: %s', str(e))
+        return 

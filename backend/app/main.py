@@ -11,7 +11,7 @@ from typing import Optional, Dict, Any, List
 import os
 from dotenv import load_dotenv
 import json
-from .utils.notifications import notify_ticket_updated
+from .utils.notifications import notify_ticket_updated, notify_ticket_created
 from .utils.formatting import format_ticket_numbers
 from datetime import datetime
 import logging
@@ -103,28 +103,33 @@ app.openapi = custom_openapi
 async def get_supabase_client() -> SupabaseClient:
     return supabase
 
-async def get_current_user(authorization: str = Header(...)) -> Dict[str, Any]:
+async def get_current_user(authorization: str = Header(...), supabase_client: SupabaseClient = Depends(get_supabase_client)) -> Dict[str, Any]:
     try:
         # Extract the token from the Authorization header
         token = authorization.split(' ')[1] if authorization.startswith('Bearer ') else authorization
         
         # Get user data from Supabase
-        user_response = supabase.auth.get_user(token)
+        user_response = supabase_client.auth.get_user(token)
         if not user_response or not user_response.user:
             raise HTTPException(status_code=401, detail="Invalid token")
         
         user = user_response.user
         
         # Get user's role from profiles table
-        profile_response = supabase.table('profiles').select('role').eq('id', user.id).single().execute()
+        profile_response = supabase_client.table('profiles').select('role').eq('id', user.id).single().execute()
         if not profile_response.data:
             raise HTTPException(status_code=401, detail="Could not fetch user profile")
         
-        # Add role to user object
-        user.user_metadata = user.user_metadata or {}
-        user.user_metadata['role'] = profile_response.data['role']
+        # Create a new dictionary with user data and role
+        user_data = {
+            'id': user.id,
+            'email': user.email,
+            'user_metadata': {
+                'role': profile_response.data['role']
+            }
+        }
         
-        return user
+        return user_data
         
     except Exception as e:
         logger.error('Error getting current user: %s', str(e))
@@ -964,9 +969,9 @@ async def get_relevant_articles(ticket_context, recent_messages, supabase_client
         # Combine ticket context and recent messages into a query
         query_text = ""
         if ticket_context:
-            query_text += f"{ticket_context.get('title', '')} {ticket_context.get('description', '')} "
+            query_text += f"{ticket_context.get('subject', '')} {ticket_context.get('description', '')} "
         
-        for msg in recent_messages[:3]:  # Only use last 3 messages for context
+        for msg in recent_messages:  # Use all messages for better context
             query_text += f"{msg.get('content', '')} "
 
         # Get embeddings using LangChain
@@ -977,106 +982,78 @@ async def get_relevant_articles(ticket_context, recent_messages, supabase_client
         query_response = index.query(
             vector=query_embedding,
             top_k=5,
-            include_metadata=True
+            include_metadata=True,
+            filter={
+                "type": "article"  # Only get articles
+            }
         )
 
         # Get the articles from Supabase using the IDs from Pinecone
-        article_ids = [match['metadata']['article_id'] for match in query_response['matches']]
-        articles_result = await supabase_client.table('knowledge_base_articles').select('*').in_('id', article_ids).execute()
-        
-        if articles_result.error:
-            logger.error('Error fetching knowledge base articles: %s', articles_result.error)
+        article_ids = []
+        for match in query_response['matches']:
+            if 'article_id' in match['metadata']:
+                article_ids.append(match['metadata']['article_id'])
+
+        if not article_ids:
             return []
 
-        return articles_result.data or []
+        try:
+            articles_result = supabase_client.table('knowledge_base_articles').select('*').in_('id', article_ids).execute()
+            return articles_result.data if hasattr(articles_result, 'data') else []
+        except Exception as e:
+            logger.error('Error fetching knowledge base articles: %s', str(e))
+            return []
 
     except Exception as e:
         logger.error('Error in get_relevant_articles: %s', str(e))
         return []
 
-async def generate_ai_response(ticket_context, recent_messages, relevant_articles, agent_message):
-    try:
-        # Create conversation history
-        messages = []
-        
-        # Add system message with context
-        system_content = "You are a helpful customer service AI assistant. "
-        if ticket_context:
-            system_content += f"\nTicket Context:\nTitle: {ticket_context.get('title', '')}\nDescription: {ticket_context.get('description', '')}"
-        
-        if relevant_articles:
-            system_content += "\n\nRelevant Knowledge Base Articles:"
-            for article in relevant_articles:
-                system_content += f"\n- {article.get('title', '')}: {article.get('content', '')}"
-        
-        messages.append(SystemMessage(content=system_content))
-
-        # Add conversation history
-        for msg in reversed(recent_messages):
-            if msg.get('is_ai_generated'):
-                messages.append(AIMessage(content=msg.get('content', '')))
-            else:
-                messages.append(HumanMessage(content=msg.get('content', '')))
-
-        # Add the agent's message
-        messages.append(HumanMessage(content=f"Agent's message: {agent_message}\nPlease generate a helpful response based on the ticket context and knowledge base articles provided."))
-
-        # Create LangChain chat model
-        chat = ChatOpenAI(
-            temperature=0.7,
-            model_name="gpt-4o-mini",
-            max_tokens=500
-        )
-
-        # Create prompt template
-        prompt = ChatPromptTemplate.from_messages(messages)
-
-        # Create chain
-        chain = prompt | chat | StrOutputParser()
-
-        # Generate response
-        response = await chain.ainvoke({})
-        return response
-
-    except Exception as e:
-        logger.error('Error generating AI response: %s', str(e))
-        return None
-
-async def generate_message_embedding(content: str) -> List[float]:
-    try:
-        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
-        embedding_vector = await embeddings.aembed_query(content.strip())
-        return embedding_vector.tolist() if isinstance(embedding_vector, np.ndarray) else embedding_vector
-    except Exception as e:
-        logger.error('Error generating message embedding: %s', str(e))
-        return None
-
 async def find_similar_messages(content: str, ticket_id: int, supabase_client: SupabaseClient, limit: int = 5) -> List[Dict]:
     try:
-        # Generate embedding for the query
-        query_embedding = await generate_message_embedding(content)
-        if not query_embedding:
-            return []
+        # Get embeddings using LangChain
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        query_embedding = await embeddings.aembed_query(content.strip())
 
-        # Get messages with embeddings for this ticket
-        messages_result = await supabase_client.rpc(
-            'match_messages',
-            {
-                'query_embedding': query_embedding,
-                'match_threshold': 0.7,
-                'match_count': limit,
-                'ticket_id': ticket_id
+        # Query Pinecone for similar messages
+        query_response = index.query(
+            vector=query_embedding,
+            top_k=limit,
+            include_metadata=True,
+            filter={
+                "type": "message",
+                "ticket_id": str(ticket_id)  # Filter by ticket_id
             }
-        ).execute()
+        )
+
+        # Get all messages for this ticket from Supabase
+        messages_result = supabase_client.table('replies').select('''
+            *,
+            user_profile:profiles!replies_user_id_fkey (
+                email,
+                full_name,
+                avatar_url,
+                role
+            )
+        ''').eq('ticket_id', ticket_id).order('created_at', desc=True).execute()
 
         if messages_result.error:
-            logger.error('Error finding similar messages: %s', messages_result.error)
+            logger.error('Error fetching messages: %s', messages_result.error)
             return []
 
         return messages_result.data or []
+
     except Exception as e:
         logger.error('Error in find_similar_messages: %s', str(e))
         return []
+
+async def generate_message_embedding(content: str, ticket_id: str = None) -> List[float]:
+    try:
+        embeddings = OpenAIEmbeddings(model="text-embedding-3-large")
+        embedding_vector = await embeddings.aembed_query(content.strip())
+        return embedding_vector
+    except Exception as e:
+        logger.error('Error generating message embedding: %s', str(e))
+        return None
 
 @app.post("/api/tickets/{ticket_id}/replies", response_model=Dict[str, Any])
 async def create_reply(
@@ -1088,8 +1065,8 @@ async def create_reply(
     try:
         content = data.get('content')
         is_public = data.get('is_public', True)
-        relevant_articles = data.get('relevant_articles', [])
-
+        is_ai_generated = data.get('is_ai_generated', False)
+        
         if not content:
             raise ValueError('Content is required')
 
@@ -1097,149 +1074,164 @@ async def create_reply(
             'ticket_id': ticket_id,
             'content': content,
             'is_public': is_public,
-            'relevant_articles': relevant_articles,
-            'user_id': user.id
+            'is_ai_generated': is_ai_generated,
+            'user_id': user['id']
         })
 
-        # Get ticket details for context
-        ticket_result = await supabase_client.table('tickets').select('*').eq('id', ticket_id).single().execute()
-        if ticket_result.error:
-            logger.error('Error fetching ticket: %s', ticket_result.error)
-            raise ticket_result.error
-        
-        ticket_context = ticket_result.data
+        # Get ticket context
+        ticket_result = supabase_client.table('tickets').select('*').eq('id', ticket_id).single().execute()
+        ticket_context = ticket_result.data if hasattr(ticket_result, 'data') else None
 
-        # Get recent messages for context
-        messages_result = await supabase_client.table('replies').select('*').eq('ticket_id', ticket_id).order('created_at', desc=True).limit(5).execute()
-        recent_messages = []
-        if not messages_result.error:
-            recent_messages = messages_result.data
+        # Get all messages for this ticket
+        messages_result = supabase_client.table('replies').select('*').eq('ticket_id', ticket_id).order('created_at', desc=True).execute()
+        recent_messages = messages_result.data if hasattr(messages_result, 'data') else []
 
-        # Generate embedding for the reply
-        try:
-            reply_embedding = await generate_embedding(content)
-            logger.info('Generated embedding for reply')
-        except Exception as e:
-            logger.error('Error generating embedding for reply: %s', str(e))
-            reply_embedding = None
+        # Get relevant articles based on current context
+        relevant_articles = await get_relevant_articles(ticket_context, recent_messages, supabase_client)
 
-        # Create the reply with embedding
+        # Create the reply
         reply_data = {
             'ticket_id': ticket_id,
             'content': content,
-            'user_id': user.id,
+            'user_id': user['id'],
             'is_public': is_public,
+            'is_ai_generated': is_ai_generated
         }
-        if reply_embedding is not None:
-            reply_data['embedding'] = reply_embedding
 
-        reply_result = await supabase_client.table('replies').insert(reply_data).select('''
-            *,
-            user_profile:profiles!replies_user_id_fkey (
-                email,
-                full_name,
-                avatar_url,
-                role
-            )
-        ''').single().execute()
+        # Execute the insert operation
+        try:
+            reply_result = supabase_client.table('replies').insert(reply_data).execute()
+            reply_data = reply_result.data[0] if hasattr(reply_result, 'data') and reply_result.data else None
+            if not reply_data:
+                raise ValueError('Failed to create reply')
+        except Exception as e:
+            logger.error('Error inserting reply: %s', str(e))
+            raise ValueError('Failed to create reply')
 
-        if reply_result.error:
-            logger.error('Error creating reply: %s', reply_result.error)
-            raise reply_result.error
+        # Get user profile data in a separate query
+        try:
+            user_profile = supabase_client.table('profiles').select('email,full_name,avatar_url,role').eq('id', user['id']).single().execute()
+            if hasattr(user_profile, 'data') and user_profile.data:
+                reply_data['user_profile'] = user_profile.data
+        except Exception as e:
+            logger.error('Error fetching user profile: %s', str(e))
 
-        # Find similar messages from ticket history
-        similar_messages = await find_similar_messages(content, ticket_id, supabase_client)
-
-        # Generate AI response if user is customer
-        ai_response = None
-        if user.get('role') == 'user':
-            # Format context from ticket, messages, articles, and similar messages
-            context = f"""
-            Ticket Subject: {ticket_context['subject']}
-            Ticket Description: {ticket_context['description']}
-            
-            Recent Messages:
-            {format_messages_for_context(recent_messages)}
-            
-            Similar Past Messages:
-            {format_messages_for_context(similar_messages)}
-            
-            Relevant Knowledge Base Articles:
-            {format_articles_for_context(relevant_articles)}
-            
-            Customer Message:
-            {content}
-            """
-
-            # Generate AI response using context
-            openai_client = OpenAI(api_key=os.getenv('OPENAI_API_KEY'))
-            response = await openai_client.chat.completions.create(
-                model="gpt-4o-mini",
-                messages=[
-                    {"role": "system", "content": "You are a helpful customer support agent. Use the provided knowledge base articles and similar past conversations to help answer the customer's question. Be concise but thorough."},
-                    {"role": "user", "content": context}
-                ]
-            )
-            
-            ai_response = response.choices[0].message.content
-
-            if ai_response:
-                # Get the assigned agent's ID from the ticket
-                assigned_agent_id = ticket_context.get('assigned_to')
-                if not assigned_agent_id:
-                    logger.error('No assigned agent found for ticket %s', ticket_id)
-                    return {
-                        'message': 'Reply created successfully',
-                        'reply': {
-                            **reply_result.data,
-                            'user_avatar': reply_result.data['user_profile'].get('avatar_url'),
+        # Generate embedding for the reply and store in Pinecone
+        try:
+            reply_embedding = await generate_message_embedding(content)
+            if reply_embedding:
+                # Store in Pinecone
+                index.upsert(
+                    vectors=[{
+                        'id': f"message_{reply_data['id']}",
+                        'values': reply_embedding,
+                        'metadata': {
+                            'content': content,
+                            'ticket_id': str(ticket_id),
+                            'type': 'message',
+                            'created_at': reply_data['created_at']
                         }
+                    }]
+                )
+                logger.info('Stored reply embedding in Pinecone')
+        except Exception as e:
+            logger.error('Error storing reply embedding: %s', str(e))
+            # Continue even if embedding storage fails
+
+        # Generate AI response if the message is from a user and not AI-generated
+        ai_reply_data = None
+        if user['user_metadata']['role'] == 'user' and not is_ai_generated:
+            try:
+                # Generate enhanced AI response using all context
+                ai_response = await generate_enhanced_response(
+                    {
+                        'ticket_context': ticket_context,
+                        'recent_messages': recent_messages,
+                        'relevant_articles': relevant_articles,
+                        'similar_messages': recent_messages  # Use all messages as context
+                    },
+                    content,
+                    'user'
+                )
+
+                if ai_response:
+                    # Get the assigned agent's ID from the ticket or find an available agent
+                    assigned_agent_id = ticket_context.get('assigned_to')
+                    
+                    if not assigned_agent_id:
+                        # Find an available agent
+                        try:
+                            agent_result = supabase_client.table('profiles').select('id').eq('role', 'agent').limit(1).execute()
+                            if hasattr(agent_result, 'data') and agent_result.data:
+                                assigned_agent_id = agent_result.data[0]['id']
+                                # Update ticket with assigned agent
+                                supabase_client.table('tickets').update({'assigned_to': assigned_agent_id}).eq('id', ticket_id).execute()
+                            else:
+                                logger.error('No agents available in the system')
+                                assigned_agent_id = "00000000-0000-0000-0000-000000000000"  # System user ID
+                        except Exception as e:
+                            logger.error('Error finding available agent: %s', str(e))
+                            assigned_agent_id = "00000000-0000-0000-0000-000000000000"  # System user ID
+
+                    # Generate AI reply from the assigned agent
+                    ai_reply_data = {
+                        'ticket_id': ticket_id,
+                        'content': ai_response,
+                        'user_id': assigned_agent_id,
+                        'is_public': True,
+                        'is_ai_generated': True
                     }
 
-                # Generate embedding for AI response
-                try:
-                    ai_reply_embedding = await generate_embedding(ai_response)
-                    logger.info('Generated embedding for AI reply')
-                except Exception as e:
-                    logger.error('Error generating embedding for AI reply: %s', str(e))
-                    ai_reply_embedding = None
+                    try:
+                        # Insert AI reply
+                        ai_reply_result = supabase_client.table('replies').insert(ai_reply_data).execute()
+                        if hasattr(ai_reply_result, 'data') and ai_reply_result.data:
+                            logger.info('AI reply created successfully')
+                            ai_reply_data = ai_reply_result.data[0]
 
-                # Create AI reply as the assigned agent
-                ai_reply_data = {
-                    'ticket_id': ticket_id,
-                    'content': ai_response,
-                    'user_id': assigned_agent_id,
-                    'is_public': True,
-                    'is_ai_generated': True,
-                }
-                if ai_reply_embedding is not None:
-                    ai_reply_data['embedding'] = ai_reply_embedding
+                            # Get agent profile data
+                            agent_profile = supabase_client.table('profiles').select('email,full_name,avatar_url,role').eq('id', assigned_agent_id).single().execute()
+                            if hasattr(agent_profile, 'data') and agent_profile.data:
+                                ai_reply_data['user_profile'] = agent_profile.data
 
-                ai_reply_result = await supabase_client.table('replies').insert(ai_reply_data).select('''
-                    *,
-                    user_profile:profiles!replies_user_id_fkey (
-                        email,
-                        full_name,
-                        avatar_url,
-                        role
-                    )
-                ''').single().execute()
-
-                if ai_reply_result.error:
-                    logger.error('Error creating AI reply: %s', ai_reply_result.error)
-                else:
-                    logger.info('Successfully created AI reply')
+                            # Generate and store embedding for AI reply
+                            try:
+                                ai_reply_embedding = await generate_message_embedding(ai_response)
+                                if ai_reply_embedding:
+                                    # Store in Pinecone
+                                    index.upsert(
+                                        vectors=[{
+                                            'id': f"message_{ai_reply_data['id']}",
+                                            'values': ai_reply_embedding,
+                                            'metadata': {
+                                                'content': ai_response,
+                                                'ticket_id': str(ticket_id),
+                                                'type': 'message',
+                                                'created_at': ai_reply_data['created_at']
+                                            }
+                                        }]
+                                    )
+                                    logger.info('Stored AI reply embedding in Pinecone')
+                            except Exception as e:
+                                logger.error('Error storing AI reply embedding: %s', str(e))
+                    except Exception as e:
+                        logger.error('Error creating AI reply: %s', str(e))
+            except Exception as e:
+                logger.error('Error generating AI response: %s', str(e))
 
         # Notify about ticket update
-        await notify_ticket_updated(supabase_client, ticket_id)
+        try:
+            await notify_ticket_updated(supabase_client, ticket_id)
+        except Exception as e:
+            logger.error('Error notifying ticket update: %s', str(e))
 
         return {
             'message': 'Reply created successfully',
             'reply': {
-                **reply_result.data,
-                'user_avatar': reply_result.data['user_profile'].get('avatar_url'),
+                **reply_data,
+                'user_avatar': reply_data.get('user_profile', {}).get('avatar_url'),
             },
-            'ai_reply': ai_response
+            'ai_reply': ai_reply_data
         }
 
     except Exception as error:
@@ -1423,6 +1415,15 @@ async def backfill_embeddings(
                         }]
                     )
 
+                    # Update has_embedding flag in Supabase
+                    update_result = supabase_client.table('knowledge_base_articles').update({
+                        'has_embedding': True
+                    }).eq('id', article['id']).execute()
+
+                    if update_result.error:
+                        logger.error('Error updating has_embedding flag for article %s: %s', article['id'], update_result.error)
+                        continue
+
                     total_processed += 1
                     logger.info(f"Processed article {article['id']}")
                 except Exception as e:
@@ -1488,3 +1489,208 @@ async def favicon():
     Handle favicon.ico requests gracefully
     """
     return {"status": "ok"}
+
+async def get_conversation_context(ticket_id: int, current_message: str, supabase_client: SupabaseClient):
+    try:
+        # Get ticket context
+        ticket_result = supabase_client.table('tickets').select('*').eq('id', ticket_id).single().execute()
+        ticket_context = ticket_result.data if ticket_result.data else None
+
+        # Get recent messages (last 5)
+        messages_result = supabase_client.table('replies').select('*').eq('ticket_id', ticket_id).order('created_at', desc=True).limit(5).execute()
+        recent_messages = messages_result.data if messages_result.data else []
+
+        # Get relevant articles based on current context
+        relevant_articles = await get_relevant_articles(ticket_context, recent_messages, supabase_client)
+
+        # Find similar past messages
+        similar_messages = await find_similar_messages(current_message, ticket_id, supabase_client)
+
+        return {
+            'ticket_context': ticket_context,
+            'recent_messages': recent_messages,
+            'relevant_articles': relevant_articles,
+            'similar_messages': similar_messages
+        }
+    except Exception as e:
+        logger.error(f"Error getting conversation context: {str(e)}")
+        return None
+
+async def generate_enhanced_response(context: Dict, current_message: str, user_role: str):
+    try:
+        # Format all context pieces
+        system_content = """You are a helpful customer service AI assistant. Your goal is to provide clear, concise, and helpful responses to customer inquiries.
+        
+        When responding to tickets:
+        1. Be professional and courteous
+        2. Address all points in the customer's message
+        3. If relevant knowledge base articles are available, incorporate their information
+        4. If similar past conversations are available, use them to inform your response
+        5. Keep responses focused and actionable
+        6. For initial ticket responses, acknowledge the issue and provide next steps
+        """
+        
+        if context['ticket_context']:
+            system_content += f"\nTicket Context:\nTitle: {context['ticket_context'].get('title', '')}\nDescription: {context['ticket_context'].get('description', '')}"
+        
+        if context['relevant_articles']:
+            system_content += "\n\nRelevant Knowledge Base Articles:"
+            for article in context['relevant_articles']:
+                system_content += f"\n- {article.get('title', '')}: {article.get('content', '')}"
+        
+        if context['similar_messages']:
+            system_content += "\n\nSimilar Past Conversations:"
+            for msg in context['similar_messages']:
+                system_content += f"\n- Customer: {msg.get('content', '')}"
+        
+        messages = [
+            SystemMessage(content=system_content),
+            *[HumanMessage(content=msg['content']) if not msg.get('is_ai_generated') else AIMessage(content=msg['content']) 
+              for msg in reversed(context['recent_messages'])],
+            HumanMessage(content=current_message)
+        ]
+
+        chat = ChatOpenAI(
+            temperature=0.7,
+            model_name="gpt-4o-mini",
+            max_tokens=500
+        )
+
+        prompt = ChatPromptTemplate.from_messages(messages)
+        chain = prompt | chat | StrOutputParser()
+        
+        response = await chain.ainvoke({})
+        return response
+
+    except Exception as e:
+        logger.error('Error generating enhanced response: %s', str(e))
+        return None
+
+@app.post("/api/tickets", response_model=Dict[str, Any])
+async def create_ticket(
+    data: Dict[str, Any],
+    supabase_client: SupabaseClient = Depends(get_supabase_client),
+    user: Dict[str, Any] = Depends(get_current_user)
+):
+    try:
+        # Validate required fields
+        required_fields = ['subject', 'description', 'priority', 'ticket_type', 'topic']
+        for field in required_fields:
+            if field not in data:
+                raise ValueError(f'Missing required field: {field}')
+
+        # Find an available agent with matching specialty
+        agents_result = supabase_client.table('profiles').select('id, email, full_name, specialty').eq('role', 'agent').eq('specialty', data['topic']).execute()
+        agent = agents_result.data[0] if agents_result.data else None
+
+        # Create the ticket
+        ticket_data = {
+            'subject': data['subject'],
+            'description': data['description'],
+            'priority': data['priority'],
+            'ticket_type': data['ticket_type'],
+            'topic': data['topic'],
+            'user_id': user['id'],
+            'status': 'open',
+            'group_name': 'Support',
+            'assigned_to': agent['id'] if agent else None
+        }
+
+        # Insert the ticket
+        ticket_result = supabase_client.table('tickets').insert(ticket_data).execute()
+        if not ticket_result.data:
+            raise ValueError('Failed to create ticket')
+
+        # Get the created ticket with related data
+        created_ticket_result = supabase_client.table('tickets').select('''
+            *,
+            profiles!tickets_user_id_fkey (email, full_name),
+            agents:profiles!tickets_assigned_to_fkey (email, full_name)
+        ''').eq('id', ticket_result.data[0]['id']).single().execute()
+
+        if not created_ticket_result.data:
+            raise ValueError('Failed to fetch created ticket')
+
+        ticket = created_ticket_result.data
+
+        # Create initial reply with ticket description
+        reply_data = {
+            'ticket_id': ticket['id'],
+            'content': data['description'],
+            'user_id': user['id'],
+            'is_public': True
+        }
+
+        reply_result = supabase_client.table('replies').insert(reply_data).execute()
+        if not reply_result.data:
+            logger.error('Error creating initial reply')
+
+        # Get conversation context for AI response
+        conversation_context = await get_conversation_context(ticket['id'], data['description'], supabase_client)
+
+        # Generate AI response
+        ai_response = None
+        if conversation_context:
+            try:
+                ai_response = await generate_enhanced_response(
+                    conversation_context,
+                    data['description'],
+                    'user'  # Initial ticket is always from a user
+                )
+
+                if ai_response:
+                    # Get the assigned agent's ID from the ticket
+                    assigned_agent_id = ticket_context.get('assigned_to')
+                    if not assigned_agent_id:
+                        logger.error('No assigned agent found for ticket %s', ticket['id'])
+                        return {
+                            'message': 'Reply created successfully',
+                            'reply': {
+                                **reply_data,
+                                'user_avatar': reply_data['user_profile'].get('avatar_url'),
+                            }
+                        }
+
+                    # Generate AI reply from the assigned agent
+                    ai_reply_data = {
+                        'ticket_id': ticket['id'],
+                        'content': ai_response,
+                        'user_id': assigned_agent_id,
+                        'is_public': True,
+                        'is_ai_generated': True
+                    }
+
+                    # Insert AI reply
+                    ai_reply_result = supabase_client.table('replies').insert(ai_reply_data).execute()
+
+                    if ai_reply_result.error:
+                        logger.error('Error creating AI reply: %s', ai_reply_result.error)
+                    else:
+                        logger.info('AI reply created successfully')
+                        ai_reply_data = ai_reply_result.data[0]
+            except Exception as e:
+                logger.error('Error generating AI response: %s', str(e))
+
+        # Notify about ticket update
+        try:
+            await notify_ticket_created(supabase_client, ticket, user)
+        except Exception as e:
+            logger.error('Error creating notification: %s', str(e))
+
+        return {
+            'ticket': {
+                **ticket,
+                'isNewTicket': True
+            },
+            'ai_response': ai_response
+        }
+
+    except Exception as error:
+        logger.error('Error in create_ticket: %s', str(error))
+        return JSONResponse(
+            content={
+                'error': str(error),
+                'details': getattr(error, 'details', None)
+            },
+            status_code=400
+        )

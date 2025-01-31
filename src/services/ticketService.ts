@@ -1,6 +1,8 @@
 import { supabase } from '../lib/supabaseClient';
+import { RealtimeChannel } from '@supabase/supabase-js';
 
-const EDGE_FUNCTION_URL = process.env.REACT_APP_SUPABASE_URL + '/functions/v1/tickets';
+// Make sure we're using the correct backend URL
+const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
 
 interface TicketCreationPayload {
   subject: string;
@@ -10,17 +12,20 @@ interface TicketCreationPayload {
   topic: 'Order & Shipping Issues' | 'Billing & Account Concerns' | 'Communication & Customer Experience' | 'Policy' | 'Promotions & Loyalty Programs' | 'Product & Service Usage';
 }
 
+let replySubscription: RealtimeChannel | null = null;
+
 export const ticketService = {
   async createTicket(payload: TicketCreationPayload) {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('No active session');
 
+    const url = `${BACKEND_URL}/api/tickets`;
     console.log('Sending ticket creation request:', {
       payload,
-      url: EDGE_FUNCTION_URL
+      url
     });
 
-    const response = await fetch(EDGE_FUNCTION_URL, {
+    const response = await fetch(url, {
       method: 'POST',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
@@ -66,13 +71,14 @@ export const ticketService = {
     const { data: { session } } = await supabase.auth.getSession();
     if (!session) throw new Error('No active session');
 
-    const response = await fetch(EDGE_FUNCTION_URL, {
+    const url = `${BACKEND_URL}/api/tickets/${id}`;
+    const response = await fetch(url, {
       method: 'PUT',
       headers: {
         'Authorization': `Bearer ${session.access_token}`,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({ id, ...updates })
+      body: JSON.stringify(updates)
     });
 
     if (!response.ok) {
@@ -169,5 +175,112 @@ export const ticketService = {
     }
 
     return { tickets: data || [] };
+  },
+
+  subscribeToReplies: (ticketId: number, onNewReply: (reply: any) => void) => {
+    console.log(`Setting up subscription for ticket ${ticketId}`);
+    
+    // Unsubscribe from any existing subscription
+    if (replySubscription) {
+        console.log('Cleaning up existing subscription');
+        replySubscription.unsubscribe();
+        replySubscription = null;
+    }
+
+    // Create new subscription
+    replySubscription = supabase
+        .channel(`replies:${ticketId}`)
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'replies',
+                filter: `ticket_id=eq.${ticketId}`
+            },
+            async (payload) => {
+                console.log('Received new reply:', payload);
+                try {
+                    // Fetch the complete reply data with user profile
+                    const { data: reply, error } = await supabase
+                        .from('replies')
+                        .select(`
+                            *,
+                            user_profile:profiles!replies_user_id_fkey (
+                                email,
+                                full_name,
+                                avatar_url,
+                                role
+                            )
+                        `)
+                        .eq('id', payload.new.id)
+                        .single();
+
+                    if (error) {
+                        console.error('Error fetching complete reply data:', error);
+                        // Still notify with the basic payload data
+                        onNewReply({
+                            ...payload.new,
+                            user_profile: null,
+                            user_avatar: null
+                        });
+                        return;
+                    }
+
+                    console.log('Fetched complete reply data:', reply);
+                    onNewReply({
+                        ...reply,
+                        user_avatar: reply.user_profile?.avatar_url
+                    });
+                } catch (err) {
+                    console.error('Error in reply subscription handler:', err);
+                    // Notify with basic payload data as fallback
+                    onNewReply({
+                        ...payload.new,
+                        user_profile: null,
+                        user_avatar: null
+                    });
+                }
+            }
+        )
+        .subscribe((status) => {
+            console.log(`Subscription status for ticket ${ticketId}:`, status);
+            if (status === 'SUBSCRIBED') {
+                console.log(`Successfully subscribed to replies for ticket ${ticketId}`);
+            } else if (status === 'CHANNEL_ERROR') {
+                console.error(`Channel error for ticket ${ticketId}`);
+                // Try to resubscribe after a delay
+                setTimeout(() => {
+                    if (replySubscription) {
+                        console.log('Attempting to resubscribe...');
+                        replySubscription.subscribe();
+                    }
+                }, 2000);
+            } else if (status === 'TIMED_OUT') {
+                console.error(`Subscription timed out for ticket ${ticketId}`);
+                // Try to resubscribe after a delay
+                setTimeout(() => {
+                    if (replySubscription) {
+                        console.log('Attempting to resubscribe after timeout...');
+                        replySubscription.subscribe();
+                    }
+                }, 2000);
+            }
+        });
+
+    return () => {
+        console.log(`Cleaning up subscription for ticket ${ticketId}`);
+        if (replySubscription) {
+            replySubscription.unsubscribe();
+            replySubscription = null;
+        }
+    };
+  },
+
+  unsubscribeFromReplies: () => {
+    if (replySubscription) {
+      replySubscription.unsubscribe();
+      replySubscription = null;
+    }
   }
 }; 
