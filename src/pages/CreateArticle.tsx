@@ -5,6 +5,8 @@ import { useKnowledgeBase } from '../contexts/KnowledgeBaseContext';
 import { supabase } from '../lib/supabaseClient';
 import '../styles/CreateArticle.css';
 
+const BACKEND_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
+
 const CreateArticle: React.FC = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
@@ -173,7 +175,7 @@ const CreateArticle: React.FC = () => {
 
         // Generate embeddings for the new article
         try {
-          const response = await fetch('/api/knowledge-base/generate-embeddings', {
+          const response = await fetch(`${BACKEND_URL}/api/knowledge-base/generate-embeddings`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

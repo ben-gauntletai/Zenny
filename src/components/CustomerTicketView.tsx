@@ -1,6 +1,7 @@
 import React, { useRef, useEffect } from 'react';
 import { Ticket, Reply } from '../hooks/useTicket';
 import { getProfileColor, getInitials } from '../utils/profileUtils';
+import { Avatar, Spinner } from '@chakra-ui/react';
 
 type Message = Reply | {
   id: number;
@@ -17,6 +18,7 @@ interface CustomerTicketViewProps {
   handleSubmitReply: () => void;
   onUpdate: (changes: Partial<Ticket>) => Promise<void>;
   pendingChanges: Partial<Ticket>;
+  isAiLoading?: boolean;
 }
 
 const getDisplayEmail = (userEmail: string | { email: string }): string => {
@@ -33,7 +35,8 @@ export const CustomerTicketView: React.FC<CustomerTicketViewProps> = ({
   setReplyContent,
   handleSubmitReply,
   onUpdate,
-  pendingChanges
+  pendingChanges,
+  isAiLoading = false
 }) => {
   const conversationRef = useRef<HTMLDivElement>(null);
 
@@ -114,6 +117,26 @@ export const CustomerTicketView: React.FC<CustomerTicketViewProps> = ({
             </div>
           );
         })}
+        {isAiLoading && (
+          <div className="message other-message" style={{ 
+            display: 'flex',
+            justifyContent: 'flex-start',
+            marginTop: '12px',
+            marginBottom: '12px'
+          }}>
+            <div className="message-avatar">
+              <div style={{ width: '32px', height: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                <Spinner
+                  size="sm"
+                  color="#4A5568"
+                  thickness="3px"
+                  speed="0.8s"
+                />
+              </div>
+            </div>
+            <div className="message-content" style={{ backgroundColor: 'transparent' }}></div>
+          </div>
+        )}
       </div>
 
       <div className="reply-box">

@@ -4,7 +4,7 @@ import { useTicketContext, TicketProvider } from '../contexts/TicketProvider';
 import { type Reply, type Ticket } from '../hooks/useTicket';
 import { useAuth } from '../contexts/AuthContext';
 import TicketDetailPanel from '../components/TicketDetailPanel';
-import { Box, Flex, Text, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton, useDisclosure, Button, Avatar } from '@chakra-ui/react';
+import { Box, Flex, Text, Modal, ModalOverlay, ModalContent, ModalHeader, ModalBody, ModalCloseButton, useDisclosure, Button, Avatar, Spinner } from '@chakra-ui/react';
 import { supabase } from '../lib/supabaseClient';
 import '../styles/TicketDetail.css';
 import { getInitials, getProfileColor } from '../utils/profileUtils';
@@ -55,6 +55,7 @@ interface CustomerTicketViewProps {
   handleSubmitReply: () => void;
   onUpdate: (changes: Partial<Ticket>) => Promise<void>;
   pendingChanges: Partial<Ticket>;
+  isAiLoading: boolean;
 }
 
 interface TicketNote {
@@ -174,7 +175,7 @@ const mapOldTopicToNew = (oldTopic: OldTicketTopic | null) => {
 
 const TicketContent: React.FC = () => {
   const navigate = useNavigate();
-  const { ticket, messages, loading, error, addReply, updateTicket } = useTicketContext();
+  const { ticket, messages, loading, error, isAiLoading, addReply, updateTicket } = useTicketContext();
   const { user } = useAuth();
   const isAgentOrAdmin = user?.user_metadata?.role === 'agent' || user?.user_metadata?.role === 'admin';
   
@@ -378,8 +379,9 @@ const TicketContent: React.FC = () => {
 
   const handleSubmitReply = async () => {
     if (!replyContent.trim()) return;
-    await addReply(replyContent, true);
-    setReplyContent('');
+    
+    const content = replyContent;
+    setReplyContent(''); // Clear immediately
     
     // Scroll to bottom after submitting
     setTimeout(() => {
@@ -388,6 +390,14 @@ const TicketContent: React.FC = () => {
         behavior: 'smooth'
       });
     }, 100);
+
+    try {
+      await addReply(content, true);
+    } catch (error) {
+      console.error('Failed to send reply:', error);
+      // Optionally restore the content if sending failed
+      setReplyContent(content);
+    }
   };
 
   const handleFieldUpdate = async (field: string, value: unknown) => {
@@ -432,6 +442,7 @@ const TicketContent: React.FC = () => {
         handleSubmitReply={handleSubmitReply}
         onUpdate={updateTicket}
         pendingChanges={pendingChanges}
+        isAiLoading={isAiLoading}
       />
     );
   }
@@ -564,6 +575,26 @@ const TicketContent: React.FC = () => {
                 </div>
               );
             })}
+            {isAiLoading && (
+              <div className="message other-message" style={{ 
+                display: 'flex',
+                justifyContent: 'flex-start',
+                marginTop: '12px',
+                marginBottom: '12px'
+              }}>
+                <div className="message-avatar">
+                  <div style={{ width: '32px', height: '32px', display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <Spinner
+                      size="sm"
+                      color="#4A5568"
+                      thickness="3px"
+                      speed="0.8s"
+                    />
+                  </div>
+                </div>
+                <div className="message-content" style={{ backgroundColor: 'transparent' }}></div>
+              </div>
+            )}
           </div>
 
           <div className="reply-box" style={{ marginTop: 'auto' }}>

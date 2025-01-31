@@ -4,7 +4,7 @@ import { supabase } from '../lib/supabaseClient';
 import { useAuth } from '../contexts/AuthContext';
 
 const EDGE_FUNCTION_URL = process.env.REACT_APP_SUPABASE_URL + '/functions/v1/tickets';
-const PYTHON_BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+const PYTHON_BACKEND_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 export interface Reply {
   id: number;
@@ -78,6 +78,7 @@ export const useTicket = (ticketId: string) => {
   const [messages, setMessages] = useState<Message[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+  const [isAiLoading, setIsAiLoading] = useState(false);
   const channelRef = useRef<any>(null);
   const isInitialLoadRef = useRef(true);
   const isSubscribedRef = useRef(false);
@@ -344,33 +345,60 @@ export const useTicket = (ticketId: string) => {
 
     console.log('Adding new reply:', { content, isPublic, ticketId: ticket.id });
 
-    // First, create the reply using the Python backend
-    const pythonResponse = await fetch(`${PYTHON_BACKEND_URL}/api/tickets/${ticket.id}/replies`, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${session.access_token}`,
-        'Content-Type': 'application/json'
-      },
-      body: JSON.stringify({
+    // Create reply in Supabase first
+    const { data: reply, error: replyError } = await supabase
+      .from('replies')
+      .insert({
+        ticket_id: ticket.id,
         content,
-        is_public: isPublic
+        user_id: user.id,
+        is_public: isPublic,
+        is_ai_generated: false
       })
-    });
+      .select(`
+        *,
+        user_profile:profiles!replies_user_id_fkey (
+          email,
+          full_name,
+          avatar_url,
+          role
+        )
+      `)
+      .single();
 
-    if (!pythonResponse.ok) {
-      const error = await pythonResponse.json();
-      console.error('Error from Python backend:', error);
-      throw new Error(error.message || 'Failed to add reply');
+    if (replyError) {
+      console.error('Error creating reply in Supabase:', replyError);
+      throw new Error(replyError.message || 'Failed to create reply');
     }
 
-    const { reply, ai_reply } = await pythonResponse.json();
-    console.log('Reply created successfully:', reply);
-    if (ai_reply) {
-      console.log('AI reply generated:', ai_reply);
+    // After creating the reply, trigger the Python backend for AI processing
+    if (user.user_metadata?.role === 'user') {
+      setIsAiLoading(true);
+      try {
+        const pythonResponse = await fetch(`${PYTHON_BACKEND_URL}/api/tickets/${ticket.id}/replies/${reply.id}/process`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${session.access_token}`,
+            'Content-Type': 'application/json'
+          }
+        });
+
+        if (!pythonResponse.ok) {
+          const errorData = await pythonResponse.json();
+          console.error('Warning: AI processing failed, but user reply was saved:', errorData);
+        } else {
+          const { ai_reply } = await pythonResponse.json();
+          if (ai_reply) {
+            console.log('AI reply generated:', ai_reply);
+          }
+        }
+      } catch (error) {
+        console.error('Warning: AI processing failed, but user reply was saved:', error);
+      } finally {
+        setIsAiLoading(false);
+      }
     }
 
-    // Don't add to local state - wait for real-time update
-    // This prevents duplicate messages
     return reply;
   };
 
@@ -469,6 +497,7 @@ export const useTicket = (ticketId: string) => {
     messages,
     loading,
     error,
+    isAiLoading,
     addReply,
     updateTicket,
     fetchTicket

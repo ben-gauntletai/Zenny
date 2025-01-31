@@ -8,15 +8,16 @@ type Message = Reply | {
   created_at: string;
 };
 
-interface TicketContextType {
+export type TicketContextType = {
   ticket: Ticket | null;
   messages: Message[];
   loading: boolean;
   error: string;
+  isAiLoading: boolean;
   addReply: (content: string, isPublic?: boolean) => Promise<Reply>;
   updateTicket: (updates: Partial<Ticket>) => Promise<void>;
   fetchTicket: () => Promise<void>;
-}
+};
 
 const TicketContext = createContext<TicketContextType | undefined>(undefined);
 
