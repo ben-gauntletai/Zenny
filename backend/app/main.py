@@ -235,62 +235,45 @@ async def handle_crm_operations(result: str, user_id: str, supabase_client: Supa
                 # Get user role
                 user_info = supabase_client.table('profiles').select('role').eq('id', user_id).single().execute()
                 
-                # Build query based on role
+                # Build query based on role and search criteria
                 base_query = supabase_client.table('tickets').select('''
                     *,
                     profiles!tickets_user_id_fkey (email, name),
                     agents:profiles!tickets_assigned_to_fkey (email, name)
                 ''')
-                
-                if user_info.data['role'] == 'agent':
-                    # For agents: show open tickets and assigned tickets, excluding Admin group
-                    tickets = base_query.filter('status', 'eq', 'open') \
-                        .filter('group_name', 'neq', 'Admin') \
-                        .execute()
-                    assigned_tickets = base_query.filter('assigned_to', 'eq', user_id) \
-                        .filter('group_name', 'neq', 'Admin') \
-                        .execute()
-                    tickets.data.extend(assigned_tickets.data)
-                elif user_info.data['role'] == 'admin':
-                    # For admins: show all open tickets and assigned tickets
-                    tickets = base_query.filter('status', 'eq', 'open').execute()
-                    assigned_tickets = base_query.filter('assigned_to', 'eq', user_id).execute()
-                    tickets.data.extend(assigned_tickets.data)
-                else:
-                    # For regular users: show only their tickets
-                    tickets = base_query.filter('user_id', 'eq', user_id).execute()
 
-                # Apply field-based filters
-                filtered_tickets = tickets.data
-                # Apply all filters at once to ensure tickets match ALL criteria
-                filtered_tickets = [
-                    ticket for ticket in filtered_tickets
-                    if all(
-                        (
-                            # Special handling for assigned_to field
-                            field == 'assigned_to' and (
-                                (value.lower() == 'unassigned' and ticket['assigned_to'] is None) or
-                                (value.lower() != 'unassigned' and 
-                                 # Look up the user ID for the email
-                                 (assignee_data := supabase_client.table('profiles')
-                                  .select('id')
-                                  .eq('email', value)
-                                  .execute()).data and
-                                 ticket.get('assigned_to') == assignee_data.data[0]['id']
-                                )
-                            )
-                        ) if field == 'assigned_to' else (
-                            # Handle all other fields
-                            str(ticket.get(field, '')).lower() == value.lower()
-                        )
-                        for field, value in search_criteria.items()
-                    )
-                ]
-                
-                if filtered_tickets:
-                    # Remove duplicates based on ticket ID and sort by ID
+                # Apply search criteria first
+                for field, value in search_criteria.items():
+                    if field == 'assigned_to':
+                        if value.lower() == 'unassigned':
+                            base_query = base_query.is_('assigned_to', 'null')
+                        else:
+                            # Look up the user ID for the email
+                            assignee_data = supabase_client.table('profiles').select('id').eq('email', value).execute()
+                            if assignee_data.data:
+                                base_query = base_query.eq('assigned_to', assignee_data.data[0]['id'])
+                    else:
+                        base_query = base_query.eq(field, value)
+
+                # Then apply role-based filters
+                if user_info.data['role'] == 'agent':
+                    # For agents: show all tickets in their group (excluding Admin group)
+                    base_query = base_query.neq('group_name', 'Admin')
+                elif user_info.data['role'] == 'admin':
+                    # Admins can see all tickets
+                    pass
+                else:
+                    # Regular users shouldn't be able to use AutoCRM
+                    responses.append('Sorry, only agents and admins can use the AutoCRM assistant.')
+                    continue
+
+                # Execute the query
+                tickets = base_query.execute()
+
+                # Format and return results
+                if tickets.data:
                     unique_tickets = sorted(
-                        {t['id']: t for t in filtered_tickets}.values(),
+                        {t['id']: t for t in tickets.data}.values(),
                         key=lambda x: x['id']
                     )
                     # Format ticket display with more details
@@ -1393,7 +1376,7 @@ async def delete_article(
             if not delete_result.data:
                 raise HTTPException(status_code=404, detail="Article not found")
                 
-            logger.info(f"Successfully deleted article {article_id} from Supabase")
+            logger.info(f"Successfully deleted article {article_id} and its embedding")
             
             return {
                 "message": f"Successfully deleted article {article_id} and its embedding",
