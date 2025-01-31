@@ -67,11 +67,15 @@ export const DashboardProvider: React.FC<{ children: React.ReactNode }> = ({ chi
   const { user } = useAuth();
 
   const updateTicketStats = (tickets: Ticket[]) => {
+    const openTickets = tickets.filter((t: Ticket) => t.status === 'open');
+    const pendingTickets = tickets.filter((t: Ticket) => t.status === 'pending');
+    const resolvedTickets = tickets.filter((t: Ticket) => t.status === 'solved' || t.status === 'closed');
+    
     return {
-      total: tickets.length,
-      open: tickets.filter((t: Ticket) => t.status === 'open').length,
-      inProgress: tickets.filter((t: Ticket) => t.status === 'pending').length,
-      resolved: tickets.filter((t: Ticket) => t.status === 'solved' || t.status === 'closed').length
+      total: openTickets.length + pendingTickets.length + resolvedTickets.length,
+      open: openTickets.length,
+      inProgress: pendingTickets.length,
+      resolved: resolvedTickets.length
     };
   };
 

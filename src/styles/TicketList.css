@@ -1,10 +1,17 @@
 .ticket-list-container {
   padding: 1rem 2rem;
   background-color: var(--background-color, #f8fafc);
-  min-height: calc(100vh - 64px);
-  width: 100%;
-  max-width: 100%;
+  height: calc(100vh - 64px);
+  width: calc(100% - 400px); /* Account for AutoCRM panel width + margin */
+  max-width: calc(100% - 400px);
   box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  position: fixed;
+  top: 64px;
+  left: 0;
+  bottom: 0;
 }
 
 .ticket-list-header {
@@ -12,6 +19,8 @@
   display: flex;
   justify-content: space-between;
   align-items: center;
+  width: 100%;
+  padding-right: 1rem;
 }
 
 .ticket-list-header h2 {
@@ -21,146 +30,16 @@
   margin: 0;
 }
 
-.tickets-table-container {
-  background: white;
-  border: 2px solid #e2e8f0;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
-  overflow: auto;
-  margin-bottom: 4rem;
-  width: 100%;
-  max-width: 100%;
+.tickets-header {
+  flex-shrink: 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 2rem;
 }
 
-.tickets-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  table-layout: auto;
-}
-
-.tickets-table th,
-.tickets-table td {
-  padding: 1rem;
-  text-align: left;
-  border-bottom: 2px solid #e2e8f0;
-  border-right: 2px solid #e2e8f0;
-}
-
-/* ID column */
-.ticket-id {
-  width: 80px !important;
-  min-width: 80px !important;
-  max-width: 80px !important;
-}
-
-/* Status and Priority columns */
-.status-cell {
-  width: 100px !important;
-  min-width: 100px !important;
-  max-width: 100px !important;
-  text-align: center;
-}
-
-.priority-cell {
-  width: 100px !important;
-  min-width: 100px !important;
-  max-width: 100px !important;
-  text-align: center;
-}
-
-/* Subject column - let it take remaining space */
-.subject-cell {
-  width: auto;
-  min-width: 200px;
-}
-
-/* Date columns */
-.date-cell {
-  width: 120px !important;
-  min-width: 120px !important;
-  max-width: 120px !important;
-}
-
-/* Email/name columns */
-.user-cell {
-  width: 150px !important;
-  min-width: 150px !important;
-  max-width: 150px !important;
-}
-
-.tickets-table thead {
-  position: sticky;
-  top: 0;
-  z-index: 10;
-  background: white;
-}
-
-.tickets-table th {
-  background: #f8f9fa;
-  font-weight: 600;
-  color: #4a5568;
-  position: sticky;
-  top: 0;
-  z-index: 1;
-  height: 48px;
-  padding: 0.75rem 1rem;
-  text-align: left;
-  border-bottom: 2px solid #e2e8f0;
-}
-
-.tickets-table td {
-  background: white;
-  color: #2d3748;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-/* Status and Priority badges */
-.status-badge,
-.priority-badge {
-  display: inline-block;
-  padding: 0.25rem 0.75rem;
-  border-radius: 9999px;
-  font-size: 0.75rem;
-  font-weight: 500;
-  white-space: nowrap;
-  min-width: 80px;
-  text-align: center;
-}
-
-.tickets-table th:last-child,
-.tickets-table td:last-child {
-  border-right: none;
-}
-
-.tickets-table tr:last-child td {
-  border-bottom: none;
-}
-
-.no-tickets {
-  text-align: center;
-  padding: 2rem;
-  color: var(--text-muted, #718096);
-  font-size: 1.1rem;
-}
-
-/* Responsive adjustments */
-@media (max-width: 1024px) {
-  .tickets-table {
-    min-width: 800px;
-  }
-}
-
-@media (max-width: 768px) {
-  .ticket-list-container {
-    padding: 0.75rem;
-  }
-  
-  .tickets-table {
-    min-width: 600px;
-  }
+.header-content {
+  flex: 1;
 }
 
 .header-content h1 {
@@ -176,7 +55,8 @@
 }
 
 .create-ticket-button {
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
   padding: 0.75rem 1.5rem;
   background-color: #4299e1;
   color: white;
@@ -184,6 +64,7 @@
   border-radius: 0.375rem;
   font-weight: 500;
   transition: background-color 0.2s;
+  margin-left: auto; /* Push button to the right */
 }
 
 .create-ticket-button:hover {
@@ -191,6 +72,7 @@
 }
 
 .filters {
+  flex-shrink: 0;
   display: flex;
   gap: 0.75rem;
   margin-bottom: 2rem;
@@ -274,15 +156,164 @@
   margin-bottom: 1.5rem;
 }
 
-.tickets-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  margin-bottom: 2rem;
+.tickets-table-container {
+  flex: 1;
+  background: white;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.05);
+  overflow-y: auto;
+  overflow-x: auto;
+  margin-bottom: 1rem;
+  width: 100%;
+  max-width: 100%;
+  min-height: 0;
+  position: relative;
 }
 
-.header-content {
-  flex: 1;
+.tickets-table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+
+.tickets-table th,
+.tickets-table td {
+  padding: 1rem;
+  text-align: left;
+  border-bottom: 2px solid #e2e8f0;
+  border-right: 2px solid #e2e8f0;
+  width: 150px;
+  min-width: 150px;
+  max-width: 150px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Special handling for ID column only */
+.ticket-id {
+  width: 80px !important;
+  min-width: 80px !important;
+  max-width: 80px !important;
+}
+
+/* Special handling for status and priority columns */
+.status-cell,
+.priority-cell {
+  width: 120px !important;
+  min-width: 120px !important;
+  max-width: 120px !important;
+  text-align: center;
+}
+
+/* Special handling for subject column */
+.subject-cell {
+  width: 250px !important;
+  min-width: 250px !important;
+  max-width: 250px !important;
+}
+
+/* Special handling for topic and group columns */
+.topic-cell,
+.group-cell,
+.assignee-cell {
+  width: 130px !important;
+  min-width: 130px !important;
+  max-width: 130px !important;
+}
+
+/* Ensure specific cells have consistent text handling */
+.ticket-id,
+.status-cell,
+.priority-cell,
+.subject-cell,
+.topic-cell,
+.group-cell,
+.assignee-cell {
+  text-align: left;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tickets-table thead {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background: white;
+}
+
+.tickets-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #4a5568;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  height: 48px;
+  padding: 0.75rem 1rem;
+  text-align: left;
+  border-bottom: 2px solid #e2e8f0;
+}
+
+.tickets-table td {
+  background: white;
+  color: #2d3748;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Status and Priority badges */
+.status-badge,
+.priority-badge {
+  display: inline-block;
+  padding: 0.25rem 0.75rem;
+  border-radius: 9999px;
+  font-size: 0.75rem;
+  font-weight: 500;
+  white-space: nowrap;
+  min-width: 80px;
+  text-align: center;
+}
+
+.tickets-table th:last-child,
+.tickets-table td:last-child {
+  border-right: none;
+}
+
+.tickets-table tr:last-child td {
+  border-bottom: none;
+}
+
+.no-tickets {
+  text-align: center;
+  padding: 2rem;
+  color: var(--text-muted, #718096);
+  font-size: 1.1rem;
+}
+
+/* Update responsive width for 7 columns */
+@media (max-width: 1024px) {
+  .tickets-table {
+    min-width: 1000px;  /* Total of all column widths plus some padding */
+  }
+}
+
+/* When AutoCRM panel is not present */
+.without-autocrm .ticket-list-container {
+  width: 100%;
+  max-width: 100%;
+  padding-right: 2rem;
+}
+
+/* Adjust padding on smaller screens */
+@media (max-width: 768px) {
+  .ticket-list-container {
+    padding: 0.75rem;
+  }
 }
 
 .sortable-header {
@@ -312,4 +343,18 @@
 
 .clickable-row:hover td {
   background-color: #f7fafc;
-} 
+}
+
+.group-cell {
+  width: 120px;
+  text-align: left;
+  padding: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.error-message {
+  flex-shrink: 0;
+  margin-top: 1rem;
+}

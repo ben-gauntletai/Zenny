@@ -2,7 +2,7 @@ import { supabase } from '../lib/supabaseClient';
 import { RealtimeChannel } from '@supabase/supabase-js';
 
 // Make sure we're using the correct backend URL
-const BACKEND_URL = process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000';
+const BACKEND_URL = process.env.REACT_APP_API_URL || 'http://localhost:8000';
 
 interface TicketCreationPayload {
   subject: string;
@@ -146,12 +146,15 @@ export const ticketService = {
           `assigned_to.eq.${session.user.id},and(assigned_to.is.null,group_name.neq.Admin)`
         );
       }
+    } else if (session.user.user_metadata?.role === 'admin' && params.isDashboard) {
+      // For admin dashboard: only show open tickets that are either unassigned or assigned to them
+      query = query.eq('status', 'open').or(`assigned_to.is.null,assigned_to.eq.${session.user.id}`);
     }
-    // Admins can see all tickets (no additional filters needed)
+    // For admin ticket list: they can see all tickets (no additional filters needed)
 
     // Apply additional filters
     if (params.status && !params.isDashboard) {
-      // Don't apply status filter on dashboard since we always want open tickets there
+      // Don't apply status filter on dashboard since we handle it in role-based filters
       query = query.eq('status', params.status);
     }
 
