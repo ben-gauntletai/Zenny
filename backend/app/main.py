@@ -193,6 +193,15 @@ async def warmup_database():
 
 async def handle_crm_operations(result: str, user_id: str, supabase_client: SupabaseClient, display_content: str = '') -> str:
     try:
+        # Get user info at the start
+        user_info = supabase_client.table('profiles').select('*').eq('id', user_id).single().execute()
+        if not user_info.data:
+            raise ValueError('User not found')
+        user = {
+            'id': user_id,
+            'user_metadata': user_info.data
+        }
+        
         # Split response into actions
         actions = [line.strip() for line in result.split('\n') if line.strip().startswith('ACTION:')]
         
@@ -478,12 +487,7 @@ async def handle_crm_operations(result: str, user_id: str, supabase_client: Supa
                         
                         if updated_ticket.data:
                             # Create notification
-                            await notify_ticket_updated(
-                                supabase_client,
-                                updated_ticket.data[0],
-                                {'id': user_id, 'user_metadata': {'role': user_info.data[0]['role'], 'full_name': 'AutoCRM'}},
-                                previous_ticket
-                            )
+                            await notify_ticket_updated(supabase_client, updated_ticket.data[0], user, previous_ticket)
                             update_results.append({'id': ticket_id, 'success': True})
                         else:
                             update_results.append({'id': ticket_id, 'success': False, 'error': 'Update failed'})
